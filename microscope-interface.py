@@ -111,3 +111,14 @@ class MicroscopeInterface:
             index 1
         """
         raise NotImplementedError()
+
+    async def recordImage(self):
+        """
+        Record an image and return a numpy array that contains the recorded
+        values.
+
+        Returns
+        -------
+        numpy array
+            The recorded image
+        """
