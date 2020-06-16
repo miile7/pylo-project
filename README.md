@@ -21,3 +21,13 @@ PyLo is written with python 3.2.
 
 ### gatan-view.py
 - Digital Micrograph Library
+
+## Internal structure
+
+### Class structure 
+
+<img src="docs/pylo-Page-1.svg" />
+
+### Program flow
+
+<img src="docs/pylo-Page-2.svg" />
