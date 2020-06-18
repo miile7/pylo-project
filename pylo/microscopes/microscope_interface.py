@@ -1,4 +1,6 @@
-class MicroscopeInterface:
+from ..vulnerable_machine import VulnerableMachine
+
+class MicroscopeInterface(VulnerableMachine):
     """
     An interface class to communicate with the microscope.
 
