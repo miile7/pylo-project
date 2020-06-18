@@ -117,7 +117,7 @@ class MicroscopeInterface:
         """
 
         for variable in self.supported_measurement_variables:
-            if variable.id == id_ and ((
+            if variable.unique_id == id_ and (isinstance(value, (int, float)) and (
                 not isinstance(variable.min_value, (int, float)) or 
                 value >= variable.min_value) and (
                 not isinstance(variable.max_value, (int, float)) or 
