@@ -1,5 +1,7 @@
 import typing
 
+Savable = typing.Union[str, int, float, bool, None]
+
 class AbstractConfiguration:
     """This class is the base class for configurations.
 
@@ -29,9 +31,12 @@ class AbstractConfiguration:
         indices
     """
 
-    def __init__(self, configuration: dict):
-        """Create a new abstract configuration."""
+    def __init__(self):
+        """Create a new abstract configuration.
+        
+        This calls the loadConfiguration() function automatically."""
         self.configuration = {}
+        self.loadConfiguration()
     
     def _keyExists(self, group: str, key: str) -> bool:
         """Get whether there is the key and the group.
@@ -95,9 +100,9 @@ class AbstractConfiguration:
         return (self._keyExists(group, key) and 
                 "default" in self.configuration[group][key])
     
-    def setValue(self, group: str, key: str, value: typing.Any, 
-                 datatype: typing.Optional[typing.Any]=None, 
-                 default_value: typing.Optional[typing.Any]=None, 
+    def setValue(self, group: str, key: str, value: Savable, 
+                 datatype: typing.Optional[type]=None, 
+                 default_value: typing.Optional[Savable]=None, 
                  ask_if_not_present: typing.Optional[bool]=None, 
                  description: typing.Optional[str]=None) -> None:
         """Set the value to the group and key.
@@ -108,14 +113,14 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name for the value
-        value : any
+        value : str, int, float, bool or None
             The value
         datatype : type
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
             given the type of the value will be used
-        default_value : any
+        default_value : str, int, float, bool or None
             The default value to use if the value is not given
         ask_if_not_present : bool
             Whether to ask the user for the value if it is not saved, if given 
@@ -127,14 +132,17 @@ class AbstractConfiguration:
             description if it exists already
         """
 
+        if datatype is None and value is not None:
+            datatype = type(value)
+
         self.addConfigurationOption(group, key, datatype, default_value, 
                                     ask_if_not_present, description)
 
         self.configuration[group][key]["value"] = [value]
     
     def addConfigurationOption(self, group: str, key: str, 
-                 datatype: typing.Optional[typing.Any]=None, 
-                 default_value: typing.Optional[typing.Any]=None, 
+                 datatype: typing.Optional[type]=None, 
+                 default_value: typing.Optional[Savable]=None, 
                  ask_if_not_present: typing.Optional[bool]=None, 
                  description: typing.Optional[str]=None) -> None:
         """Define the property for the given group and key.
@@ -152,7 +160,7 @@ class AbstractConfiguration:
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already
-        default_value : any
+        default_value : str, int, float, bool or None
             The default value to use if the value is not given
         ask_if_not_present : bool
             Whether to ask the user for the value if it is not saved, if given 
@@ -190,7 +198,7 @@ class AbstractConfiguration:
             self.configuration[group][key]["description"] = description
     
     def getValue(self, group: str, key: str, 
-                 fallback_default: typing.Optional[bool]=True) -> typing.Any:
+                 fallback_default: typing.Optional[bool]=True) -> Savable:
         """Get the value for the given group and key.
 
         Raises
@@ -216,7 +224,7 @@ class AbstractConfiguration:
         """
 
         if self.valueExists(group, key):
-            return self.configuration[group][key]["values"][-1]
+            return self._parseValue(group, key, self.configuration[group][key]["value"][-1])
         elif fallback_default and self.defaultExists(group, key):
             return self.configuration[group][key]["default"]
         else:
@@ -225,7 +233,176 @@ class AbstractConfiguration:
                 "found.").format(key, group)
             )
     
-    def temporaryOverwriteValue(self, group: str, key: str, value: typing.Any) -> None:
+    def _getType(self, group: str, key: str) -> type:
+        """Get the type for the group and the key.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or when there is no type for 
+            it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name
+
+        Returns
+        -------
+        type
+            The datatype
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}, therefore it " + 
+                 "cannot be overwritten.").format(key, group)
+            )
+        elif ("type" not in self.configuration[group][key] or
+              self.configuration[group][key]["type"] == None):
+            raise KeyError(
+                "There is no type for the key {} with the group {}.".format(key, group)
+            )
+        else:
+            return self.configuration[group][key]["type"]
+    
+    def _parseValue(self, group: str, key: str, value: Savable) -> Savable:
+        """Parse the value to the datatype defined by the group and key, if 
+        there is no datatype the original value will be returned.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name
+        value : str, int, float, bool or None
+            The value to parse
+
+        Returns
+        -------
+        Savable
+            The parsed value or the value if there is no datatype defined at
+            the group and key
+        """
+
+        try:
+            datatype = self._getType(group, key)
+        except KeyError:
+            datatype = None
+        
+        if datatype == int:
+            return int(value)
+        elif datatype == float:
+            return float(value)
+        elif datatype == str:
+            return str(value)
+        elif datatype == bool:
+            return bool(value)
+        else:
+            return value
+    
+    def getDefault(self, group: str, key: str) -> Savable:
+        """Get the default value for the group and key.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no default for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+
+        Returns
+        -------
+        str, int, float bool or None
+            The default value
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}.").format(key, group)
+            )
+        elif "default" not in self.configuration[group][key]:
+            raise KeyError(
+                ("There is no default for the key {} in the group {}.").format(key, group)
+            )
+        else:
+            return self.configuration[group][key]["default"]
+    
+    def getAskIfNotPresent(self, group: str, key: str) -> bool:
+        """Get whether to ask if the value for the given group and key is not 
+        present.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no 
+            `ask_if_not_present` value for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+
+        Returns
+        -------
+        bool
+            Whether to ask if the value is not present
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}.").format(key, group)
+            )
+        elif "ask_if_not_present" not in self.configuration[group][key]:
+            raise KeyError(
+                ("There is no ask_if_not_present for the key {} in the group {}.").format(key, group)
+            )
+        else:
+            return self.configuration[group][key]["ask_if_not_present"]
+    
+    def getDescription(self, group: str, key: str) -> str:
+        """Get the description for the group and key.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no description for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+
+        Returns
+        -------
+        str
+            The description
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}.").format(key, group)
+            )
+        elif "description" not in self.configuration[group][key]:
+            raise KeyError(
+                ("There is no description for the key {} in the group {}.").format(key, group)
+            )
+        else:
+            return self.configuration[group][key]["description"]
+    
+    def temporaryOverwriteValue(self, group: str, key: str, value: Savable) -> None:
         """Temporary overwrite the given value of the group and key.
 
         This is not saved presistantly. Also this is lost when the setValue() 
@@ -243,7 +420,7 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name for the value
-        value : any
+        value : str, int, float, bool or None
             The value
         """
 
@@ -259,7 +436,7 @@ class AbstractConfiguration:
                  "value before overwriting temporarily.").format(key, group)
             )
         
-        self.configuration[group][key]["values"].append(value)
+        self.configuration[group][key]["value"].append(value)
     
     def resetValue(self, group: str, key: str, count: typing.Optional[int]=1) -> None:
         """Removes count times the overwriting of the value for the given 
@@ -294,11 +471,11 @@ class AbstractConfiguration:
                  "value before overwriting temporarily.").format(key, group)
             )
 
-        if count == 0:
+        if count == 0 or len(self.configuration[group][key]) <= 1:
             return
 
         # do not allow to delete item 0, this is the initial value
-        max_length = len(self.configuration[group][key]["value"]) - 2
+        max_length = len(self.configuration[group][key]["value"]) - 1
 
         if count < 0 or count > max_length:
             count = max_length
