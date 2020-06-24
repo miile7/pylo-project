@@ -51,7 +51,7 @@ class Image:
     
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
-               file_type: typing.Optional[str]=None):
+               file_type: typing.Optional[str]=None) -> None:
         """Save the image to the given file_path.
 
         Raises
