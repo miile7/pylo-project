@@ -151,13 +151,6 @@ if len(non_existing_groups_and_keys) == 0:
     assert False
 
 class TestConfiguration:
-    # test_configuration_without_option_groups = []
-    # all_groups_and_keys_having_values = []
-    # options_group_test_configuration = []
-    # options_groups_and_keys = []
-    # complete_test_configuration_with_defaults = []
-    # complete_test_configuration_width_description = []
-
     def setup_method(self):
         # prepare config for autoload
         dummy_config = {}
