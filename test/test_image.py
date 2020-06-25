@@ -29,12 +29,12 @@ class TestImage:
             if os.path.isfile(path):
                 try:
                     os.remove(path)
-                except FileNotFoundError:
+                except (FileNotFoundError, OSError):
                     pass
             elif os.path.isdir(path):
                 try:
                     os.removedirs(path)
-                except FileNotFoundError:
+                except (FileNotFoundError, OSError):
                     pass
                 
     
@@ -155,9 +155,13 @@ class TestImage:
         self.delete_files.append(path)
 
         if file_type == None:
-            image.saveTo(path)
+            thread = image.saveTo(path)
         else:
-            image.saveTo(path, file_type=file_type)
+            thread = image.saveTo(path, file_type=file_type)
+        
+        # wait until the save is done, otherwise testing the result is not 
+        # possible
+        thread.join()
         
         return image, path
 
@@ -209,9 +213,13 @@ class TestImage:
         image, illumination_data, tags = self.get_random_image()
 
         if overwrite == None:
-            image.saveTo(path)
+            thread = image.saveTo(path)
         else:
-            image.saveTo(path, overwrite=overwrite)
+            thread = image.saveTo(path, overwrite=overwrite)
+        
+        # wait until the save is done, otherwise testing the result is not 
+        # possible
+        thread.join()
         
         assert self.check_illumination_data(image, path)
 
@@ -236,9 +244,13 @@ class TestImage:
         time.sleep(0.1)
 
         if overwrite == None:
-            image.saveTo(path)
+            thread = image.saveTo(path)
         else:
-            image.saveTo(path, overwrite=overwrite)
+            thread = image.saveTo(path, overwrite=overwrite)
+        
+        # wait until the save is done, otherwise testing the result is not 
+        # possible
+        thread.join()
         
         assert creation_time < os.path.getmtime(path)
 
@@ -256,7 +268,11 @@ class TestImage:
         image, illumination_data, tags = self.get_random_image()
 
         with pytest.raises(FileExistsError):
-            image.saveTo(path, overwrite=False)
+            thread = image.saveTo(path, overwrite=False)
+        
+            # wait until the save is done, otherwise testing the result is not 
+            # possible
+            thread.join()
     
     def test_create_directories(self):
         """Test if create_directories in saveTo creates the directories
@@ -269,7 +285,11 @@ class TestImage:
         self.delete_files.append(img_path)
         self.delete_files.append(dir_path)
 
-        image.saveTo(img_path, create_directories=True)
+        thread = image.saveTo(img_path, create_directories=True)
+        
+        # wait until the save is done, otherwise testing the result is not 
+        # possible
+        thread.join()
 
         assert os.path.exists(dir_path) and os.path.isdir(dir_path)
     
@@ -281,10 +301,14 @@ class TestImage:
         dir_path = os.path.join(self.root, "non-existing-dir/")
         
         with pytest.raises(FileNotFoundError):
-            image.saveTo(
+            thread = image.saveTo(
                 os.path.join(dir_path, "test-image-{}.tif".format(self.image_counter)),
                 create_directories=False
             )
+        
+            # wait until the save is done, otherwise testing the result is not 
+            # possible
+            thread.join()
     
     @pytest.mark.parametrize("file_name,file_type,PIL_expected_type", [
         ("test-image-{}.jpg", None, "JPEG"),
