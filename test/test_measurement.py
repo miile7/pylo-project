@@ -1,11 +1,39 @@
 import os
 
+
+
+
+
+
+
+
+
+
+print("\n\n\nThis class doesnt' work at the moment because the setup_method() is " + 
+      "called before every single function call. This way the test takes " + 
+      "forever and raises unwanted exceptions. Note that also all the oter " + 
+      "test are written like that which is WRONG!\n\n\n")
+
+
+
+
+
+
+
+
+
+
+assert False
+
+
 if __name__ == "__main__":
     # For direct call only
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from PIL import Image as PILImage
 import numpy as np
+import datetime
 import asyncio
 import pytest
 import random
@@ -21,6 +49,48 @@ def sleepRandomTime():
     respond_time = random.randrange(5, 20) / 50
     time.sleep(respond_time)
     return respond_time
+
+def convertMeasurementVariableToImageSave(var, value, steps=255):
+    """Convert the measurement variable `var` with the `value` to be saved in 
+    an image with `steps` values in one pixel.
+
+    Parameters
+    ----------
+    var : pylo.MeasurementVariable
+        The measurement variable which defines the min and max values
+    value : float
+        The value to convert
+    steps : int, optional
+        The number of value steps per pixel
+    
+    Returns
+    -------
+    float
+        The value divided on `steps`
+    """
+    return (value - var.min_value) / (var.max_value - var.min_value) * steps
+
+def convertImageSaveToMeasurementVariable(var, value, steps=255):
+    """Convert the saved measurement variable `var` with the image pixel 
+    `value` back to the original value (note that the conversion is not 
+    precise, there is some data lost which makes the value to be roughly the 
+    original value).
+
+    Parameters
+    ----------
+    var : pylo.MeasurementVariable
+        The measurement variable which defines the min and max values
+    value : float
+        The converted value
+    steps : int, optional
+        The number of value steps per pixel
+    
+    Returns
+    -------
+    float
+        The value of the measurement variable
+    """
+    return value / steps * (var.max_value - var.min_value) + var.min_value
 
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self):
@@ -95,6 +165,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         
         self.is_in_safe_state = True
 
+dummy_camera_name = "DummyCamera for testing"
 class DummyCamera(pylo.CameraInterface):
     def __init__(self, microscope):
         super().__init__()
@@ -109,9 +180,9 @@ class DummyCamera(pylo.CameraInterface):
     
     async def recordImage(self):
         self.is_in_safe_state = False
-        size = max(4, len(self.microscope.supported_measurement_variables))
+        size = len(self.microscope.supported_measurement_variables) + 1
         # create grayscale image
-        image_data = np.zeros((size, size), dtype=np.uint8)
+        image_data = np.zeros((size, max(2, size)), dtype=np.uint8)
 
         # save current image count first row in the first two pixels in the 
         # image
@@ -121,25 +192,25 @@ class DummyCamera(pylo.CameraInterface):
         # save current focus second row in the image, normed by min and max 
         # value
         f_var = self.microscope.getMeasurementVariableById("focus")
-        image_data[1][0] = ((self.microscope.focus - f_var.min_value) / 
-                            (f_var.max_value - f_var.min_value) * 255)
+        image_data[1][0] = convertMeasurementVariableToImageSave(
+                                f_var, self.microscope.focus)
 
         # save the magnetic field
         m_var = self.microscope.getMeasurementVariableById("magnetic-field")
-        image_data[2][0] = ((self.microscope.magnetic_field - m_var.min_value) / 
-                            (m_var.max_value - m_var.min_value) * 255)
+        image_data[2][0] = convertMeasurementVariableToImageSave(
+                                m_var, self.microscope.magnetic_field)
 
         # save the magnetic field
         t_var = self.microscope.getMeasurementVariableById("x-tilt")
-        image_data[3][0] = ((self.microscope.x_tilt - t_var.min_value) / 
-                            (t_var.max_value - t_var.min_value) * 255)
+        image_data[3][0] = convertMeasurementVariableToImageSave(
+                                t_var, self.microscope.x_tilt)
         
         respond_time = sleepRandomTime()
 
         tags = {
             "exposure-time": respond_time,
             "image-count": self.img_count,
-            "camera": "DummyCamera for testing"
+            "camera": dummy_camera_name
         }
 
         self.img_count += 1
@@ -163,7 +234,7 @@ class DummyController:
         self.configuration = DummyConfiguration()
 
 class TestMeasurement:
-    def setup_method(self):
+    def setup_class(self):
         self.root = os.path.join(os.path.dirname(__file__), "tmp_test_files")
 
         if not os.path.exists(self.root):
@@ -172,9 +243,12 @@ class TestMeasurement:
         self.controller = DummyController()
         self.measurement_steps = []
 
-        for f in (0, 5, 10):
-            for m in (0, 1, 2):
-                for t in (-10, 0, 10):
+        # for f in (0, 5, 10):
+        #     for m in (0, 1, 2):
+        #         for t in (-10, 0, 10):
+        for f in (5,):
+            for m in (1,):
+                for t in (-10, 10):
                     self.measurement_steps.append({"focus": f, 
                                                    "magnetic-field": m, 
                                                    "x-tilt": t})
@@ -183,29 +257,273 @@ class TestMeasurement:
         self.measurement.save_dir = self.root
         self.measurement.name_format = "{counter}-dummy-measurement.tif"
 
-        # register events
+        self.measurement.tags["test key"] = "Test Value"
+        self.measurement.tags["test key 2"] = 2
+        self.measurement.tags["test key 3"] = False
 
+        # add counter for testing
+        self.name_test_format = ["{counter}"]
+        # add all measurement variables
+        for var in self.controller.microscope.supported_measurement_variables:
+            self.name_test_format.append("{variables[" + var.unique_id + "]}")
+        # add all tags
+        for key in self.measurement.tags:
+            self.name_test_format.append("{tags[" + key + "]}")
+        # add some static/assumable image tags
+        self.name_test_format.append("{imgtags[image-count]}")
+        self.name_test_format.append("{imgtags[camera]}")
+        # add time
+        self.name_test_format.append("{time:%Y%m%d%H%M,%S}")
+        # convert to string
+        self.name_test_format = ";".join(self.name_test_format)
+
+        # prepare event timers
+        self.microscope_ready_time = []
+        self.before_record_time = []
+        self.after_record_time = []
+        self.measurement_ready_time = []
+
+        # formatted names
+        self.formatted_names = []
+
+        # register events
+        pylo.microscope_ready.append(self.microscope_ready_handler)
+        pylo.before_record.append(self.before_record_handler)
+        pylo.after_record.append(self.after_record_handler)
+        pylo.measurement_ready.append(self.measurement_ready_handler)
+
+        pylo.after_record.append(self.prepare_names_handler)
+
+        self.start_time = time.time()
         asyncio.run(self.measurement.start())
+
+        self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
+                                     sorted(self.get_image_paths())))
     
-    def teardown_method(self):
+    def teardown_class(self):
         # for f in os.listdir(self.root):
         #     os.remove(os.path.join(self.root, f))
         
         # os.removedirs(self.root)
         pass
     
-    def test_all_steps_produced_images(self):
-        """Test if there are as much image files in the directory as there are 
-        steps to record images for."""
+    def get_image_paths(self, counter=None):
+        """A generator that returns the file name until the counter, if the 
+        counter is not given the number of steps will be used for the counter.
 
-        reg = re.compile(r"[\d]+-dummy-measurement\.tif")
-        file_count = 0
-
-        for f in glob.glob("*-dummy-measurement.tif"):
-            if reg.match(f):
-                file_count += 1
+        Parameters
+        ----------
+        counter : int, optional
+            The end number of the file name to return (not inculding the 
+            counter)
         
-        assert file_count == len(self.measurement_steps)
+        Yields
+        ------
+        str
+            The image paths
+        """
+
+        if not isinstance(counter, int):
+            counter = len(self.measurement_steps)
+        
+        for i in range(counter):
+            yield os.path.join(
+                self.root, 
+                self.measurement.name_format.format(counter=i)
+            )
+    
+    def microscope_ready_handler(self):
+        self.microscope_ready_time.append(time.time())
+    
+    def before_record_handler(self):
+        self.before_record_time.append(time.time())
+    
+    def after_record_handler(self):
+        self.after_record_time.append(time.time())
+    
+    def measurement_ready_handler(self):
+        self.measurement_ready_time.append(time.time())
+    
+    def prepare_names_handler(self):
+        self.formatted_names.append(self.measurement.formatName(self.name_test_format))
+    
+    def test_all_steps_produced_images(self):
+        """Test if there are all the image files that are expected."""
+
+        for f in self.get_image_paths():
+            assert os.path.exists(f)
+            assert os.path.isfile(f)
+            assert os.path.getmtime(f) >= self.start_time
+    
+    def test_all_steps_content_of_images(self):
+        """Test if the content of the image is correct, this tests whether the
+        image is readable and saved correctly (which is redundant with the 
+        image test) plus whether the values are actually set in the microscope
+        because the microscope values are saved in the image."""
+
+        f_var = self.controller.microscope.getMeasurementVariableById("focus")
+        f_prec = (f_var.max_value - f_var.min_value) / 255
+        m_var = self.controller.microscope.getMeasurementVariableById("magnetic-field")
+        m_prec = (m_var.max_value - m_var.min_value) / 255
+        t_var = self.controller.microscope.getMeasurementVariableById("x-tilt")
+        t_prec = (t_var.max_value - t_var.min_value) / 255
+
+        for i, f in enumerate(self.get_image_paths()):
+            load_img = PILImage.open(f)
+            image_data = np.array(load_img)
+
+            counter = image_data[0][0] * 255 + image_data[0][1]
+            focus = convertImageSaveToMeasurementVariable(
+                        f_var, image_data[1][0])
+            magnetic_field = convertImageSaveToMeasurementVariable(
+                        m_var, image_data[2][0])
+            x_tilt = convertImageSaveToMeasurementVariable(
+                        t_var, image_data[3][0])
+            
+            assert counter == i
+            assert math.isclose(focus, self.measurement_steps[i]["focus"], 
+                                abs_tol=f_prec)
+            assert math.isclose(magnetic_field, 
+                                self.measurement_steps[i]["magnetic-field"], 
+                                abs_tol=m_prec)
+            assert math.isclose(x_tilt, self.measurement_steps[i]["x-tilt"], 
+                                abs_tol=t_prec)
+    
+    def test_all_events_are_called(self):
+        """Test if all the expected events are fired."""
+        assert len(self.microscope_ready_time) > 0
+        assert len(self.before_record_time) > 0
+        assert len(self.after_record_time) > 0
+        assert len(self.measurement_ready_time) > 0
+    
+    def test_microscope_ready_event_time(self):
+        """Test if the microscope_ready event is fired after the start but 
+        before all other events and before any image is created."""
+
+        # microscope ready is only called once
+        assert len(self.microscope_ready_time) == 1
+
+        assert self.start_time < self.microscope_ready_time[0]
+        # before record is triggered right after the microscope ready with not
+        # much code inbetween, therefore this is probably always the same time
+        assert self.microscope_ready_time[0] <= min(self.before_record_time)
+        assert self.microscope_ready_time[0] < min(self.after_record_time)
+        assert self.microscope_ready_time[0] < self.measurement_ready_time[0]
+
+        # microscope has to be ready before any image is recorded
+        assert self.microscope_ready_time[0] < min(self.file_m_times)
+    
+    def test_before_record_event_time(self):
+        """Test if the all before_record event are fired after the start but 
+        before after_record and measurement_ready events and before the 
+        image is created."""
+
+        # there is a before record for every measurement step
+        assert len(self.before_record_time) == len(self.measurement_steps)
+
+        assert self.start_time < min(self.before_record_time)
+        # before record is triggered right after the microscope ready with not
+        # much code inbetween, therefore this is probably always the same time
+        assert self.microscope_ready_time[0] <= min(self.before_record_time)
+        # all before_record times must be before the after_record times
+        assert np.all(np.array(self.before_record_time) < np.array(self.after_record_time))
+        assert max(self.before_record_time) < self.measurement_ready_time[0]
+
+        # before_record is fired before the corresponding image is created
+        assert np.all(np.array(self.before_record_time) < np.array(self.file_m_times))
+    
+    def test_after_record_event_time(self):
+        """Test if the all after_record event are fired after each record 
+        and before the measurement_ready events and after the image is created 
+        (but before it is saved)."""
+
+        # there is a before record for every measurement step
+        assert len(self.after_record_time) == len(self.measurement_steps)
+
+        assert self.start_time < min(self.after_record_time)
+        assert self.microscope_ready_time[0] < min(self.after_record_time)
+        # all before_record times must be before the after_record times
+        assert np.all(np.array(self.before_record_time) < np.array(self.after_record_time))
+        assert max(self.after_record_time) <= self.measurement_ready_time[0]
+
+        # after_record is fired before the corresponding image is saved
+        assert np.all(np.array(self.after_record_time) <= np.array(self.file_m_times))
+
+    def test_measurement_ready_event_time(self):
+        """Test if the measurement_ready event is fired after all other events
+        and after all images are created."""
+
+        # microscope ready is only called once
+        assert len(self.measurement_ready_time) == 1
+
+        assert self.start_time < self.measurement_ready_time[0]
+        # before record is triggered right after the microscope ready with not
+        # much code inbetween, therefore this is probably always the same time
+        assert self.microscope_ready_time[0] < self.measurement_ready_time[0]
+        assert min(self.before_record_time) < self.measurement_ready_time[0]
+        assert min(self.after_record_time) <= self.measurement_ready_time[0]
+
+        # microscope has to be ready before any image is recorded
+        assert max(self.file_m_times) <= self.measurement_ready_time[0]
+    
+    def test_format_name_on_each_step(self):
+        """Test if the nameFormat() function uses the correct values on each
+        step."""
+
+        measurement_variable_ids = [x.unique_id 
+            for x in self.controller.microscope.supported_measurement_variables]
+        
+        for i, name in enumerate(self.formatted_names):
+            name = name.split(";")
+
+            # check the counter
+            s = 0
+            e = 1
+            assert "{}".format(name[s]) == str(i)
+
+            # check the values of all the measurement variables saved in the 
+            # string, do not rely on the order
+            s = e
+            e += len(measurement_variable_ids)
+            check_values = name[s:e]
+            for variable_id in measurement_variable_ids:
+                expected_value = self.measurement_steps[i][variable_id]
+                assert "{}".format(expected_value) in check_values
+            
+            # check the tags of the measurement
+            s = e
+            e += len(self.measurement.tags)
+            check_tags = name[s:e]
+            for key in self.measurement.tags:
+                assert "{}".format(self.measurement.tags[key]) in check_tags
+            
+            # check some image tags
+            s = e
+            e += 2
+            check_imgtags = name[s:e]
+            # check the image counter, it should be equal to the step counter
+            assert "{}".format(i) in check_imgtags
+            # check the camera name
+            assert "{}".format(dummy_camera_name) in check_imgtags
+
+            # test time
+            s = e
+            e += 1
+            check_time = name[s].split(",")
+            expected_time = datetime.datetime.fromtimestamp(self.after_record_time[i])
+            assert check_time[0] == expected_time.strftime("%Y%m%d%H%M")
+            # check if time is one second close, the after_record is fired 
+            # before the save so it might not be exactly the same
+            assert math.isclose(int(check_time[1]), int(expected_time.second), abs_tol=1)
+
+            # check if all parts are checked
+            assert e == len(name)
+    
+    def test_missing_keys_in_format_name(self):
+        """Test if missing keys/wrong placeholders are just ignored in the 
+        formatName() function"""
+
+        assert self.measurement.formatName("{nonexitingplaceholder}") == ""
     
     def throw_exception(self):
         raise Exception("This is an exception to test whether exceptions are " + 

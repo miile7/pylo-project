@@ -276,7 +276,7 @@ class Measurement:
                     return
                 
                 name = self.formatName()
-                self.current_image.saveTo(os.path.join(self.save_dir, name))
+                thread = self.current_image.saveTo(os.path.join(self.save_dir, name))
             
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly
@@ -284,6 +284,12 @@ class Measurement:
                 self.controller.microscope.resetToSafeState(),
                 self.controller.camera.resetToSafeState()
             )
+
+            # wait until the last image is saved hoping that all image saving
+            # takes the same amount of time and the image before the last image
+            # is already saved/has a headstart that big that the last image
+            # can't overtake the one before the last
+            thread.join()
 
             # reset everything to the state before measuring
             self.running = False
