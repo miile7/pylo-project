@@ -17,6 +17,11 @@ class VulnerableMachine:
     _in_emergency_state : bool
         Whether the current instrument is in emergency state at the moment, if 
         it is the user has to unblock everything manually
+    
+    Listened Events
+    ---------------
+    emergency
+        Set the machine to emergency state when the emergency event is fired
     """
 
     def __init__(self):
