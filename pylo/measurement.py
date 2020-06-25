@@ -155,15 +155,15 @@ class Measurement:
     def _setSafe(self):
         """Set the microscope and the camera to be in safe state and stop the 
         measurement."""
+
         self.controller.microscope.resetToEmergencyState()
         self.controller.camera.resetToEmergencyState()
-        self.stop()
     
     async def start(self) -> None:
         """Start the measurement.
         
-        Events
-        ------
+        Fired Events
+        ------------
         microscope_ready
             Fired when the microscope is in lorenz mode the measurement is 
             right about starting
@@ -175,11 +175,29 @@ class Measurement:
         after_record
             Fired after setting the microscope to measurement point and 
             recording an image but before saving the image to the directory
+        
+        Listened Events
+        ---------------
+        stop, emergency
+            Stop the async calls on the microscope and the camera if the stop
+            event is fired
         """
         self.running = True
 
         try:
-            await self.controller.microscope.setInLorenzMode()
+            # create async task
+            task = asyncio.create_task(self.controller.microscope.setInLorenzMode())
+            # add cancel to events
+            emergency.append(task.cancel)
+            stop.append(task.cancel)
+
+            await task
+
+            # remove references so the task and the event callbacks get removed
+            # by the garbage collector
+            emergency.remove(task.cancel)
+            stop.remove(task.cancel)
+            del task
         
             if not self.running:
                 # stop() is called
@@ -208,8 +226,10 @@ class Measurement:
                     
                     # MicroscopeInterface.setMeasurementVariableValue() is 
                     # async so this is an future object
-                    task = self.controller.microscope.setMeasurementVariableValue(
-                        variable_name, step[variable_name]
+                    task = asyncio.create_task(
+                        self.controller.microscope.setMeasurementVariableValue(
+                            variable_name, step[variable_name]
+                        )
                     )
 
                     # add cancel callback to emergency and stop event to stop 
@@ -263,7 +283,7 @@ class Measurement:
             measurement_ready()
         except Exception:
             # stop if any error occurres, just to be sure
-            self._setSafe()
+            self.stop()
             raise
     
     def stop(self) -> None:
@@ -272,11 +292,14 @@ class Measurement:
         Note that the current hardware action is still finished when it has 
         started already!
 
-        Events
-        ------
+        Fired Events
+        ------------
         stop
             Fired when this function is executed
         """
 
         self.running = False
+        self._setSafe()
+
+        # fire stop event
         stop()

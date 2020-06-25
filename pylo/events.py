@@ -16,3 +16,6 @@ before_record = Event()
 """Fired after setting the microscope to measurement point and recording an 
 image but before saving the image to the directory"""
 after_record = Event()
+
+"""Fired when the measurement is stopped but not finished"""
+stop = Event()
