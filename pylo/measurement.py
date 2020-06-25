@@ -13,7 +13,11 @@ from .events import microscope_ready
 from .events import measurement_ready
 from .events import before_record
 from .events import after_record
-from .controller import Controller
+from .events import emergency
+from .events import stop
+# from .controller import Controller
+# for tmp debugging only
+Controller = typing.Any
 
 class Measurement:
     """This class represents one measurement.
@@ -184,9 +188,13 @@ class Measurement:
         """
         self.running = True
 
-        try:
+        # try:
+        if True:
             # create async task
-            task = asyncio.create_task(self.controller.microscope.setInLorenzMode())
+            task = asyncio.create_task(
+                self.controller.microscope.setInLorenzMode(True)
+            )
+
             # add cancel to events
             emergency.append(task.cancel)
             stop.append(task.cancel)
@@ -254,7 +262,7 @@ class Measurement:
                     return
                 
                 # record measurement
-                self.current_image = asyncio.run(self.controller.camera.recordImage())
+                self.current_image = await self.controller.camera.recordImage()
 
                 if not self.running:
                     # stop() is called
@@ -281,10 +289,10 @@ class Measurement:
             self.running = False
             self._step_index = -1
             measurement_ready()
-        except Exception:
-            # stop if any error occurres, just to be sure
-            self.stop()
-            raise
+        # except Exception:
+        #     # stop if any error occurres, just to be sure
+        #     self.stop()
+        #     raise
     
     def stop(self) -> None:
         """Stop the measurement. 
