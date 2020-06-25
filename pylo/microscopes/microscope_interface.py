@@ -160,3 +160,34 @@ class MicroscopeInterface(VulnerableMachine):
             raise KeyError(
                 "Could not find a measurement variable with id {}.".format(id_)
             )
+    
+    async def resetToSafeState(self) -> None:
+        """Set the microscope into its safe state.
+
+        Raises
+        ------
+        KeyError
+            When the `id_` does not exist for this microscope
+        
+        Parameters
+        ----------
+        id_ : str
+            The id of the measurement variable
+        
+        Returns
+        -------
+        MeasurementVariable
+            The variable object
+        """
+
+        f = list(filter(
+            lambda v: v.unique_id == id_, 
+            self.supported_measurement_variables
+        ))
+
+        if len(f) > 0:
+            return f[0]
+        else:
+            raise KeyError(
+                "Could not find a measurement variable with id {}.".format(id_)
+            )
