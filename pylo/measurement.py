@@ -179,7 +179,7 @@ class Measurement:
         self.running = True
 
         try:
-            asyncio.run(self.controller.microscope.setInLorenzMode())
+            await self.controller.microscope.setInLorenzMode()
         
             if not self.running:
                 # stop() is called
@@ -197,15 +197,37 @@ class Measurement:
                 # fire event before recording
                 before_record()
 
+                # the asynchronous tasks to set the values at the micrsocope
+                tasks = []
+
                 for variable_name in step:
                     # set each measurement variable
                     if not self.running:
                         # stop() is called
                         return
                     
-                    asyncio.run(self.controller.microscope.setMeasurementVariableValue(
+                    # MicroscopeInterface.setMeasurementVariableValue() is 
+                    # async so this is an future object
+                    task = self.controller.microscope.setMeasurementVariableValue(
                         variable_name, step[variable_name]
-                    ))
+                    )
+
+                    # add cancel callback to emergency and stop event to stop 
+                    # executing the async operation
+                    emergency.append(task.cancel)
+                    stop.append(task.cancel)
+                    tasks.append(task)
+                
+                # wait until all the measurement vairables are set
+                await asyncio.gather(*tasks)
+                
+                # remove the callback to let the garbage collector destroy the 
+                # task
+                for task in tasks:
+                    emergency.remove(task.cancel)
+                    stop.remove(task.cancel)
+                    del task
+                del tasks
 
                 if not self.running:
                     # stop() is called
@@ -230,8 +252,10 @@ class Measurement:
             
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly
-            asyncio.run(self.controller.microscope.resetToSafeState())
-            asyncio.run(self.controller.camera.resetToSafeState())
+            await asyncio.gather(
+                self.controller.microscope.resetToSafeState(),
+                self.controller.camera.resetToSafeState()
+            )
 
             # reset everything to the state before measuring
             self.running = False
@@ -247,6 +271,12 @@ class Measurement:
         
         Note that the current hardware action is still finished when it has 
         started already!
+
+        Events
+        ------
+        stop
+            Fired when this function is executed
         """
 
         self.running = False
+        stop()
