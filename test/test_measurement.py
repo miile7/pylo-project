@@ -1,5 +1,31 @@
 import os
 
+
+
+
+
+
+
+
+
+
+print("\n\n\nThis class doesnt' work at the moment because the setup_method() is " + 
+      "called before every single function call. This way the test takes " + 
+      "forever and raises unwanted exceptions. Note that also all the oter " + 
+      "test are written like that which is WRONG!\n\n\n")
+
+
+
+
+
+
+
+
+
+
+assert False
+
+
 if __name__ == "__main__":
     # For direct call only
     import sys
