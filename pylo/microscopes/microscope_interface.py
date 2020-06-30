@@ -17,6 +17,7 @@ class MicroscopeInterface(VulnerableMachine):
     def __init__(self):
         """Get the microscope instance"""
         self.supported_measurement_variables = []
+        self.supports_parallel_measurement_variable_setting = True
 
     def setInLorenzMode(self, lorenz_mode: bool) -> None:
         """Set whether the microscope should now be in lorenz mode or not.
@@ -131,37 +132,6 @@ class MicroscopeInterface(VulnerableMachine):
     
     def getMeasurementVariableById(self, id_: str) -> MeasurementVariable:
         """Get the measurement variable object by its id.
-
-        Raises
-        ------
-        KeyError
-            When the `id_` does not exist for this microscope
-        
-        Parameters
-        ----------
-        id_ : str
-            The id of the measurement variable
-        
-        Returns
-        -------
-        MeasurementVariable
-            The variable object
-        """
-
-        f = list(filter(
-            lambda v: v.unique_id == id_, 
-            self.supported_measurement_variables
-        ))
-
-        if len(f) > 0:
-            return f[0]
-        else:
-            raise KeyError(
-                "Could not find a measurement variable with id {}.".format(id_)
-            )
-    
-    async def resetToSafeState(self) -> None:
-        """Set the microscope into its safe state.
 
         Raises
         ------
