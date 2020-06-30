@@ -14,7 +14,7 @@ from .events import measurement_ready
 from .events import before_record
 from .events import after_record
 from .events import emergency
-from .events import stop
+from .events import after_stop
 # from .controller import Controller
 # for tmp debugging only
 Controller = typing.Any
@@ -198,14 +198,14 @@ class Measurement:
 
             # add cancel to events
             emergency.append(task.cancel)
-            stop.append(task.cancel)
+            after_stop.append(task.cancel)
 
             await task
 
             # remove references so the task and the event callbacks get removed
             # by the garbage collector
             emergency.remove(task.cancel)
-            stop.remove(task.cancel)
+            after_stop.remove(task.cancel)
             del task
         
             if not self.running:
@@ -216,7 +216,6 @@ class Measurement:
             microscope_ready()
 
             for self._step_index, step in enumerate(self.steps):
-                print(self._step_index)
                 # start going through steps
                 if not self.running:
                     # stop() is called
@@ -245,7 +244,7 @@ class Measurement:
                     # add cancel callback to emergency and stop event to stop 
                     # executing the async operation
                     emergency.append(task.cancel)
-                    stop.append(task.cancel)
+                    after_stop.append(task.cancel)
                     tasks.append(task)
                 
                 # wait until all the measurement vairables are set
@@ -255,7 +254,7 @@ class Measurement:
                 # task
                 for task in tasks:
                     emergency.remove(task.cancel)
-                    stop.remove(task.cancel)
+                    after_stop.remove(task.cancel)
                     del task
                 del tasks
 
@@ -264,8 +263,17 @@ class Measurement:
                     return
                 
                 # record measurement
-                self.current_image = await self.controller.camera.recordImage()
-                self.current_image.controller = self.controller
+                task = asyncio.create_task(self.controller.camera.recordImage())
+                # add cancel callback to emergency and stop event to stop 
+                # executing the async operation
+                emergency.append(task.cancel)
+                after_stop.append(task.cancel)
+
+                self.current_image = await task
+                
+                emergency.remove(task.cancel)
+                after_stop.remove(task.cancel)
+                del task
 
                 if not self.running:
                     # stop() is called
@@ -307,11 +315,13 @@ class Measurement:
         """Stop the measurement. 
         
         Note that the current hardware action is still finished when it has 
-        started already!
+        started already! Also note that the Measurement.start() is a 
+        asyncio.Future object which the task should be cancelled of. This also 
+        needs to be done outside of this function.
 
         Fired Events
         ------------
-        stop
+        after_stop
             Fired when this function is executed
         """
 
@@ -319,4 +329,4 @@ class Measurement:
         self._setSafe()
 
         # fire stop event
-        stop()
+        after_stop()

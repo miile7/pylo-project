@@ -18,4 +18,4 @@ image but before saving the image to the directory"""
 after_record = Event()
 
 """Fired when the measurement is stopped but not finished"""
-stop = Event()
+after_stop = Event()
