@@ -714,6 +714,39 @@ class TestMeasurement:
         # check that the following events are not executed
         assert len(performed_measurement.measurement_ready_time) == 0
     
+    def stop_measurement_after(self, perf_measurement, stop_time):
+        """Stop the measurement after the amout of time."""
+        time.sleep(stop_time)
+        perf_measurement.measurement.stop()
+
+    def test_stop_event_stops_while_setting_lorenz_mode(self):
+        """Test whether a stop call stops the microscope while it is setting
+        the lorenz mode."""
+        # make the sleep time (=time the microscope and camera take to perform
+        # their action) big enough so the stop call is somewhere inbetween
+        operation_time = 2
+        setSleepTime(operation_time)
+
+        performed_measurement = PerformedMeasurement(0, auto_start=False)
+        thread = threading.Thread(target=self.stop_measurement_after, 
+                                  args=(performed_measurement, operation_time / 2))
+        thread.start()
+        performed_measurement.measurement.start()
+        
+        # make sure there the first operation has not finished, there must not
+        # be more time between the current time (where the measurement has 
+        # been stopped) and the start time than some fraction of the 
+        # operation_time
+        assert time.time() <= performed_measurement.start_time + operation_time * 3 / 4
+
+        self.check_event_is_stopped(performed_measurement)
+
+        # check that the following events are not executed
+        assert performed_measurement.controller.microscope.currently_setting_lorenz_mode
+
+        # reset the sleep time to be random again
+        setSleepTime("random")
+    
     def throw_exception(self):
         raise Exception("This is an exception to test whether exceptions are " + 
                         "handled correctly.")
