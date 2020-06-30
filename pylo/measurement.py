@@ -187,6 +187,7 @@ class Measurement:
             event is fired
         """
         self.running = True
+        threads = []
 
         # try:
         if True:
@@ -215,6 +216,7 @@ class Measurement:
             microscope_ready()
 
             for self._step_index, step in enumerate(self.steps):
+                print(self._step_index)
                 # start going through steps
                 if not self.running:
                     # stop() is called
@@ -263,6 +265,7 @@ class Measurement:
                 
                 # record measurement
                 self.current_image = await self.controller.camera.recordImage()
+                self.current_image.controller = self.controller
 
                 if not self.running:
                     # stop() is called
@@ -276,7 +279,9 @@ class Measurement:
                     return
                 
                 name = self.formatName()
-                thread = self.current_image.saveTo(os.path.join(self.save_dir, name))
+                threads.append(
+                    self.current_image.saveTo(os.path.join(self.save_dir, name))
+                )
             
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly
@@ -285,11 +290,9 @@ class Measurement:
                 self.controller.camera.resetToSafeState()
             )
 
-            # wait until the last image is saved hoping that all image saving
-            # takes the same amount of time and the image before the last image
-            # is already saved/has a headstart that big that the last image
-            # can't overtake the one before the last
-            thread.join()
+            # Wait for all saving threads to finish
+            for thread in threads:
+                thread.join()
 
             # reset everything to the state before measuring
             self.running = False
