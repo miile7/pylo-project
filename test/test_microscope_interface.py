@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 import pylo.microscopes
 import pylo
 
@@ -18,23 +17,23 @@ class TestMicroscopeInterface:
 
     def test_error_is_thrown_set_lorenz_mode(self):
         with pytest.raises(NotImplementedError):
-            asyncio.run(self.microscope.setInLorenzMode(True))
+            self.microscope.setInLorenzMode(True)
         
     def test_error_is_thrown_get_lorenz_mode(self):
         with pytest.raises(NotImplementedError):
-            asyncio.run(self.microscope.getInLorenzMode())
+            self.microscope.getInLorenzMode()
         
     def test_error_is_thrown_set_measurement_variable(self):
         with pytest.raises(NotImplementedError):
-            asyncio.run(self.microscope.setMeasurementVariableValue("test-variable", 0))
+            self.microscope.setMeasurementVariableValue("test-variable", 0)
         
     def test_error_is_thrown_get_measurement_variable(self):
         with pytest.raises(NotImplementedError):
-            asyncio.run(self.microscope.getMeasurementVariableValue("test-variable"))
+            self.microscope.getMeasurementVariableValue("test-variable")
         
     def test_error_is_thrown_reset_to_safe_state(self):
         with pytest.raises(NotImplementedError):
-            asyncio.run(self.microscope.resetToSafeState())
+            self.microscope.resetToSafeState()
 
     @pytest.mark.parametrize("id_,value", [
         ("test-var-1", 0),
