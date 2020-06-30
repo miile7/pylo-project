@@ -39,7 +39,6 @@ class TestVulnerableMachine:
         machine = DummyMachine()
         machine.resetToEmergencyState()
 
-        print(machine)
         assert machine._in_emergency_state == True
 
     def test_emergency_state_safe(self):

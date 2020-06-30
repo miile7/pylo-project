@@ -128,12 +128,33 @@ class MicroscopeInterface(VulnerableMachine):
         
         return False
     
-    async def resetToSafeState(self) -> None:
-        """Set the microscope into its safe state.
+    def getMeasurementVariableById(self, id_: str) -> MeasurementVariable:
+        """Get the measurement variable object by its id.
 
-        The safe state will be used whenever something bad happens or when the 
-        measurement has finished. The microscope will be told to go in the safe 
-        state. This should be a state where the microscope can stay for long 
-        times until the operator comes again.
+        Raises
+        ------
+        KeyError
+            When the `id_` does not exist for this microscope
+        
+        Parameters
+        ----------
+        id_ : str
+            The id of the measurement variable
+        
+        Returns
+        -------
+        MeasurementVariable
+            The variable object
         """
-        raise NotImplementedError()
+
+        f = list(filter(
+            lambda v: v.unique_id == id_, 
+            self.supported_measurement_variables
+        ))
+
+        if len(f) > 0:
+            return f[0]
+        else:
+            raise KeyError(
+                "Could not find a measurement variable with id {}.".format(id_)
+            )
