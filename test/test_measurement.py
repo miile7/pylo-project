@@ -7,8 +7,8 @@ if __name__ == "__main__":
 
 from PIL import Image as PILImage
 import numpy as np
+import threading
 import datetime
-import asyncio
 import pytest
 import random
 import glob
@@ -96,7 +96,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         # testing that the stop event prevents all actions from finishing
         self.currently_setting_measurement_variable = None
     
-    async def setMeasurementVariableValue(self, id_, value):
+    def setMeasurementVariableValue(self, id_, value):
         self.currently_setting_measurement_variable = id_
         if not self.isValidMeasurementVariableValue(id_, value):
             variable = self.getMeasurementVariableById(id_)
@@ -126,7 +126,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.currently_setting_measurement_variable = None
         self.currently_setting_lorenz_mode = False
 
-    async def getMeasurementVariableValue(self, id_):
+    def getMeasurementVariableValue(self, id_):
         respond_time = sleepRandomTime()
 
         if id_ == "focus":
@@ -138,7 +138,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         else:
             raise KeyError("The measurement variable {} does not exist.".format(id_))
     
-    async def setInLorenzMode(self, lorenz_mode):
+    def setInLorenzMode(self, lorenz_mode):
         self.currently_setting_lorenz_mode = True
         respond_time = sleepRandomTime()
 
@@ -148,12 +148,12 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.is_in_lorenz_mode = lorenz_mode
         self.currently_setting_lorenz_mode = False
     
-    async def getInLorenzMode(self):
+    def getInLorenzMode(self):
         respond_time = sleepRandomTime()
 
         return self.is_in_lorenz_mode
     
-    async def resetToSafeState(self):
+    def resetToSafeState(self):
         respond_time = sleepRandomTime()
         
         self.is_in_safe_state = True
@@ -167,14 +167,12 @@ class DummyCamera(pylo.CameraInterface):
         self.is_in_safe_state = False
         self.currently_recording_image = False
     
-    async def resetToSafeState(self):
+    def resetToSafeState(self):
         respond_time = sleepRandomTime()
         
-        print("In reset to safe state")
-        assert False
         self.is_in_safe_state = True
     
-    async def recordImage(self):
+    def recordImage(self):
         self.currently_recording_image = True
         self.is_in_safe_state = False
         size = len(self.microscope.supported_measurement_variables) + 1
@@ -244,7 +242,7 @@ class PerformedMeasurement:
     each test, set the variable cache=False
     """
 
-    def __init__(self, num=2, before_start=None):
+    def __init__(self, num=2, before_start=None, auto_start=True):
         self.root = os.path.join(os.path.dirname(__file__), "tmp_test_files")
 
         if not os.path.exists(self.root):
@@ -333,12 +331,18 @@ class PerformedMeasurement:
         if callable(before_start):
             before_start(self)
         
+        self.file_m_times = []
         self.start_time = time.time()
         
-        asyncio.run(self.measurement.start())
+        if auto_start:
+            # start in separate thread for testing, this will probaobly be in a 
+            # separate thread later too, so include it for testing
+            thread = threading.Thread(target=self.measurement.start())
+            thread.start()
+            thread.join()
 
-        self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
-                                     self.get_image_paths()))
+            self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
+                                        self.get_image_paths()))
     
     def get_image_paths(self, counter=None):
         """A generator that returns the file name until the counter, if the 
@@ -390,39 +394,7 @@ class PerformedMeasurement:
     
     def check_if_microscope_in_lorenz_mode(self):
         assert self.controller.microscope.is_in_lorenz_mode
-
-performed_measurement_obj = None
-
-@pytest.fixture
-def performed_measurement(performed_measurement_cache=True):
-    """Get the performed measurement.
-
-    If cache is False, always a new measurement will be created
-
-    Returns
-    -------
-    PerformedMeasurement
-        The measurement
-    """
-
-    global performed_measurement_obj, cache
-
-    if (not performed_measurement_cache or 
-        not isinstance(performed_measurement_obj, PerformedMeasurement)):
-        # recreate if not cache
-        performed_measurement_obj = PerformedMeasurement()
     
-    def every_step_visited_handler(self):
-        step = self.measurement.steps[self.measurement._step_index]
-
-        try:
-            self.unvisited_steps.remove(step)
-        except ValueError:
-            pass
-    
-    def check_if_microscope_in_lorenz_mode(self):
-        assert self.controller.microscope.is_in_lorenz_mode
-
 performed_measurement_obj = None
 
 @pytest.fixture
@@ -448,6 +420,7 @@ def performed_measurement(performed_measurement_cache=True):
 
 class TestMeasurement:
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_all_steps_produced_images(self, performed_measurement):
         """Test if there are all the image files that are expected."""
 
@@ -457,6 +430,7 @@ class TestMeasurement:
             assert os.path.getmtime(f) >= performed_measurement.start_time
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_all_steps_content_of_images(self, performed_measurement):
         """Test if the content of the image is correct, this tests whether the
         image is readable and saved correctly (which is redundant with the 
@@ -494,6 +468,7 @@ class TestMeasurement:
                                 abs_tol=t_prec)
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_all_events_are_called(self, performed_measurement):
         """Test if all the expected events are fired."""
         assert len(performed_measurement.microscope_ready_time) > 0
@@ -502,6 +477,7 @@ class TestMeasurement:
         assert len(performed_measurement.measurement_ready_time) > 0
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_microscope_ready_event_time(self, performed_measurement):
         """Test if the microscope_ready event is fired after the start but 
         before all other events and before any image is created."""
@@ -524,6 +500,7 @@ class TestMeasurement:
                 min(performed_measurement.file_m_times))
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_before_record_event_time(self, performed_measurement):
         """Test if the all before_record event are fired after the start but 
         before after_record and measurement_ready events and before the 
@@ -550,6 +527,7 @@ class TestMeasurement:
                       np.array(performed_measurement.file_m_times))
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_after_record_event_time(self, performed_measurement):
         """Test if the all after_record event are fired after each record 
         and before the measurement_ready events and after the image is created 
@@ -574,7 +552,8 @@ class TestMeasurement:
             assert after_time <= m_time or math.isclose(after_time, m_time, 
                                                         rel_tol=0, abs_tol=1e-6)
                            
-    @pytest.mark.slow()                             
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")                       
     def test_measurement_ready_event_time(self, performed_measurement):
         """Test if the measurement_ready event is fired after all other events
         and after all images are created."""
@@ -598,6 +577,7 @@ class TestMeasurement:
                 performed_measurement.measurement_ready_time[0])
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_format_name_on_each_step(self, performed_measurement):
         """Test if the nameFormat() function uses the correct values on each
         step."""
@@ -654,6 +634,7 @@ class TestMeasurement:
             assert e == len(name)
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_missing_keys_in_format_name(self, performed_measurement):
         """Test if missing keys/wrong placeholders are just ignored in the 
         formatName() function"""
@@ -661,24 +642,28 @@ class TestMeasurement:
         assert performed_measurement.measurement.formatName("{nonexitingplaceholder}") == ""
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_all_steps_visited(self, performed_measurement):
         """Test if all steps that were defined are visited."""
 
         assert len(performed_measurement.unvisited_steps) == 0
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_microscope_in_safe_state(self, performed_measurement):
         """Test if the microscope is in the safe state after the measurmenet
         has finished."""
         assert performed_measurement.controller.microscope.is_in_safe_state
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_camera_in_safe_state(self, performed_measurement):
         """Test if the camera is in the safe state after the measurmenet
         has finished."""
         assert performed_measurement.controller.camera.is_in_safe_state
     
     @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def check_event_is_stopped(self, perf_measurement):
         """Check if the given measurement is stopped and there are no files 
         created."""

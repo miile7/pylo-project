@@ -1,5 +1,5 @@
+import threading
 import datetime
-import asyncio
 import typing
 import os
 
@@ -163,7 +163,7 @@ class Measurement:
         self.controller.microscope.resetToEmergencyState()
         self.controller.camera.resetToEmergencyState()
     
-    async def start(self) -> None:
+    def start(self) -> None:
         """Start the measurement.
         
         Fired Events
@@ -183,31 +183,17 @@ class Measurement:
         Listened Events
         ---------------
         stop, emergency
-            Stop the async calls on the microscope and the camera if the stop
+            Stop the calls on the microscope and the camera if the stop
             event is fired
         """
         self.running = True
-        threads = []
+        image_save_threads = []
 
         # try:
         if True:
-            # create async task
-            task = asyncio.create_task(
-                self.controller.microscope.setInLorenzMode(True)
-            )
+            # set to lorenz mode
+            self.controller.microscope.setInLorenzMode(True)
 
-            # add cancel to events
-            emergency.append(task.cancel)
-            after_stop.append(task.cancel)
-
-            await task
-
-            # remove references so the task and the event callbacks get removed
-            # by the garbage collector
-            emergency.remove(task.cancel)
-            after_stop.remove(task.cancel)
-            del task
-        
             if not self.running:
                 # stop() is called
                 return
@@ -216,7 +202,6 @@ class Measurement:
             microscope_ready()
 
             for self._step_index, step in enumerate(self.steps):
-                print(self._step_index)
                 # start going through steps
                 if not self.running:
                     # stop() is called
@@ -225,8 +210,8 @@ class Measurement:
                 # fire event before recording
                 before_record()
 
-                # the asynchronous tasks to set the values at the micrsocope
-                tasks = []
+                # the asynchronous threads to set the values at the micrsocope
+                measurement_variable_threads = []
 
                 for variable_name in step:
                     # set each measurement variable
@@ -234,48 +219,33 @@ class Measurement:
                         # stop() is called
                         return
                     
-                    # MicroscopeInterface.setMeasurementVariableValue() is 
-                    # async so this is an future object
-                    task = asyncio.create_task(
-                        self.controller.microscope.setMeasurementVariableValue(
-                            variable_name, step[variable_name]
+                    if self.controller.microscope.supports_parallel_measurement_variable_setting:
+                        # MicroscopeInterface.setMeasurementVariableValue() can
+                        # set parallel
+                        thread = threading.Thread(
+                            target=self.controller.microscope.setMeasurementVariableValue,
+                            args=(variable_name, step[variable_name])
                         )
-                    )
-
-                    # add cancel callback to emergency and stop event to stop 
-                    # executing the async operation
-                    emergency.append(task.cancel)
-                    after_stop.append(task.cancel)
-                    tasks.append(task)
+                        thread.start()
+                        measurement_variable_threads.append(thread)
+                    else:
+                        # set measurement variables sequential
+                        self.controller.microscope.setMeasurementVariableValue(
+                            variable_name, 
+                            step[variable_name]
+                        )
                 
-                # wait until all the measurement vairables are set
-                await asyncio.gather(*tasks)
+                # Wait for all measurement variable threads to finish
+                for thread in measurement_variable_threads:
+                    thread.join()
                 
-                # remove the callback to let the garbage collector destroy the 
-                # task
-                for task in tasks:
-                    emergency.remove(task.cancel)
-                    after_stop.remove(task.cancel)
-                    del task
-                del tasks
-
                 if not self.running:
                     # stop() is called
                     return
                 
                 # record measurement
-                task = asyncio.create_task(self.controller.camera.recordImage())
-                # add cancel callback to emergency and stop event to stop 
-                # executing the async operation
-                emergency.append(task.cancel)
-                after_stop.append(task.cancel)
-
-                self.current_image = await task
+                self.current_image = self.controller.camera.recordImage()
                 
-                emergency.remove(task.cancel)
-                after_stop.remove(task.cancel)
-                del task
-
                 if not self.running:
                     # stop() is called
                     return
@@ -288,19 +258,32 @@ class Measurement:
                     return
                 
                 name = self.formatName()
-                threads.append(
-                    self.current_image.saveTo(os.path.join(self.save_dir, name))
+                # save the image parallel to working on
+                thread = threading.Thread(
+                    target=self.current_image.saveTo,
+                    args=(os.path.join(self.save_dir, name), )
                 )
+                thread.start()
+                image_save_threads.append(thread)
             
+            reset_threads = []
             # reset microscope and camera to a safe state so there is no need
-            # for the operator to come back very quickly
-            await asyncio.gather(
-                self.controller.microscope.resetToSafeState(),
-                self.controller.camera.resetToSafeState()
-            )
+            # for the operator to come back very quickly, do this while waiting
+            # for the save threads to finish
+            thread = threading.Thread(target=self.controller.microscope.resetToSafeState)
+            thread.start()
+            reset_threads.append(thread)
+            
+            thread = threading.Thread(target=self.controller.camera.resetToSafeState)
+            thread.start()
+            reset_threads.append(thread)
 
-            # Wait for all saving threads to finish
-            for thread in threads:
+            # wait for all saving threads to finish
+            for thread in image_save_threads:
+                thread.join()
+
+            # wait for all machine reset threads to finish
+            for thread in reset_threads:
                 thread.join()
 
             # reset everything to the state before measuring
@@ -316,9 +299,7 @@ class Measurement:
         """Stop the measurement. 
         
         Note that the current hardware action is still finished when it has 
-        started already! Also note that the Measurement.start() is a 
-        asyncio.Future object which the task should be cancelled of. This also 
-        needs to be done outside of this function.
+        started already!
 
         Fired Events
         ------------
