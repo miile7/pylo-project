@@ -379,11 +379,22 @@ class PerformedMeasurement:
     
     def prepare_names_handler(self):
         self.formatted_names.append(self.measurement.formatName(self.name_test_format))
+    
+    def every_step_visited_handler(self):
+        step = self.measurement.steps[self.measurement._step_index]
+
+        try:
+            self.unvisited_steps.remove(step)
+        except ValueError:
+            pass
+    
+    def check_if_microscope_in_lorenz_mode(self):
+        assert self.controller.microscope.is_in_lorenz_mode
 
 performed_measurement_obj = None
 
 @pytest.fixture
-def performed_measurement():
+def performed_measurement(performed_measurement_cache=True):
     """Get the performed measurement.
 
     If cache is False, always a new measurement will be created
@@ -396,7 +407,8 @@ def performed_measurement():
 
     global performed_measurement_obj, cache
 
-    if not cache or not isinstance(performed_measurement_obj, PerformedMeasurement):
+    if (not performed_measurement_cache or 
+        not isinstance(performed_measurement_obj, PerformedMeasurement)):
         # recreate if not cache
         performed_measurement_obj = PerformedMeasurement()
     
@@ -722,7 +734,7 @@ class TestMeasurement:
                         "handled correctly.")
 
     @pytest.mark.skip()
-    def test_exception_stops_measurement(self, performed_measurement):
+    def test_exception_stops_measurement(self):
         """Test if an exception stops the measurement."""
         pylo.after_record.append(performed_measurement.throw_exception)
 
