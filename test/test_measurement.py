@@ -1,31 +1,5 @@
 import os
 
-
-
-
-
-
-
-
-
-
-print("\n\n\nThis class doesnt' work at the moment because the setup_method() is " + 
-      "called before every single function call. This way the test takes " + 
-      "forever and raises unwanted exceptions. Note that also all the oter " + 
-      "test are written like that which is WRONG!\n\n\n")
-
-
-
-
-
-
-
-
-
-
-assert False
-
-
 if __name__ == "__main__":
     # For direct call only
     import sys
@@ -340,6 +314,12 @@ class PerformedMeasurement:
         pylo.after_record.clear()
         pylo.measurement_ready.clear()
 
+        # clear events
+        pylo.microscope_ready.clear()
+        pylo.before_record.clear()
+        pylo.after_record.clear()
+        pylo.measurement_ready.clear()
+
         # register events
         pylo.microscope_ready.append(self.microscope_ready_handler)
         pylo.before_record.append(self.before_record_handler)
@@ -399,6 +379,26 @@ class PerformedMeasurement:
     
     def prepare_names_handler(self):
         self.formatted_names.append(self.measurement.formatName(self.name_test_format))
+
+performed_measurement_obj = None
+
+@pytest.fixture
+def performed_measurement():
+    """Get the performed measurement.
+
+    If cache is False, always a new measurement will be created
+
+    Returns
+    -------
+    PerformedMeasurement
+        The measurement
+    """
+
+    global performed_measurement_obj, cache
+
+    if not cache or not isinstance(performed_measurement_obj, PerformedMeasurement):
+        # recreate if not cache
+        performed_measurement_obj = PerformedMeasurement()
     
     def every_step_visited_handler(self):
         step = self.measurement.steps[self.measurement._step_index]
@@ -722,7 +722,7 @@ class TestMeasurement:
                         "handled correctly.")
 
     @pytest.mark.skip()
-    def test_exception_stops_measurement(self):
+    def test_exception_stops_measurement(self, performed_measurement):
         """Test if an exception stops the measurement."""
         pylo.after_record.append(performed_measurement.throw_exception)
 

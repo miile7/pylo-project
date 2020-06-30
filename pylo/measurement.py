@@ -216,6 +216,7 @@ class Measurement:
             microscope_ready()
 
             for self._step_index, step in enumerate(self.steps):
+                print(self._step_index)
                 # start going through steps
                 if not self.running:
                     # stop() is called
