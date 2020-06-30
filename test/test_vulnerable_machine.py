@@ -5,7 +5,6 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pytest
-import asyncio
 import pylo
 
 class DummyMachine(pylo.VulnerableMachine):
@@ -16,7 +15,7 @@ class DummyMachine(pylo.VulnerableMachine):
     def test_function(self) -> bool:
         return True
     
-    async def resetToSafeState(self) -> None:
+    def resetToSafeState(self) -> None:
         self.is_in_safe_state = True
 
 class TestVulnerableMachine:

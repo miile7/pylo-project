@@ -1,4 +1,3 @@
-import asyncio
 import inspect
 from .blocked_function_error import BlockedFunctionError
 from .blocked_function import BlockedFunction
@@ -44,7 +43,7 @@ class VulnerableMachine:
         """
 
         self._in_emergency_state = True
-        asyncio.run(self.resetToSafeState())
+        self.resetToSafeState()
 
         for name, _ in inspect.getmembers(self, predicate=inspect.ismethod):
             if name != "resolveEmergencyState":
@@ -58,7 +57,7 @@ class VulnerableMachine:
         for name, _ in inspect.getmembers(self, predicate=lambda x: isinstance(x, BlockedFunction)):
             setattr(self, name, getattr(self, name).func)
     
-    async def resetToSafeState(self) -> None:
+    def resetToSafeState(self) -> None:
         """Set the machine into its safe state.
 
         The safe state will be used whenever something bad happens or when the 

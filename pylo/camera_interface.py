@@ -16,7 +16,7 @@ class CameraInterface(VulnerableMachine):
         """Create a new camera interface object."""
         self.tags = {}
     
-    async def recordImage(self) -> Image:
+    def recordImage(self) -> Image:
         """Get the image of the current camera.
 
         Returns

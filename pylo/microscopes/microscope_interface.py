@@ -1,4 +1,5 @@
 from ..vulnerable_machine import VulnerableMachine
+from ..measurement_variable import MeasurementVariable
 
 class MicroscopeInterface(VulnerableMachine):
     """
@@ -17,7 +18,7 @@ class MicroscopeInterface(VulnerableMachine):
         """Get the microscope instance"""
         self.supported_measurement_variables = []
 
-    async def setInLorenzMode(self, lorenz_mode: bool) -> None:
+    def setInLorenzMode(self, lorenz_mode: bool) -> None:
         """Set whether the microscope should now be in lorenz mode or not.
 
         This is typically done by switching off the lenses that are close to 
@@ -30,7 +31,7 @@ class MicroscopeInterface(VulnerableMachine):
         """
         raise NotImplementedError()
 
-    async def getInLorenzMode(self) -> bool:
+    def getInLorenzMode(self) -> bool:
         """Get whether the microscope is currently in lorenz mode or not.
 
         Returns
@@ -40,7 +41,7 @@ class MicroscopeInterface(VulnerableMachine):
         """
         raise NotImplementedError()
 
-    async def setMeasurementVariableValue(self, id_: str, value: float) -> None:
+    def setMeasurementVariableValue(self, id_: str, value: float) -> None:
         """Set the measurement variable defined by its id to the given value.
 
         A measurement variable is each variable that this microscope can 
@@ -68,7 +69,7 @@ class MicroscopeInterface(VulnerableMachine):
         """
         raise NotImplementedError()
 
-    async def getMeasurementVariableValue(self, id_: str) -> float:
+    def getMeasurementVariableValue(self, id_: str) -> float:
         """Get the value of the measurement variable defined by its id.
 
         A measurement variable is each variable that this microscope can 
