@@ -169,24 +169,19 @@ class Measurement:
         """Set the microscope and the camera to be in safe state and stop the 
         measurement."""
 
-        # try:
-        #     self.controller.microscope.resetToEmergencyState()
-        # except BlockedFunctionError:
-        #     # emergency event is called, microscope goes in emergency state by 
-        #     # itself
-        #     pass
+        try:
+            self.controller.microscope.resetToEmergencyState()
+        except BlockedFunctionError:
+            # emergency event is called, microscope goes in emergency state by 
+            # itself
+            pass
 
-        # try:
-        #     self.controller.camera.resetToEmergencyState()
-        # except BlockedFunctionError:
-        #     # emergency event is called, camera goes in emergency state by 
-        #     # itself
-        #     pass
-
-        print("Measurement._setSafe()")
-
-        self.controller.microscope.resetToEmergencyState()
-        self.controller.camera.resetToEmergencyState()
+        try:
+            self.controller.camera.resetToEmergencyState()
+        except BlockedFunctionError:
+            # emergency event is called, camera goes in emergency state by 
+            # itself
+            pass
     
     def start(self) -> None:
         """Start the measurement.
