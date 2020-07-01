@@ -16,9 +16,7 @@ from .events import after_record
 from .events import emergency
 from .events import after_stop
 from .image import Image
-# from .controller import Controller
-# for tmp debugging only
-Controller = typing.Any
+from .controller import Controller
 
 class Measurement:
     """This class represents one measurement.
