@@ -229,12 +229,11 @@ class DummyConfiguration(pylo.AbstractConfiguration):
     def saveConfiguration(self):
         pass
 
-class DummyController:
+class DummyController(pylo.Controller):
     def __init__(self):
         self.microscope = DummyMicroscope()
         self.camera = DummyCamera(self.microscope)
         self.configuration = DummyConfiguration()
-        self.times = {"file_m_time": {}}
 
 class PerformedMeasurement:
     """This class performs one measurement and saves some specific values which
