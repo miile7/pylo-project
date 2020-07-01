@@ -7,14 +7,15 @@ from collections import defaultdict
 
 from .config import DEFAULT_SAVE_DIRECTORY
 from .config import DEFAULT_SAVE_FILE_NAME
+from .blocked_function_error import BlockedFunctionError
 from .measurement_variable import MeasurementVariable
-from .image import Image
 from .events import microscope_ready
 from .events import measurement_ready
 from .events import before_record
 from .events import after_record
 from .events import emergency
 from .events import after_stop
+from .image import Image
 # from .controller import Controller
 # for tmp debugging only
 Controller = typing.Any
@@ -43,6 +44,11 @@ class Measurement:
     running : bool
         Whether the measurement is running or not, to stop the measurement 
         immediately set this to False
+        
+    Listened Events
+    ---------------
+    emergency
+        Stop the measurement if the event is fired
     """
 
     def __init__(self, controller: Controller, steps: typing.List[dict]):
@@ -79,6 +85,9 @@ class Measurement:
         
         self.current_image = None
         self.running = False
+
+        # stop the measurement when the emergency event is fired
+        emergency.append(self.stop)
 
         # the index in the steps that is currently being measured
         self._step_index = -1
@@ -160,6 +169,22 @@ class Measurement:
         """Set the microscope and the camera to be in safe state and stop the 
         measurement."""
 
+        # try:
+        #     self.controller.microscope.resetToEmergencyState()
+        # except BlockedFunctionError:
+        #     # emergency event is called, microscope goes in emergency state by 
+        #     # itself
+        #     pass
+
+        # try:
+        #     self.controller.camera.resetToEmergencyState()
+        # except BlockedFunctionError:
+        #     # emergency event is called, camera goes in emergency state by 
+        #     # itself
+        #     pass
+
+        print("Measurement._setSafe()")
+
         self.controller.microscope.resetToEmergencyState()
         self.controller.camera.resetToEmergencyState()
     
@@ -179,18 +204,11 @@ class Measurement:
         after_record
             Fired after setting the microscope to measurement point and 
             recording an image but before saving the image to the directory
-        
-        Listened Events
-        ---------------
-        stop, emergency
-            Stop the calls on the microscope and the camera if the stop
-            event is fired
         """
         self.running = True
         image_save_threads = []
 
-        # try:
-        if True:
+        try:
             # set to lorenz mode
             self.controller.microscope.setInLorenzMode(True)
 
@@ -290,10 +308,10 @@ class Measurement:
             self.running = False
             self._step_index = -1
             measurement_ready()
-        # except Exception:
-        #     # stop if any error occurres, just to be sure
-        #     self.stop()
-        #     raise
+        except Exception:
+            # stop if any error occurres, just to be sure
+            self.stop()
+            raise
     
     def stop(self) -> None:
         """Stop the measurement. 

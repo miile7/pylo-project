@@ -156,6 +156,11 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def resetToSafeState(self):
         respond_time = sleepRandomTime()
         
+        # wait for other actions to finish
+        while (self.currently_setting_lorenz_mode or 
+               self.currently_setting_measurement_variable is not None):
+            time.sleep(0.01)
+        
         self.is_in_safe_state = True
 
 dummy_camera_name = "DummyCamera for testing"
@@ -418,6 +423,9 @@ def performed_measurement(performed_measurement_cache=True):
     
     return performed_measurement_obj
 
+class DummyException(Exception):
+    pass
+
 class TestMeasurement:
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
@@ -664,53 +672,63 @@ class TestMeasurement:
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
-    def check_event_is_stopped(self, perf_measurement):
-        """Check if the given measurement is stopped and there are no files 
-        created."""
+    def check_measurement_is_stopped(self, perf_measurement, check_files=True):
+        """Check if the given measurement is stopped at any time, check if 
+        there are no files created if `check_files` is True."""
 
         assert not perf_measurement.measurement.running
         assert perf_measurement.controller.microscope.is_in_safe_state
         assert perf_measurement.controller.camera.is_in_safe_state
 
-        for f in glob.glob(os.path.join(perf_measurement.root, "*.tif")):
-            assert os.path.getmtime(f) < perf_measurement.start_time
+        if check_files:
+            for f in glob.glob(os.path.join(perf_measurement.root, "*.tif")):
+                assert os.path.getmtime(f) < perf_measurement.start_time
     
-    def test_stop_event_stops_execution_in_microscope_ready(self):
+    def test_stop_stops_execution_in_microscope_ready(self):
         """Test if firing the stop event in the microscope_ready event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
             lambda m: pylo.microscope_ready.append(m.measurement.stop)
         )
 
-        self.check_event_is_stopped(performed_measurement)
+        self.check_measurement_is_stopped(performed_measurement)
 
+        # check that the following events are executed
+        assert len(performed_measurement.microscope_ready_time) == 1
         # check that the following events are not executed
         assert len(performed_measurement.before_record_time) == 0
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
     
-    def test_stop_event_stops_execution_in_before_record(self):
+    def test_stop_stops_execution_in_before_record(self):
         """Test if firing the stop event in the before_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.microscope_ready.append(m.measurement.stop)
+            lambda m: pylo.before_record.append(m.measurement.stop)
         )
 
-        self.check_event_is_stopped(performed_measurement)
+        self.check_measurement_is_stopped(performed_measurement)
 
+        # check that the following events are executed
+        assert len(performed_measurement.microscope_ready_time) == 1
+        assert len(performed_measurement.before_record_time) == 1
         # check that the following events are not executed
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
     
-    def test_stop_event_stops_execution_in_after_record(self):
+    def test_stop_stops_execution_in_after_record(self):
         """Test if firing the stop event in the after_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.microscope_ready.append(m.measurement.stop)
+            lambda m: pylo.after_record.append(m.measurement.stop)
         )
 
-        self.check_event_is_stopped(performed_measurement)
+        self.check_measurement_is_stopped(performed_measurement)
 
+        # check that the following events are executed
+        assert len(performed_measurement.microscope_ready_time) == 1
+        assert len(performed_measurement.before_record_time) == 1
+        assert len(performed_measurement.after_record_time) == 1
         # check that the following events are not executed
         assert len(performed_measurement.measurement_ready_time) == 0
     
@@ -719,7 +737,8 @@ class TestMeasurement:
         time.sleep(stop_time)
         perf_measurement.measurement.stop()
 
-    def test_stop_event_stops_while_setting_lorenz_mode(self):
+    @pytest.mark.slow()
+    def test_stop_stops_while_setting_lorenz_mode(self):
         """Test whether a stop call stops the microscope while it is setting
         the lorenz mode."""
         # make the sleep time (=time the microscope and camera take to perform
@@ -729,32 +748,182 @@ class TestMeasurement:
 
         performed_measurement = PerformedMeasurement(0, auto_start=False)
         thread = threading.Thread(target=self.stop_measurement_after, 
-                                  args=(performed_measurement, operation_time / 2))
+                                  args=(performed_measurement, 
+                                        operation_time / 2))
         thread.start()
+
+        # start the measurement in this thread
         performed_measurement.measurement.start()
         
-        # make sure there the first operation has not finished, there must not
-        # be more time between the current time (where the measurement has 
-        # been stopped) and the start time than some fraction of the 
-        # operation_time
-        assert time.time() <= performed_measurement.start_time + operation_time * 3 / 4
+        # make sure only the lorenz mode is set (this is not breakable) and
+        # then the function exits and give some buffer (10%)
+        assert time.time() <= (performed_measurement.start_time + 
+                               operation_time * 1.1)
 
-        self.check_event_is_stopped(performed_measurement)
+        # wait until the stop thread is done
+        thread.join()
+
+        self.check_measurement_is_stopped(performed_measurement)
 
         # check that the following events are not executed
-        assert performed_measurement.controller.microscope.currently_setting_lorenz_mode
+        assert len(performed_measurement.microscope_ready_time) == 0
+        assert len(performed_measurement.before_record_time) == 0
+        assert len(performed_measurement.after_record_time) == 0
+        assert len(performed_measurement.measurement_ready_time) == 0
+
+        # reset the sleep time to be random again
+        setSleepTime("random")
+
+    @pytest.mark.slow()
+    def test_stop_stops_while_setting_measurement_variable(self):
+        """Test whether a stop call stops the microscope while it is setting
+        a measurement variable."""
+        # make the sleep time (=time the microscope and camera take to perform
+        # their action) big enough so the stop call is somewhere inbetween
+        operation_time = 2
+        setSleepTime(operation_time)
+
+        performed_measurement = PerformedMeasurement(0, auto_start=False)
+        thread = threading.Thread(target=self.stop_measurement_after, 
+                                  args=(performed_measurement, 
+                                        operation_time * 1.5))
+        thread.start()
+
+        # start the measurement in this thread
+        performed_measurement.measurement.start()
+        
+        # make sure only the lorenz mode is set (one operation time) and the 
+        # measurement variable is set (another operation time) and give some 
+        # buffer (10%)
+        assert time.time() <= (performed_measurement.start_time + 
+                               operation_time * 2 * 1.1)
+
+        # wait until the stop thread is done
+        thread.join()
+
+        self.check_measurement_is_stopped(performed_measurement)
+
+        # check that the following events are executed
+        assert len(performed_measurement.microscope_ready_time) > 0
+        assert len(performed_measurement.before_record_time) > 0
+        # check that the following events are not executed
+        assert len(performed_measurement.after_record_time) == 0
+        assert len(performed_measurement.measurement_ready_time) == 0
 
         # reset the sleep time to be random again
         setSleepTime("random")
     
-    def throw_exception(self):
-        raise Exception("This is an exception to test whether exceptions are " + 
-                        "handled correctly.")
+    def after_stop_handler(self):
+        """The event handler for testing the after_stop event."""
+        self.after_stop_times.append(time.time())
+    
+    def check_events(self, stop_callable):
+        """Perform the test for the events, the code is nearly the same so use
+        it for both tests."""
 
-    @pytest.mark.skip()
+        # make the sleep time (=time the microscope and camera take to perform
+        # their action) big enough so the stop call is somewhere inbetween
+        operation_time = 0.5
+        setSleepTime(operation_time)
+
+        self.after_stop_times = []
+        pylo.after_stop.clear()
+        pylo.after_stop.append(self.after_stop_handler)
+
+        performed_measurement = PerformedMeasurement(0, auto_start=False)
+
+        # start the measurement another thread
+        thread = threading.Thread(target=performed_measurement.measurement.start)
+        thread.start()
+
+        # stop the measurement
+        stop_callable(performed_measurement, operation_time)
+
+        # event is only triggered once
+        assert len(self.after_stop_times) == 1
+        # event is triggered immediately after the stop call
+        assert math.isclose(self.after_stop_times[0], time.time(), rel_tol=0,
+                            abs_tol=0.01)
+
+        # wait until the thread is done
+        thread.join()
+
+        # check if the measurement is acutally stopped
+        self.check_measurement_is_stopped(performed_measurement)
+
+        # reset the sleep time to be random again
+        setSleepTime("random")
+        pylo.after_stop.clear()
+    
+    def test_after_stop_event_is_triggered(self):
+        """Test whether a stop call triggers the after_stop event."""
+        self.check_events(lambda p, t: self.stop_measurement_after(p, t))
+
+    def test_emergency_event_stops_measurement(self):
+        """Test if firing the emergency event stops the measurement."""
+        pylo.emergency.clear()
+        self.check_events(lambda p, t: pylo.emergency())
+        pylo.emergency.clear()
+    
+    def throw_exception(self, *args):
+        raise DummyException("This is an exception to test whether exceptions " + 
+                             "are handled correctly.")
+
+    def test_exception_in_microscope_ready_stops_measurement(self):
+        """Test if an exception in the microscope_ready event stops the 
+        measurement."""
+        with pytest.raises(DummyException):
+            performed_measurement = PerformedMeasurement(0, 
+                lambda m: pylo.microscope_ready.append(self.throw_exception)
+            )
+
+            self.check_measurement_is_stopped(performed_measurement)
+
+            # check that the following events are executed
+            assert len(performed_measurement.microscope_ready_time) == 1
+            # check that the following events are not executed
+            assert len(performed_measurement.before_record_time) == 0
+            assert len(performed_measurement.after_record_time) == 0
+            assert len(performed_measurement.measurement_ready_time) == 0
+
+    def test_exception_in_before_record_stops_measurement(self):
+        """Test if an exception in the before_record event stops the 
+        measurement."""
+        with pytest.raises(DummyException):
+            performed_measurement = PerformedMeasurement(0, 
+                lambda m: pylo.before_record.append(self.throw_exception)
+            )
+
+            self.check_measurement_is_stopped(performed_measurement)
+
+            # check that the following events are executed
+            assert len(performed_measurement.microscope_ready_time) == 1
+            assert len(performed_measurement.before_record_time) == 1
+            # check that the following events are not executed
+            assert len(performed_measurement.after_record_time) == 0
+            assert len(performed_measurement.measurement_ready_time) == 0
+
+    def test_exception_in_after_record_stops_measurement(self):
+        """Test if an exception in the after_record event stops the 
+        measurement."""
+        with pytest.raises(DummyException):
+            performed_measurement = PerformedMeasurement(0, 
+                lambda m: pylo.after_record.append(self.throw_exception)
+            )
+
+            self.check_measurement_is_stopped(performed_measurement)
+
+            # check that the following events are executed
+            assert len(performed_measurement.microscope_ready_time) == 1
+            assert len(performed_measurement.before_record_time) == 1
+            assert len(performed_measurement.after_record_time) == 1
+            # check that the following events are not executed
+            assert len(performed_measurement.measurement_ready_time) == 0
+
     def test_exception_stops_measurement(self):
-        """Test if an exception stops the measurement."""
-        pylo.after_record.append(performed_measurement.throw_exception)
+        """Test if an exception at a random time stops the measurement."""
+        with pytest.raises(DummyException):
+            self.check_events(self.throw_exception)
 
 if __name__ == "__main__":
     pass
