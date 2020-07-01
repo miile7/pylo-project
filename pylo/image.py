@@ -1,6 +1,7 @@
 import os
 import json
 import typing
+import threading
 import numpy as np
 
 from PIL import Image as PILImage
@@ -51,8 +52,11 @@ class Image:
     
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
-               file_type: typing.Optional[str]=None) -> None:
+               file_type: typing.Optional[str]=None) -> threading.Thread:
         """Save the image to the given file_path.
+
+        Note that the saving is done in another thread. The thread will be 
+        returned.
 
         Raises
         ------
@@ -83,6 +87,11 @@ class Image:
             else that the extension if the file_path, this can be any key of 
             the Image.export_extensions, this is case-insensitive, 
             default: None
+        
+        Returns
+        -------
+        threading.Thread
+            The thread that is currently saving
         """
 
         file_path = os.path.abspath(file_path)
@@ -116,7 +125,10 @@ class Image:
 
             if (file_type in self.export_extensions and 
                 callable(self.export_extensions[file_type])):
-                self.export_extensions[file_type](file_path, self)
+                thread = threading.Thread(target=self.export_extensions[file_type], 
+                                          args=(file_path, self))
+                thread.start()
+                return thread
             else:
                 raise ValueError(
                     "The file extension {} is not supported.".format(file_type)
