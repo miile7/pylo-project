@@ -336,6 +336,38 @@ class AbstractConfiguration:
         else:
             return self.configuration[group][key]["default"]
     
+    def getDatatype(self, group: str, key: str) -> type:
+        """Get the datatype for the group and key.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no datatype for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+
+        Returns
+        -------
+        type
+            The datatype
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}.").format(key, group)
+            )
+        elif "type" not in self.configuration[group][key]:
+            raise KeyError(
+                ("There is no datatype for the key {} in the group {}.").format(key, group)
+            )
+        else:
+            return self.configuration[group][key]["type"]
+    
     def getAskIfNotPresent(self, group: str, key: str) -> bool:
         """Get whether to ask if the value for the given group and key is not 
         present.
