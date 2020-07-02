@@ -3,11 +3,14 @@ import importlib
 import typing
 import os
 
-from .abstract_configuration import AbstractConfiguration
+from .microscopes.microscope_interface import MicroscopeInterface
+from .camera_interface import CameraInterface
 from .abstract_configuration import Savable
 from .stop_program import StopProgram
 from .measurement import Measurement
+from .events import series_ready
 from .events import init_ready
+from .events import user_ready
 from .config import CONFIGURATION
 from .config import PROGRAM_NAME
 from .config import VIEW
@@ -87,8 +90,8 @@ class Controller:
         """
 
         module_name, class_name = self.getConfigurationValuesOrAsk(
-            (CONFIG_SETUP_GROUP, config_key_module, module_options),
-            (CONFIG_SETUP_GROUP, config_key_class, class_options)
+            ((CONFIG_SETUP_GROUP, config_key_module, module_options),
+             (CONFIG_SETUP_GROUP, config_key_class, class_options))
         )
 
         module = importlib.import_module(module_name)
@@ -99,7 +102,7 @@ class Controller:
         else:
             return class_()
     
-    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[str, str, typing.Optional[typing.Collection]]) -> typing.Tuple[Savable]:
+    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[str, typing.Optional[typing.Collection]]]) -> typing.Tuple[Savable]:
         """Get the configuration values or ask for them if they are not given.
 
         Parameters
@@ -174,16 +177,41 @@ class Controller:
                                     x != "__init__.py"), 
                         os.listdir(default_module_path))
 
-        try:
-            # get the microscope from the config or from the user
-            self.microscope = self._dynamicCreateClass("microscope-module", 
-                                                    "microscope-class",
-                                                    modules)
-            # get the camera form the config or form the user
-            self.camera = self._dynamicCreateClass("camera-module", "camera-class")
-        except StopProgram:
-            self.stopProgramLoop()
-            return
+        self.microscope = None
+        while not isinstance(self.microscope, MicroscopeInterface):
+            try:
+                # get the microscope from the config or from the user
+                self.microscope = self._dynamicCreateClass("microscope-module", 
+                                                        "microscope-class",
+                                                        modules)
+            except ModuleNotFoundError:
+                self.view.showError("The microscope module could not be " + 
+                                    "found.")
+                self.microscope = None
+            except (AttributeError, NameError):
+                self.view.showError("The microscope module does define " + 
+                                    "the given microscope class.")
+                self.microscope = None
+            except StopProgram:
+                self.stopProgramLoop()
+                return
+
+        self.camera = None
+        while not isinstance(self.camera, CameraInterface):
+            try:
+                # get the camera form the config or form the user
+                self.camera = self._dynamicCreateClass("camera-module", "camera-class")
+            except ModuleNotFoundError:
+                self.view.showError("The camera module could not be " + 
+                                    "found.")
+                self.camera = None
+            except (AttributeError, NameError):
+                self.view.showError("The camera module does define " + 
+                                    "the given camera class.")
+                self.camera = None
+            except StopProgram:
+                self.stopProgramLoop()
+                return
         
         self.measurement = None
 
@@ -191,68 +219,32 @@ class Controller:
         init_ready()
 
         # build the view
-        try:
-            measurement_layout = self.view.showCreateMeasurement()
-        except StopProgram:
-            self.stopProgramLoop()
-            return
-
-        if (isinstance(measurement_layout, typing.Collection) and 
-            len(measurement_layout) > 1):
-            self.measurement = self.createMeasurement(*measurement_layout[0:2])
-    
-    def createMeasurement(self, start_conditions: typing.Dict, series: typing.Collection) -> Measurement:
-        """Create a measurement object.
+        measurement_layout = None
+        while (not isinstance(measurement_layout, typing.Collection) or 
+               len(measurement_layout) <= 1):
+            try:
+                measurement_layout = self.view.showCreateMeasurement()
+            except StopProgram:
+                self.stopProgramLoop()
+                return
+            
+            if(not isinstance(measurement_layout, typing.Collection) or 
+               len(measurement_layout) <= 1):
+                self.view.showError("The measurement layout contains errors.")
         
-        Create a measurement, start_conditions contains all 
-        `MeasurementVariable`s defined with their values, the series is a dict 
-        that has an 'id', a 'start', a 'step-width' and an 'end' index, optional is the 
-        'on-each-point' index which may contain another series dict (that will 
-        do the series in this point)
+        # fire user_ready event
+        user_ready()
 
-        Raises
-        ------
-        ValueError
-            When the "id", "start", "end" or "step-width" indices are missing 
-            in the series dicts
-        ValueError
-            When the "id" is not a valid `MeasurementVariable` id
-        """
+        self.measurement = Measurement.fromSeries(self, 
+                                                  measurement_layout[0], 
+                                                  measurement_layout[1])
+        
+        # fire series_ready event
+        series_ready()
 
-        return Measurement(self, steps)
-    
-    def _parseSeries(self, start_conditions: typing.Dict, series: typing.Collection) -> typing.List:
-        steps = []
-        cached_vars = {}
-
-        for i, s in enumerate(series):
-            if ("start" not in s or not isinstance(s["start"], (int, float))):
-                raise ValueError(("The series at index {} does not contain a " + 
-                                  "'{}' index").format(i, "start"))
-            if ("end" not in s or not isinstance(s["end"], (int, float))):
-                raise ValueError(("The series at index {} does not contain a " + 
-                                  "'{}' index").format(i, "end"))
-            if ("step-width" not in s or not isinstance(s["step-width"], (int, float))):
-                raise ValueError(("The series at index {} does not contain a " + 
-                                  "'{}' index").format(i, "step-width"))
-            if "id" not in s:
-                raise ValueError(("The series at index {} does not contain a " + 
-                                  "'{}' index").format(i, "id"))
-            if s["id"] not in cached_vars:
-                cached_vars[s["id"]] = self.microscope.getMeasurementVariableById(s["id"])
-            var = cached_vars[s["id"]]
-            
-            for v in range(start=max(var.min_value, s["start"]), 
-                           step=s["step-width"], 
-                           stop=min(var.max_value, s["end"])):
-                step = start_conditions.copy()
-                step[s["id"]] = v
-                steps.appped(step)
-
-                if "on-each-step" in s:
-                    steps.append(self._parseSeries(step, s["on-each-step"]))
-            
-            return steps
+        self._measurement_thread = threading.Thread(
+            target=self.measurement.start
+        )
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
@@ -274,7 +266,7 @@ class Controller:
         return self.startProgramLoop()
     
     @staticmethod
-    def defineConfigurationOptions(configuration: AbstractConfiguration):
+    def defineConfigurationOptions(configuration: "AbstractConfiguration"):
         """Define which configuration options this class requires.
 
         Parameters
