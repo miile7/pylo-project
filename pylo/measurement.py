@@ -3,12 +3,14 @@ import datetime
 import typing
 import os
 
+import numpy as np
+
 from collections import defaultdict
 
 from .abstract_configuration import AbstractConfiguration
 from .blocked_function_error import BlockedFunctionError
 from .measurement_variable import MeasurementVariable
-from .controller import Controller
+# from .controller import Controller
 from .events import microscope_ready
 from .events import measurement_ready
 from .events import before_record
@@ -51,7 +53,7 @@ class Measurement:
         Stop the measurement if the event is fired
     """
 
-    def __init__(self, controller: Controller, steps: typing.List[dict]):
+    def __init__(self, controller: "Controller", steps: typing.List[dict]):
         self.controller = controller
         self.tags = {}
         self.steps = steps
@@ -309,6 +311,94 @@ class Measurement:
 
         # fire stop event
         after_stop()
+    
+    @classmethod
+    def fromSeries(class_, controller: "Controller", start_conditions: dict, 
+                   series: dict) -> "Measurement":
+        """Create a measurement object.
+        
+        Create a measurement, start_conditions contains all 
+        `MeasurementVariable`s defined with their values, the series is a dict 
+        that has an 'variable', a 'start', a 'step-width' and an 'end' index, optional is the 
+        'on-each-point' index which may contain another series dict (that will 
+        do the series in this point)
+
+        Raises
+        ------
+        KeyError
+            When the "variable", "start", "end" or "step-width" indices are missing 
+            in the series dicts
+        ValueError
+            When not all of the supported measurement variables are contained
+            in either the start_conditions or the series
+        ValueError
+            When the "variable" index is not a valid `MeasurementVariable` id
+        """
+
+        steps = Measurement._parseSeries(controller, start_conditions, series)
+        return Measurement(controller, steps)
+    
+    @staticmethod
+    def _parseSeries(controller: "Controller", start_conditions: dict, 
+                     series: dict) -> list:
+        """Create the steps for the measurement by the given `start_conditions`
+        and the `series`.
+
+        """
+
+        steps = []
+
+        # check if all indices are present
+        if ("start" not in series or 
+            not isinstance(series["start"], (int, float))):
+            raise KeyError(("The series does not contain a " + 
+                                "'{}' index").format("start"))
+        if ("end" not in series or 
+            not isinstance(series["end"], (int, float))):
+            raise KeyError(("The series does not contain a " + 
+                                "'{}' index").format("end"))
+        if ("step-width" not in series or 
+            not isinstance(series["step-width"], (int, float))):
+            raise KeyError(("The series does not contain a " + 
+                                "'{}' index").format("step-width"))
+        if "variable" not in series:
+            raise KeyError(("The series does not contain a " + 
+                                "'{}' index").format("variable"))
+        
+        # test if step is > 0
+        if series["step-width"] <= 0:
+            raise ValueError("The 'step-width' must be greater than 0.")
+        
+        series_variable = None
+        for var in controller.microscope.supported_measurement_variables:
+            if var.unique_id == series["variable"]:
+                series_variable = var
+            elif var.unique_id not in start_conditions:
+                raise ValueError(("The measurement variable {} (id: {})"  + 
+                                  "is neither contained in the " + 
+                                  "start_conditions nor in the series. " + 
+                                  "Cannot create a Measurement when some " + 
+                                  "variables are not known.").format(var.name, 
+                                                                     var.unique_id))
+
+        if series_variable is None:
+            raise ValueError(("The series variable {} is not a valid " + 
+                              "measurement variable id.").format(series["variable"]))
+
+        for v in np.arange(max(series_variable.min_value, series["start"]), 
+                           min(series_variable.max_value, series["end"]) + 
+                               series["step-width"],
+                           series["step-width"]):
+            step = start_conditions.copy()
+            step[series["variable"]] = v
+
+            if "on-each-step" in series:
+                steps += Measurement._parseSeries(controller, step, 
+                                                  series["on-each-step"])
+            else:
+                steps.append(step)
+            
+        return steps
     
     @staticmethod
     def defineConfigurationOptions(configuration: AbstractConfiguration):

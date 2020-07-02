@@ -923,6 +923,158 @@ class TestMeasurement:
         """Test if an exception at a random time stops the measurement."""
         with pytest.raises(DummyException):
             self.check_events(self.throw_exception)
+    
+    def test_parse_series(self):
+        """Test if the Measurement::_parseSeries() is correct for a single 
+        series."""
+
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
+
+        steps = pylo.Measurement._parseSeries(controller, start, series)
+
+        assert len(steps) == 11
+
+        for i, step in enumerate(steps):
+            for measurement_var in controller.microscope.supported_measurement_variables:
+                # make sure all the measurement variables are present in every
+                # step
+                assert measurement_var.unique_id in step
+            
+            assert step["magnetic-field"] == 0
+            assert step["x-tilt"] == 0
+            
+            if i == 0:
+                assert step["focus"] == 0
+            else:
+                assert step["focus"] == steps[i - 1]["focus"] + 1
+    
+    def test_parse_single_nested_series(self):
+        """Test if the Measurement::_parseSeries() is correct for a series 
+        that contains another series."""
+
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
+                  "on-each-step": {"variable": "magnetic-field", "start": 0, 
+                                   "end": 3, "step-width": 0.1}}
+
+        steps = pylo.Measurement._parseSeries(controller, start, series)
+
+        assert len(steps) == 11 * 31
+
+        for i, step in enumerate(steps):
+            for measurement_var in controller.microscope.supported_measurement_variables:
+                # make sure all the measurement variables are present in every
+                # step
+                assert measurement_var.unique_id in step
+            
+            assert step["x-tilt"] == 0
+            
+            if i % 31 == 0:
+                assert step["magnetic-field"] == 0
+            else:
+                # having problems with float rounding
+                assert math.isclose(step["magnetic-field"], 
+                                    steps[i - 1]["magnetic-field"] + 0.1)
+            
+            if i // 31 == 0:
+                assert step["focus"] == 0
+            else:
+                assert math.isclose(step["focus"], 
+                                    steps[(i // 31) * 31 - 1]["focus"] + 1)
+    
+    def test_parse_double_nested_series(self):
+        """Test if the Measurement::_parseSeries() is correct for a series 
+        that contains another series and that contains another series."""
+
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
+                  "on-each-step": {"variable": "magnetic-field", "start": 0, 
+                                   "end": 3, "step-width": 0.1, 
+                                   "on-each-step": {"variable": "x-tilt", 
+                                                     "start": -20, 
+                                                     "end": 20, 
+                                                     "step-width": 5}}}
+
+        steps = pylo.Measurement._parseSeries(controller, start, series)
+
+        assert len(steps) == 11 * 31 * 9
+
+        for i, step in enumerate(steps):
+            for measurement_var in controller.microscope.supported_measurement_variables:
+                # make sure all the measurement variables are present in every
+                # step
+                assert measurement_var.unique_id in step
+            
+            if i % 9 == 0:
+                assert step["x-tilt"] == -20
+            else:
+                # having problems with float rounding
+                assert math.isclose(step["x-tilt"], 
+                                    steps[i - 1]["x-tilt"] + 5)
+            
+            if (i // 9) % 31 == 0:
+                assert step["magnetic-field"] == 0
+            else:
+                # having problems with float rounding
+                assert math.isclose(step["magnetic-field"], 
+                                    steps[(i // 9) * 9 - 1]["magnetic-field"] + 0.1)
+            
+            if i // (31 * 9) == 0:
+                assert step["focus"] == 0
+            else:
+                assert math.isclose(step["focus"], 
+                                    steps[(i // 31 // 9) * 31 * 9 - 1]["focus"] + 1)
+    
+    def test_parse_series_wrong_variable_raises_exception(self):
+        """Test if an invalid variable id raises an exception."""
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "non-existing", "start": 0, "end": 10, "step-width": 1}
+
+        with pytest.raises(ValueError):
+            pylo.Measurement._parseSeries(controller, start, series)
+    
+    def test_parse_series_wrong_missing_key_raises_exception(self):
+        """Test if missing keys raise an exception."""
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
+
+        for key in series:
+            invalid_series = series.copy()
+            del invalid_series[key]
+
+            with pytest.raises(KeyError):
+                pylo.Measurement._parseSeries(controller, start, invalid_series)
+
+    @pytest.mark.parametrize("step_width", (-1, 0))
+    def test_parse_series_step_width_smaller_than_zero(self, step_width):
+        """Test if a step with smaller or equal to zero raises an exception."""
+
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": step_width}
+
+        with pytest.raises(ValueError):
+            pylo.Measurement._parseSeries(controller, start, series)
+
+    @pytest.mark.parametrize("focus_start,focus_end", ((-1, 10), (0, 15)))
+    def test_parse_series_stays_in_bondaries(self, focus_start, focus_end):
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": focus_start, "end": focus_end, 
+                  "step-width": 1}
+        steps = pylo.Measurement._parseSeries(controller, start, series)
+
+        measurement_var = controller.microscope.getMeasurementVariableById(series["variable"])
+
+        for step in steps:
+            assert measurement_var.min_value <= step[series["variable"]]
+            assert step[series["variable"]] <= measurement_var.max_value
 
 if __name__ == "__main__":
     pass
