@@ -115,21 +115,22 @@ class AbstractConfiguration:
             The key name for the value
         value : str, int, float, bool or None
             The value
-        datatype : type
+        datatype : type, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
-            given the type of the value will be used
-        default_value : str, int, float, bool or None
-            The default value to use if the value is not given
-        ask_if_not_present : bool
+            given the type of the value will be used, default: str
+        default_value : str, int, float, bool or None, optional
+            The default value to use if the value is not given, default: None
+        ask_if_not_present : bool, optional
             Whether to ask the user for the value if it is not saved, if given 
             this will overwite the ask_if_not_present if it exists already, if 
-            it does not exist and is not given False will be used
-        description : str
+            it does not exist and is not given False will be used, default: 
+            False
+        description : str, optional
             The description to save in the ini file or to show to the user as 
             explenation what he is putting int, if given this will overwite the 
-            description if it exists already
+            description if it exists already, default: ""
         """
 
         if datatype is None and value is not None:
@@ -156,20 +157,22 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name for the value
-        datatype : type
+        datatype : type, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
-            datatype if it exists already
-        default_value : str, int, float, bool or None
-            The default value to use if the value is not given
-        ask_if_not_present : bool
+            datatype if it exists already, if it does not exist and is not 
+            given the type of the value will be used, default: str
+        default_value : str, int, float, bool or None, optional
+            The default value to use if the value is not given, default: None
+        ask_if_not_present : bool, optional
             Whether to ask the user for the value if it is not saved, if given 
             this will overwite the ask_if_not_present if it exists already, if 
-            it does not exist and is not given False will be used
-        description : str
+            it does not exist and is not given False will be used, default: 
+            False
+        description : str, optional
             The description to save in the ini file or to show to the user as 
             explenation what he is putting int, if given this will overwite the 
-            description if it exists already
+            description if it exists already, default: ""
         """
 
         if not group in self.configuration:
