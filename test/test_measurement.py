@@ -1064,6 +1064,9 @@ class TestMeasurement:
 
     @pytest.mark.parametrize("focus_start,focus_end", ((-1, 10), (0, 15)))
     def test_parse_series_stays_in_bondaries(self, focus_start, focus_end):
+        """Test if the series stays in the boundaries of the 
+        `MeasurementVariable` even if it is told not to be."""
+        
         controller = DummyController()
         start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": focus_start, "end": focus_end, 
