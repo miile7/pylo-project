@@ -5,10 +5,10 @@ import os
 
 from collections import defaultdict
 
-from .config import DEFAULT_SAVE_DIRECTORY
-from .config import DEFAULT_SAVE_FILE_NAME
+from .abstract_configuration import AbstractConfiguration
 from .blocked_function_error import BlockedFunctionError
 from .measurement_variable import MeasurementVariable
+from .controller import Controller
 from .events import microscope_ready
 from .events import measurement_ready
 from .events import before_record
@@ -16,7 +16,9 @@ from .events import after_record
 from .events import emergency
 from .events import after_stop
 from .image import Image
-from .controller import Controller
+
+from .config import DEFAULT_SAVE_DIRECTORY
+from .config import DEFAULT_SAVE_FILE_NAME
 
 class Measurement:
     """This class represents one measurement.
@@ -54,32 +56,12 @@ class Measurement:
         self.tags = {}
         self.steps = steps
 
-        self.save_dir = DEFAULT_SAVE_DIRECTORY
-        # add an entry to the config and ask the user if there is nothing
-        # saved
-        controller.configuration.addConfigurationOption(
-            "measurement", "save-directory", datatype=str, 
-            default_value=self.save_dir, ask_if_not_present=True,
-            description="The directory where to save the camera images to " + 
-            "that are recorded while measuring.")
-        
-        self.name_format = DEFAULT_SAVE_FILE_NAME
-        # add an entry to the config and ask the user if there is nothing
-        # saved
-        controller.configuration.addConfigurationOption(
-            "measurement", "save-file-format", datatype=str, 
-            default_value=self.name_format, ask_if_not_present=True,
-            description="The name format to use to save the recorded images. " + 
-            "Some placeholders can be used. Use {counter} to get the current " + 
-            "measurement number, use {tags[your_value]} to get use the " + 
-            "`your_value` of the measurement tags. Use " + 
-            "{variables[your_variable]} to get the value of the measurement " + 
-            "variable `your_variable`. To use the `your_img_value` of the " + 
-            "image tags, use {imgtags[your_value]}. For times set the format " + 
-            "according to the python `strftime()` format, started with a " + 
-            "colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and " + 
-            "hour minute and second. Make sure to inculde the file extension " + 
-            "but use supported extensions only.")
+        self.save_dir = self.controller.configuration.getValue(
+            "measurement", "save-directory"
+        )
+        self.name_format = self.controller.configuration.getValue(
+            "measurement", "save-file-format"
+        )
         
         self.current_image = None
         self.running = False
@@ -199,7 +181,7 @@ class Measurement:
             recording an image but before saving the image to the directory
         """
         self.running = True
-        image_save_threads = []
+        self._image_save_threads = []
 
         try:
             # set to lorenz mode
@@ -275,7 +257,7 @@ class Measurement:
                     args=(os.path.join(self.save_dir, name), )
                 )
                 thread.start()
-                image_save_threads.append(thread)
+                self._image_save_threads.append(thread)
             
             reset_threads = []
             # reset microscope and camera to a safe state so there is no need
@@ -290,8 +272,7 @@ class Measurement:
             reset_threads.append(thread)
 
             # wait for all saving threads to finish
-            for thread in image_save_threads:
-                thread.join()
+            self.waitForAllImageSavings()
 
             # wait for all machine reset threads to finish
             for thread in reset_threads:
@@ -305,6 +286,11 @@ class Measurement:
             # stop if any error occurres, just to be sure
             self.stop()
             raise
+    
+    def waitForAllImageSavings(self):
+        """Wait until all threads where images are saved have finished."""
+        for thread in self._image_save_threads:
+            thread.join()
     
     def stop(self) -> None:
         """Stop the measurement. 
@@ -323,3 +309,37 @@ class Measurement:
 
         # fire stop event
         after_stop()
+    
+    @staticmethod
+    def defineConfigurationOptions(configuration: AbstractConfiguration):
+        """Define which configuration options this class requires.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration to define the required options in
+        """
+        
+        # add an entry to the config and ask the user if there is nothing
+        # saved
+        configuration.addConfigurationOption(
+            "measurement", "save-directory", datatype=str, 
+            default_value=DEFAULT_SAVE_DIRECTORY, ask_if_not_present=True,
+            description="The directory where to save the camera images to " + 
+            "that are recorded while measuring.")
+        # add an entry to the config and ask the user if there is nothing
+        # saved
+        configuration.addConfigurationOption(
+            "measurement", "save-file-format", datatype=str, 
+            default_value=DEFAULT_SAVE_FILE_NAME, ask_if_not_present=True,
+            description="The name format to use to save the recorded images. " + 
+            "Some placeholders can be used. Use {counter} to get the current " + 
+            "measurement number, use {tags[your_value]} to get use the " + 
+            "`your_value` of the measurement tags. Use " + 
+            "{variables[your_variable]} to get the value of the measurement " + 
+            "variable `your_variable`. To use the `your_img_value` of the " + 
+            "image tags, use {imgtags[your_value]}. For times set the format " + 
+            "according to the python `strftime()` format, started with a " + 
+            "colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and " + 
+            "hour minute and second. Make sure to inculde the file extension " + 
+            "but use supported extensions only.")
