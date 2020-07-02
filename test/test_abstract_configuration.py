@@ -29,10 +29,12 @@ complete_test_configuration = [
     ("dummy-group-2", "value2", False, {}, {}),
     ("dummy-group-2", "value3", None, {}, {}),
     ("set-group", "value1", 123, {"datatype": int, "default_value": -1, 
-        "ask_if_not_present": False, "description": "Value 1"}, {}),
+        "ask_if_not_present": False, "description": "Value 1", 
+        "restart_required": True}, {}),
     ("set-group", "value2", 98923.9882, {"default_value": "Not Set"}, {}),
     ("set-group", "value3", "Test string", {"ask_if_not_present": True}, {}),
-    ("set-group", "value4", 0, {"datatype": bool}, {"value": False}),
+    ("set-group", "value4", 0, {"datatype": bool, "restart_required": True}, 
+        {"value": False}),
     ("set-group", "value5", "-1.787898922", {"datatype": float}, 
         {"value": -1.787898922}),
     ("options-group", "value1", None, {"datatype": int, "default_value": 0,
@@ -40,7 +42,7 @@ complete_test_configuration = [
     ("options-group", "value2", None, {"datatype": float,
         "ask_if_not_present": True, "description": "Value 2"}, {}),
     ("options-group", "value3", None, {"datatype": bool, 
-        "default_value": True}, {}),
+        "default_value": True, "restart_required": True}, {}),
     ("options-group", "value4", None, {"datatype": str, 
         "default_value": "Default"}, {}),
     ("options-group", "value5", None, {}, {}),
@@ -66,6 +68,12 @@ for i, (group, key, value, args, expected) in enumerate(complete_test_configurat
             expected["ask_if_not_present"] = args["ask_if_not_present"]
         else:
             expected["ask_if_not_present"] = False
+
+    if not "restart_required" in expected:
+        if "restart_required" in args:
+            expected["restart_required"] = args["restart_required"]
+        else:
+            expected["restart_required"] = False
 
     if not "description" in expected:
         if "description" in args:
@@ -253,6 +261,15 @@ class TestConfiguration:
             
         assert (self.configuration.getAskIfNotPresent(group, key) == 
                 expected["ask_if_not_present"])
+
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_restart_required_is_correct(self, group, key, value, args, expected):
+        """Test whether the restart required value is correct."""
+        if not "restart_required" in expected:
+            expected["restart_required"] = False
+            
+        assert (self.configuration.getRestartRequired(group, key) == 
+                expected["restart_required"])
 
     @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_width_description)
     def test_description_is_correct(self, group, key, value, args, expected):
