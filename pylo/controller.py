@@ -197,12 +197,62 @@ class Controller:
             self.stopProgramLoop()
             return
 
-        if measurement_layout is not None:
-            self.measurement = self.createMeasurement(measurement_layout)
+        if (isinstance(measurement_layout, typing.Collection) and 
+            len(measurement_layout) > 1):
+            self.measurement = self.createMeasurement(*measurement_layout[0:2])
     
-    def createMeasurement(self, start_conditions: typing.Dict, series: typing.Dict) -> Measurement:
-        """Create a measurement object"""
-        return None
+    def createMeasurement(self, start_conditions: typing.Dict, series: typing.Collection) -> Measurement:
+        """Create a measurement object.
+        
+        Create a measurement, start_conditions contains all 
+        `MeasurementVariable`s defined with their values, the series is a dict 
+        that has an 'id', a 'start', a 'step-width' and an 'end' index, optional is the 
+        'on-each-point' index which may contain another series dict (that will 
+        do the series in this point)
+
+        Raises
+        ------
+        ValueError
+            When the "id", "start", "end" or "step-width" indices are missing 
+            in the series dicts
+        ValueError
+            When the "id" is not a valid `MeasurementVariable` id
+        """
+
+        return Measurement(self, steps)
+    
+    def _parseSeries(self, start_conditions: typing.Dict, series: typing.Collection) -> typing.List:
+        steps = []
+        cached_vars = {}
+
+        for i, s in enumerate(series):
+            if ("start" not in s or not isinstance(s["start"], (int, float))):
+                raise ValueError(("The series at index {} does not contain a " + 
+                                  "'{}' index").format(i, "start"))
+            if ("end" not in s or not isinstance(s["end"], (int, float))):
+                raise ValueError(("The series at index {} does not contain a " + 
+                                  "'{}' index").format(i, "end"))
+            if ("step-width" not in s or not isinstance(s["step-width"], (int, float))):
+                raise ValueError(("The series at index {} does not contain a " + 
+                                  "'{}' index").format(i, "step-width"))
+            if "id" not in s:
+                raise ValueError(("The series at index {} does not contain a " + 
+                                  "'{}' index").format(i, "id"))
+            if s["id"] not in cached_vars:
+                cached_vars[s["id"]] = self.microscope.getMeasurementVariableById(s["id"])
+            var = cached_vars[s["id"]]
+            
+            for v in range(start=max(var.min_value, s["start"]), 
+                           step=s["step-width"], 
+                           stop=min(var.max_value, s["end"])):
+                step = start_conditions.copy()
+                step[s["id"]] = v
+                steps.appped(step)
+
+                if "on-each-step" in s:
+                    steps.append(self._parseSeries(step, s["on-each-step"]))
+            
+            return steps
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
