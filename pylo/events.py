@@ -19,3 +19,7 @@ after_record = Event()
 
 """Fired when the measurement is stopped but not finished"""
 after_stop = Event()
+
+"""Fired when the view and the configuration are loaded but before everything 
+else."""
+init_ready = Event()
