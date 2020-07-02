@@ -104,7 +104,8 @@ class AbstractConfiguration:
                  datatype: typing.Optional[type]=None, 
                  default_value: typing.Optional[Savable]=None, 
                  ask_if_not_present: typing.Optional[bool]=None, 
-                 description: typing.Optional[str]=None) -> None:
+                 description: typing.Optional[str]=None,
+                 restart_required: typing.Optional[bool]=None) -> None:
         """Set the value to the group and key.
 
         Parameters
@@ -131,13 +132,17 @@ class AbstractConfiguration:
             The description to save in the ini file or to show to the user as 
             explenation what he is putting int, if given this will overwite the 
             description if it exists already, default: ""
+        restart_required : bool, optional
+            Whether a restart is required that the changes will apply, default: 
+            False
         """
 
         if datatype is None and value is not None:
             datatype = type(value)
 
         self.addConfigurationOption(group, key, datatype, default_value, 
-                                    ask_if_not_present, description)
+                                    ask_if_not_present, description,
+                                    restart_required)
 
         self.configuration[group][key]["value"] = [value]
     
@@ -145,7 +150,8 @@ class AbstractConfiguration:
                  datatype: typing.Optional[type]=None, 
                  default_value: typing.Optional[Savable]=None, 
                  ask_if_not_present: typing.Optional[bool]=None, 
-                 description: typing.Optional[str]=None) -> None:
+                 description: typing.Optional[str]=None,
+                 restart_required: typing.Optional[bool]=None) -> None:
         """Define the property for the given group and key.
 
         This is for the configuration and the view to know what to expect and 
@@ -173,6 +179,9 @@ class AbstractConfiguration:
             The description to save in the ini file or to show to the user as 
             explenation what he is putting int, if given this will overwite the 
             description if it exists already, default: ""
+        restart_required : bool, optional
+            Whether a restart is required that the changes will apply, default: 
+            False
         """
 
         if not group in self.configuration:
@@ -199,6 +208,11 @@ class AbstractConfiguration:
         if (description is not None or 
             "description" not in self.configuration[group][key]):
             self.configuration[group][key]["description"] = description
+
+        if restart_required is not None: 
+            self.configuration[group][key]["restart_required"] = restart_required
+        elif "restart_required" not in self.configuration[group][key]:
+            self.configuration[group][key]["restart_required"] = False
     
     def getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True) -> Savable:
@@ -307,6 +321,44 @@ class AbstractConfiguration:
         else:
             return value
     
+    def _getIndexValue(self, group: str, key: str, index: str) -> typing.Any:
+        """Get the value at the index.
+
+        This is for internal use only.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no index in it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        index : str
+            The index to get the value of
+
+        Returns
+        -------
+        any
+            The value at the index in the group and key
+        """
+
+        if not self._keyExists(group, key):
+            raise KeyError(
+                ("The key {} does not exist in the group {}.").format(key, 
+                                                                      group)
+            )
+        elif index not in self.configuration[group][key]:
+            raise KeyError(
+                ("There is no index '{}' for the key {} in the " + 
+                 "group {}.").format(index, key, group)
+            )
+        else:
+            return self.configuration[group][key][index]
+    
     def getDefault(self, group: str, key: str) -> Savable:
         """Get the default value for the group and key.
 
@@ -327,17 +379,10 @@ class AbstractConfiguration:
         str, int, float bool or None
             The default value
         """
-
-        if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}.").format(key, group)
-            )
-        elif "default" not in self.configuration[group][key]:
-            raise KeyError(
-                ("There is no default for the key {} in the group {}.").format(key, group)
-            )
-        else:
-            return self.configuration[group][key]["default"]
+        try:
+            return self._getIndexValue(group, key, "default")
+        except KeyError:
+            raise
     
     def getDatatype(self, group: str, key: str) -> type:
         """Get the datatype for the group and key.
@@ -359,17 +404,10 @@ class AbstractConfiguration:
         type
             The datatype
         """
-
-        if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}.").format(key, group)
-            )
-        elif "type" not in self.configuration[group][key]:
-            raise KeyError(
-                ("There is no datatype for the key {} in the group {}.").format(key, group)
-            )
-        else:
-            return self.configuration[group][key]["type"]
+        try:
+            return self._getIndexValue(group, key, "type")
+        except KeyError:
+            raise
     
     def getAskIfNotPresent(self, group: str, key: str) -> bool:
         """Get whether to ask if the value for the given group and key is not 
@@ -393,17 +431,10 @@ class AbstractConfiguration:
         bool
             Whether to ask if the value is not present
         """
-
-        if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}.").format(key, group)
-            )
-        elif "ask_if_not_present" not in self.configuration[group][key]:
-            raise KeyError(
-                ("There is no ask_if_not_present for the key {} in the group {}.").format(key, group)
-            )
-        else:
-            return self.configuration[group][key]["ask_if_not_present"]
+        try:
+            return self._getIndexValue(group, key, "ask_if_not_present")
+        except KeyError:
+            raise
     
     def getDescription(self, group: str, key: str) -> str:
         """Get the description for the group and key.
@@ -425,17 +456,36 @@ class AbstractConfiguration:
         str
             The description
         """
+        try:
+            return self._getIndexValue(group, key, "description")
+        except KeyError:
+            raise
+    
+    def getRestartRequired(self, group: str, key: str) -> bool:
+        """Get whether a restart is required that the changes apply or not.
 
-        if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}.").format(key, group)
-            )
-        elif "description" not in self.configuration[group][key]:
-            raise KeyError(
-                ("There is no description for the key {} in the group {}.").format(key, group)
-            )
-        else:
-            return self.configuration[group][key]["description"]
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no 
+            restart_required for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+
+        Returns
+        -------
+        bool
+            Whether a restart is required that the changes apply
+        """
+        try:
+            return self._getIndexValue(group, key, "restart_required")
+        except KeyError:
+            raise
     
     def temporaryOverwriteValue(self, group: str, key: str, value: Savable) -> None:
         """Temporary overwrite the given value of the group and key.
