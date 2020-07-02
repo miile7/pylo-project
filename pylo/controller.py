@@ -1,8 +1,13 @@
+import threading
 import importlib
 import typing
 import os
 
+from .abstract_configuration import AbstractConfiguration
 from .abstract_configuration import Savable
+from .stop_program import StopProgram
+from .measurement import Measurement
+from .events import init_ready
 from .config import CONFIGURATION
 from .config import PROGRAM_NAME
 from .config import VIEW
@@ -33,37 +38,32 @@ class Controller:
         self.configuration = CONFIGURATION
         self.view = VIEW
 
-        # add the option for the microscope module
-        self.configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, "microscope-module", str, description=("The " + 
-            "module name where the microscope to use is defined. This must " + 
-            "be a valid python module name relative to the {name} root. So " + 
-            "if you are outside {name}, you should type pylo<your input>" + 
-            "(usually including the first dot). For example use " + 
-            ".microscopes.my_custom_microscope. (The file  is then in " + 
-            "pylo/microscopes/my_custom_microscope.py)").format(name=PROGRAM_NAME)
-        )
+        Controller.defineConfigurationOptions(self.configuration)
+        Measurement.defineConfigurationOptions(self.configuration)
 
-        default_module_path = os.path.join(os.path.dirname(__file__), 
-                                           "microscopes")
-        modules = filter(lambda x: (x.endswith(".py") and
-                                    x != "microscope_interface.py" and 
-                                    x != "__init__.py"), 
-                        os.listdir(default_module_path))
-
-        self.microscope = self._dynamicCreateClass("microscope-module", 
-                                                   "microscope-class",
-                                                   modules)
+        self.microscope = None
+        self.camera = None
+        self.measurement = None
+        self._measurement_thread = None
     
     def _dynamicCreateClass(self, config_key_module: str, config_key_class: str, 
                               module_options: typing.Optional[typing.Collection]=None, 
                               class_options: typing.Optional[typing.Collection]=None,
-                              constructor_args: typing.Optional[typing.Collection]=None):
+                              constructor_args: typing.Optional[typing.Collection]=None) -> typing.Any:
         """Dynamically create the an object of the given module and class where
         the module and class are loaded form the config.
 
         If the config does not contain the keys or there are not the values 
         given, the module and class are asked from the user.
+
+        Raises
+        ------
+        ModuleNotFoundError
+            When the `module_name` is not a valid module
+        AttributeError
+            When the `class_name` does not exist in the given module
+        NameError
+            When the `class_name` exists in the module but is not a class
 
         Parameters
         ----------
@@ -80,6 +80,10 @@ class Controller:
             given
         constructor_args : tuple, optional
             The arguments to pass to the constructor
+        
+        Returns
+        -------
+            The object of the class in the module
         """
 
         module_name, class_name = self.getConfigurationValuesOrAsk(
@@ -152,3 +156,116 @@ class Controller:
                 values[target_keys[i]] = result
         
         return tuple(values.values())
+    
+    def startProgramLoop(self) -> None:
+        """Start the program loop.
+        
+        Fired Events
+        ------------
+        init_ready
+            Fired after the initializiation is done
+        """
+
+        # the default microscope options
+        default_module_path = os.path.join(os.path.dirname(__file__), 
+                                           "microscopes")
+        modules = filter(lambda x: (x.endswith(".py") and
+                                    x != "microscope_interface.py" and 
+                                    x != "__init__.py"), 
+                        os.listdir(default_module_path))
+
+        try:
+            # get the microscope from the config or from the user
+            self.microscope = self._dynamicCreateClass("microscope-module", 
+                                                    "microscope-class",
+                                                    modules)
+            # get the camera form the config or form the user
+            self.camera = self._dynamicCreateClass("camera-module", "camera-class")
+        except StopProgram:
+            self.stopProgramLoop()
+            return
+        
+        self.measurement = None
+
+        # fire init_ready event
+        init_ready()
+
+        # build the view
+        try:
+            measurement_layout = self.view.showCreateMeasurement()
+        except StopProgram:
+            self.stopProgramLoop()
+            return
+
+        if measurement_layout is not None:
+            self.measurement = self.createMeasurement(measurement_layout)
+    
+    def createMeasurement(self, start_conditions: typing.Dict, series: typing.Dict) -> Measurement:
+        """Create a measurement object"""
+        return None
+    
+    def stopProgramLoop(self) -> None:
+        """Stop the program loop.
+
+        This funciton will also wait for all threads to join.
+        """
+
+        if isinstance(self.measurement, Measurement) and self.measurement.running:
+            self.measurement.stop()
+
+            if isinstance(self._measurement_thread, threading.Thread):
+                self._measurement_thread.join()
+            
+            self.measurement.waitForAllImageSavings()
+    
+    def restartProgramLoop(self):
+        """Stop and restart the program loop."""
+        self.stopProgramLoop()
+        return self.startProgramLoop()
+    
+    @staticmethod
+    def defineConfigurationOptions(configuration: AbstractConfiguration):
+        """Define which configuration options this class requires.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration to define the required options in
+        """
+        
+        # add the option for the microscope module
+        configuration.addConfigurationOption(
+            CONFIG_SETUP_GROUP, "microscope-module", str, description=("The " + 
+            "module name where the microscope to use is defined. This must " + 
+            "be a valid python module name relative to the {name} root. So " + 
+            "if you are outside {name}, you should type pylo<your input>" + 
+            "(usually including the first dot). For example use " + 
+            ".microscopes.my_custom_microscope. (The file is then " + 
+            "pylo/microscopes/my_custom_microscope.py)").format(name=PROGRAM_NAME),
+            restart_required=True
+        )
+        # the configuration option for the microscope class
+        configuration.addConfigurationOption(
+            CONFIG_SETUP_GROUP, "microscope-class", str, description=("The " + 
+            "class name of the microscope class that communicates with the " + 
+            "physical microscope. The class name must be in the " + 
+            "'microscope-module'."), restart_required=True
+        )
+        # add the option for the camera module
+        configuration.addConfigurationOption(
+            CONFIG_SETUP_GROUP, "camera-module", str, description=("The " + 
+            "camera name where the camera to use is defined. This must " + 
+            "be a valid python module name relative to the {name} root. So " + 
+            "if you are outside {name}, you should type pylo<your input>" + 
+            "(usually including the first dot). For example use " + 
+            ".my_custom_camera. (The file is then " + 
+            "pylo/my_custom_camera.py)").format(name=PROGRAM_NAME),
+            restart_required=True
+        )
+        # the configuration option for the camera class
+        configuration.addConfigurationOption(
+            CONFIG_SETUP_GROUP, "camera-class", str, description=("The " + 
+            "class name of the camera class that communicates with the " + 
+            "physical camera. The class name must be in the " + 
+            "'camera-module'."), restart_required=True
+        )
