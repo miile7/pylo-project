@@ -23,3 +23,10 @@ after_stop = Event()
 """Fired when the view and the configuration are loaded but before everything 
 else."""
 init_ready = Event()
+
+"""Fired when the user has entered all the settings and presses the measurement
+start button."""
+user_ready = Event()
+
+"""Fired when the Measurement series is created."""
+series_ready = Event()
