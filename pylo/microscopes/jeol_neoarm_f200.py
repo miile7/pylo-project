@@ -11,11 +11,11 @@ from ..measurement_variable import MeasurementVariable
 CONFIG_JEOLNEOARMF200_GROUP = "JEOLNeoARMF200"
 
 # the stage position constants in TEM3.stage3
-STATE_INDEX_X_POS = 0
-STATE_INDEX_Y_POS = 1
-STATE_INDEX_Z_POS = 2
-STATE_INDEX_X_TILT = 3
-STATE_INDEX_Y_TILT = 4
+STAGE_INDEX_X_POS = 0
+STAGE_INDEX_Y_POS = 1
+STAGE_INDEX_Z_POS = 2
+STAGE_INDEX_X_TILT = 3
+STAGE_INDEX_Y_TILT = 4
 
 # the stage status constants in TEM3.stage3
 STAGE_STATUS_REST = 0
@@ -76,6 +76,11 @@ class JEOLNeoARMF200(MicroscopeInterface):
       - PL1 - PL3: Projection Lense
       - DiffFocus: ?
       - FLC: Free lense control, can be on and off for individual leses
+    
+    lens3.SetNtrl((Lens3)arg1, (int)arg2)
+        NTRL within only value range.
+        0:Brightness, 1:OBJ Focus, 2:DIFF Focus, 3:IL Focus, 4:PL Focus, 5:FL Focus
+
 
     Attributes
     ----------
@@ -211,6 +216,8 @@ class JEOLNeoARMF200(MicroscopeInterface):
             # switch off fine and coarse objective lense
             self._lense_control.SetOLc(0)
             self._lense_control.SetOLf(0)
+
+            # self._lense_control.SetOLSuperFineNeutral()
         else:
             # disable free lense control for objective fine and coarse lense
             self._lense_control.SetFLCSw(OL_FINE_LENSE_ID, 0)
@@ -288,12 +295,23 @@ class JEOLNeoARMF200(MicroscopeInterface):
             # false
             raise ValueError("The id {} does not exist.".format(id_))
     
-    def _setFocus(self, value):
-        self._action_lock.acquire()
+    def _setFocus(self, value : float):
+        """Set the focus to the given value.
 
+        Typical values are between -1 and 50.
+
+        Parameters
+        ----------
+        value : float
+            The focus value
+        """
+        self._action_lock.acquire()
         self._eos.SetObjFocus(value)
 
         self._action_lock.release()
+
+        raise Exception("The focus does not properly work at the moment. This " + 
+                        "probably is the wrong focus.")
 
     def _setObjectiveLenseCurrent(self, value : float) -> None:
         """Set the objective lense current.
@@ -315,10 +333,8 @@ class JEOLNeoARMF200(MicroscopeInterface):
         # lock the microscope
         self._action_lock.acquire()
 
-        # coarse_solution = ?
-
-        # self._lense_control.SetOLc(value // coarse_solution)
-        # self._lense_control.SetOLf(value % coarse_solution)
+        # self._lense_control.SetOLc(value // self.objective_lense_coarse_solution)
+        # self._lense_control.SetOLf(value % self.objective_lense_coarse_solution)
         self._lense_control.SetOLf(value)
 
         # allow other functions to use the microscope
@@ -347,7 +363,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
         self._stage.SetTiltXAngle(value)
 
         # wait until the x tilt has the desired value
-        while self._stage.GetStatus()[STATE_INDEX_X_TILT] == STAGE_STATUS_MOVING:
+        while self._stage.GetStatus()[STAGE_INDEX_X_TILT] == STAGE_STATUS_MOVING:
             time.sleep(0.1)
 
         # allow other functions to use the microscope
@@ -378,11 +394,117 @@ class JEOLNeoARMF200(MicroscopeInterface):
         self._stage.SetTiltYAngle(value)
 
         # wait until the y tilt has the desired value
-        while self._stage.GetStatus()[STATE_INDEX_Y_TILT] == STAGE_STATUS_MOVING:
+        while self._stage.GetStatus()[STAGE_INDEX_Y_TILT] == STAGE_STATUS_MOVING:
             time.sleep(0.1)
 
         # allow other functions to use the microscope
         self._action_lock.release()
+    
+    def getMeasurementVariableValue(self, id_: str) -> float:
+        """Get the value for the given `MeasurementVariable` id.
+
+        Raises
+        ------
+        ValueError
+            When there is no `MeasurementVariable` for the `id_`.
+        """
+
+        if id_ == "focus":
+            return self._getFocus()
+        elif id_ == "ol-current":
+            return self._getObjectiveLenseCurrent()
+        elif id_ == "magnetic-field":
+            return self._getMagneticFieldForObjectiveLenseCurrent(
+                self._getObjectiveLenseCurrent()
+            )
+        elif id_ == "x-tilt":
+            self._getXTilt()
+        elif id_ == "y-tilt":
+            self._getYTilt()
+        else:
+            raise ValueError(("There is no MeasurementVariable for the " + 
+                              "id {}.").format(id_))
+    
+    def _getFocus(self) -> float:
+        self._action_lock.acquire()
+
+        # GetObjFocus() doesn't exist, no idea how to get the focus value 
+        # (except for saving it but that is only the last escape, this makes it
+        # impossible to check if the focus really is set correctly)
+        # self._eos.GetObjFocus()
+
+        self._action_lock.release()
+        raise Exception("Currently there is no possibility to get the focus.")
+    
+    def _getObjectiveLenseCurrent(self) -> float:
+        """Get the objective lense current in the current units.
+
+        Returns
+        -------
+        float
+            The actual current of the objective lense at the microscope
+        """
+
+        # lock the microscope
+        self._action_lock.acquire()
+
+        value = (
+            self._lense_control.GetOLf() + 0
+            # self._lense_control.GetOLf() * self.objective_lense_coarse_solution
+        )
+
+        # allow other functions to use the microscope
+        self._action_lock.release()
+
+        return value
+    
+    def _getXTilt(self) -> float:
+        """Get the x tilt in degrees.
+
+        Returns
+        -------
+        float
+            The x tilt
+        """
+
+        # lock the microscope
+        self._action_lock.acquire()
+
+        # wait until the x tilt is not changing anymore
+        while self._stage.GetStatus()[STAGE_INDEX_X_TILT] == STAGE_STATUS_MOVING:
+            time.sleep(0.1)
+
+        # get the current stage position (includes the tilt)
+        pos = self._stage.GetPos()
+
+        # allow other functions to use the microscope
+        self._action_lock.release()
+
+        return pos[STAGE_INDEX_X_TILT]
+    
+    def _getYTilt(self) -> float:
+        """Get the y tilt in degrees.
+
+        Returns
+        -------
+        float
+            The y tilt
+        """
+        
+        # lock the microscope
+        self._action_lock.acquire()
+
+        # wait until the y tilt is not changing anymore
+        while self._stage.GetStatus()[STAGE_INDEX_Y_TILT] == STAGE_STATUS_MOVING:
+            time.sleep(0.1)
+
+        # get the current stage position (includes the tilt)
+        pos = self._stage.GetPos()
+
+        # allow other functions to use the microscope
+        self._action_lock.release()
+
+        return pos[STAGE_INDEX_Y_TILT]
 
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
