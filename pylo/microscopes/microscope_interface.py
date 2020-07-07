@@ -6,17 +6,23 @@ class MicroscopeInterface(VulnerableMachine):
 
     Attributes
     ----------
+    controller : Controller
+        The controller
     supported_measurement_variables : list of MeasurementVariable
         All the measurement variables that this microscope supports, typically 
         this is the magnetic field (via controlling the lens current of the 
         objective lense or any lense that is close/around the speciemen), the 
         focus and possibly the tilt of the speciemen
+    supports_parallel_measurement_variable_setting : bool
+        Whether `MeasurementVariable`s can be set parallel, for example the 
+        tilt can be set while the lense current is set
     """
 
-    def __init__(self) -> None:
-        """Get the microscope instance."""
+    def __init__(self, controller : "Controller"):
+        """Get the microscope instance"""
         self.supported_measurement_variables = []
         self.supports_parallel_measurement_variable_setting = True
+        self.controller = controller
 
     def setInLorenzMode(self, lorenz_mode: bool) -> None:
         """Set whether the microscope should now be in lorenz mode or not.
