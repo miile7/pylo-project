@@ -91,7 +91,7 @@ class Controller:
             When the `module_name` is not a valid module
         AttributeError
             When the `class_name` does not exist in the given module
-        NameError
+        NameError, TypeError
             When the `class_name` exists in the module but is not a class
 
         Parameters
@@ -116,8 +116,8 @@ class Controller:
         """
 
         module_name, class_name = self.getConfigurationValuesOrAsk(
-            ((CONFIG_SETUP_GROUP, config_key_module, module_options),
-             (CONFIG_SETUP_GROUP, config_key_class, class_options))
+            (CONFIG_SETUP_GROUP, config_key_module, module_options),
+            (CONFIG_SETUP_GROUP, config_key_class, class_options)
         )
 
         module = importlib.import_module(module_name)
