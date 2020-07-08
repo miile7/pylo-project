@@ -1,5 +1,6 @@
 import threading
 import importlib
+import inspect
 import typing
 import sys
 import os
@@ -17,6 +18,8 @@ from .events import user_ready
 from .config import PROGRAM_NAME
 # from .config import CONFIGURATION
 # from .config import VIEW
+
+MAX_LOOP_COUNT = 1000
 
 # for importing with import_lib in Controller::_dynamicCreateClass()
 # add pylo/root
@@ -120,6 +123,12 @@ class Controller:
             (CONFIG_SETUP_GROUP, config_key_class, class_options)
         )
 
+        extensions = (".py", ".py3", ".pyd", ".pyc", ".pyo", ".pyw", ".pyx",
+                      ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
+        for ext in extensions:
+            if module_name.endswith(ext):
+                module_name = module_name[:-1*len(ext)]
+
         module = importlib.import_module(module_name)
         class_ = getattr(module, class_name)
 
@@ -128,19 +137,28 @@ class Controller:
         else:
             return class_()
     
-    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]]) -> typing.Tuple[Savable]:
+    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
+                                    save_if_not_exists: typing.Optional[bool]=True,
+                                    fallback_default: typing.Optional[bool]=False) -> typing.Tuple[Savable]:
         """Get the configuration values or ask for them if they are not given.
 
-        Note that this never returns the default! If there is a default value 
-        in the configuration, this default value is ignored.
+        If the user is asked for the value, the value will be saved for the 
+        given group and key in the configuration, if the `safe_if_not_exists`
+        is not False.
+
+        Note that if the configuration returns None, this is interpreted as a 
+        missing value. Also if the default is None.
 
         Parameters
         ----------
-        list of tuples:
+        config_lookup : list of tuples
             Each tuple defines one configuration value to loop up, the index 0
             is the group, the index 1 is the key. Index 2 is optional and can
             hold options to show to the user if the configuration value is not 
             defined
+        save_if_not_exists : bool
+            Whether to save the value if it was asked for and does not exist in
+            the configuration, default: True
         
         Returns
         -------
@@ -156,10 +174,13 @@ class Controller:
 
         for i, (group, key, *_) in enumerate(config_lookup):
             try:
-                values.append(self.configuration.getValue(group, key,
-                                                         fallback_default=False))
+                val = self.configuration.getValue(group, key, fallback_default=fallback_default)
             except KeyError:
-                values.append(None)
+                val = None
+            
+            values.append(val)
+
+            if val is None:
                 # set the name to ask for
                 input_param = {"name": "{} ({})".format(key, group)}
 
@@ -194,8 +215,19 @@ class Controller:
             target_keys = list(input_params.keys())
 
             for i, result in enumerate(results):
+                # the index in the result to return and in the parameter list
+                original_index = target_keys[i]
                 # replace the missing value with the asked result
-                values[target_keys[i]] = result
+                values[original_index] = result
+
+                if save_if_not_exists:
+                    # save the asked value in the configuration
+                    self.configuration.setValue(
+                        config_lookup[original_index][0],
+                        config_lookup[original_index][1],
+                        result
+                    )
+
         
         return tuple(values)
     
@@ -211,7 +243,10 @@ class Controller:
             Fired after the initializiation is done
         """
 
-        before_init()
+        try:
+            before_init()
+        except StopProgram:
+            return
 
         # the default microscope options
         default_module_path = os.path.join(os.path.dirname(__file__), 
@@ -221,50 +256,130 @@ class Controller:
                                     x != "__init__.py"), 
                         os.listdir(default_module_path))
 
+        # prevent infinite loop
+        security_counter = 0
         self.microscope = None
-        while not isinstance(self.microscope, MicroscopeInterface):
+        while (not isinstance(self.microscope, MicroscopeInterface) and 
+               security_counter < MAX_LOOP_COUNT):
+            security_counter += 1
             try:
                 # get the microscope from the config or from the user
                 self.microscope = self._dynamicCreateClass("microscope-module", 
                                                            "microscope-class",
                                                            modules)
-            except ModuleNotFoundError:
-                self.view.showError("The microscope module could not be " + 
-                                    "found.")
+            except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
+                if isinstance(e, ModuleNotFoundError):
+                    msg = "The microscope module could not be found: {}"
+                    fix = ("Change the 'microscope-module' in the '{}' group " + 
+                           "in the configuration or type in a valid value. " + 
+                           "The value can either be a python file or a python " + 
+                           "module. Place that file in the current directory " + 
+                           "where the script is executed or in the " + 
+                           "'microscopes' directory in the {} directory " + 
+                           "({}).").format(CONFIG_SETUP_GROUP, 
+                                os.path.basename(os.path.dirname(__file__)),
+                                os.path.dirname(__file__))
+                    key = "microscope-module"
+                else:
+                    msg = ("The microscope module could be loaded but the " + 
+                           "given microscope class either does not exist or " + 
+                           "is not a class: {}")
+                    fix = ("Change the 'microscope-class' in the '{}' group " + 
+                           "in the configuration or type in a valid value. " + 
+                           "The value has to be the name of the class that " + 
+                           "defines the microscope class. The microscope " + 
+                           "class has to extend the class " + 
+                           "'pylo.microscopes.MicroscopeInterface'.").format(CONFIG_SETUP_GROUP)
+                    key = "microscope-class"
+                self.view.showError(msg.format(e), fix)
                 self.microscope = None
-            except (AttributeError, NameError):
-                self.view.showError("The microscope module does define " + 
-                                    "the given microscope class.")
-                self.microscope = None
-            except StopProgram:
-                self.stopProgramLoop()
-                return
-
-        self.camera = None
-        while not isinstance(self.camera, CameraInterface):
-            try:
-                # get the camera form the config or form the user
-                self.camera = self._dynamicCreateClass("camera-module", "camera-class")
-            except ModuleNotFoundError:
-                self.view.showError("The camera module could not be " + 
-                                    "found.")
-                self.camera = None
-            except (AttributeError, NameError):
-                self.view.showError("The camera module does define " + 
-                                    "the given camera class.")
-                self.camera = None
+                # remove the saved value, this either does not exist or is
+                # wrong, in both cases the user will be asked in the next run
+                if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
+                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
             except StopProgram:
                 self.stopProgramLoop()
                 return
         
+        # show an error that the max loop count is reached and stop the
+        # execution
+        if security_counter + 1 >= MAX_LOOP_COUNT:
+            self.view.showError(("The program is probably trapped in an " + 
+                                 "infinite loop when trying to get the " + 
+                                 "microsocpe. The execution will be stopped now " + 
+                                 "after {} iterations.").format(security_counter),
+                                 "This is a bigger issue. Look in the code " + 
+                                 "and debug the 'pylo/controller.py' file.")
+            return
+
+        # prevent infinite loop
+        security_counter = 0
+        self.camera = None
+        while (not isinstance(self.camera, CameraInterface) and 
+               security_counter < MAX_LOOP_COUNT):
+            security_counter += 1
+            try:
+                # get the camera form the config or form the user
+                self.camera = self._dynamicCreateClass("camera-module", "camera-class")
+            except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
+                if isinstance(e, ModuleNotFoundError):
+                    msg = "The camera module could not be found: {}"
+                    fix = ("Change the 'camera-module' in the '{}' group " + 
+                           "in the configuration or type in a valid value. " + 
+                           "The value can either be a python file or a python " + 
+                           "module. Place that file in the current directory " + 
+                           "where the script is executed or in in the {} " + 
+                           "directory ({}).").format(CONFIG_SETUP_GROUP, 
+                                os.path.basename(os.path.dirname(__file__)),
+                                os.path.dirname(__file__))
+                    key = "camera-module"
+                else:
+                    msg = ("The camera module could be loaded but the " + 
+                           "given camera class either does not exist or " + 
+                           "is not a class: {}")
+                    fix = ("Change the 'camera-class' in the '{}' group " + 
+                           "in the configuration or type in a valid value. " + 
+                           "The value has to be the name of the class that " + 
+                           "defines the camera class. The camera " + 
+                           "class has to extend the class " + 
+                           "'pylo.CameraInterface'.").format(CONFIG_SETUP_GROUP)
+                    key = "camera-class"
+                self.view.showError(msg.format(e), fix)
+                self.camera = None
+                # remove the saved value, this either does not exist or is
+                # wrong, in both cases the user will be asked in the next run
+                if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
+                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+            except StopProgram:
+                self.stopProgramLoop()
+                return
+
+        # show an error that the max loop count is reached and stop the
+        # execution
+        if security_counter + 1 >= MAX_LOOP_COUNT:
+            self.view.showError(("The program is probably trapped in an " + 
+                                 "infinite loop when trying to get the " + 
+                                 "camera. The execution will be stopped now " + 
+                                 "after {} iterations.").format(security_counter),
+                                 "This is a bigger issue. Look in the code " + 
+                                 "and debug the 'pylo/controller.py' file.")
+            return
+        
         self.measurement = None
 
         # fire init_ready event
-        init_ready()
+        try:
+            init_ready()
+        except StopProgram:
+            return
 
+        # prevent infinite loop
+        security_counter = 0
         # build the view
         measurement_layout = None
-        while not isinstance(self.measurement, Measurement):
+        while (not isinstance(self.measurement, Measurement) and 
+               security_counter < MAX_LOOP_COUNT):
+            security_counter += 1
             try:
                 measurement_layout = self.view.showCreateMeasurement()
             except StopProgram:
@@ -273,21 +388,52 @@ class Controller:
             
             if(not isinstance(measurement_layout, typing.Collection) or 
                len(measurement_layout) <= 1):
-                self.view.showError("The measurement layout contains errors.")
+                self.view.showError("The view returned an invalid measurement.",
+                                    "Try to input your measurement again, if " + 
+                                    "it still doesn't work you have to debug " + 
+                                    "your view in 'pylo/{}'.".format(
+                                        inspect.getfile(self.view.__class__)))
         
-                # fire user_ready event
+            # fire user_ready event
+            try:
                 user_ready()
+            except StopProgram:
+                return
 
+            try:
                 self.measurement = Measurement.fromSeries(self, 
                                                           measurement_layout[0], 
                                                           measurement_layout[1])
+            except (KeyError, ValueError) as e:
+                self.view.showError("The measurement could not be initialized " + 
+                                    "because it is not formatted correctly: " + 
+                                    "{}".format(e),
+                                    "Try again and make sure you entered a " + 
+                                    "valid value for this.")
+
+        # show an error that the max loop count is reached and stop the
+        # execution
+        if security_counter + 1 >= MAX_LOOP_COUNT:
+            self.view.showError(("The program is probably trapped in an " + 
+                                 "infinite loop when trying to initialize the " + 
+                                 "measurement. The execution will be stopped now " + 
+                                 "after {} iterations.").format(security_counter),
+                                 "This is a bigger issue. Look in the code " + 
+                                 "and debug the 'pylo/controller.py' file.")
+            return
         
         # fire series_ready event
-        series_ready()
+        try:
+            series_ready()
+        except StopProgram:
+            return
 
         self._measurement_thread = threading.Thread(
             target=self.measurement.start
         )
+        self._measurement_thread.start()
+
+        self._measurement_thread.join()
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
