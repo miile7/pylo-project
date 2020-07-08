@@ -25,8 +25,19 @@ else."""
 init_ready = Event()
 
 """Fired when the user has entered all the settings and presses the measurement
-start button."""
+start button. Note that this event may be fired multiple times when the user 
+inputs an invalid measurement. Due to python philosophy (Ask for forgivness, 
+not for permission) the measurement is created with possibly wrong data which 
+then will raise an error. This will be shown to the user and he will be asked
+to repeat the measurement."""
 user_ready = Event()
 
 """Fired when the Measurement series is created."""
 series_ready = Event()
+
+"""Fired before everything. This event is fired in the constructor of the
+controller which should be the first object that is created."""
+before_start = Event()
+
+"""Fired when the program is started but nothing is initialized yet."""
+before_init = Event()

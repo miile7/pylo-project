@@ -1,6 +1,7 @@
 import threading
 import importlib
 import typing
+import sys
 import os
 
 from .microscopes.microscope_interface import MicroscopeInterface
@@ -8,12 +9,22 @@ from .camera_interface import CameraInterface
 from .abstract_configuration import Savable
 from .stop_program import StopProgram
 from .measurement import Measurement
+from .events import before_start
 from .events import series_ready
+from .events import before_init
 from .events import init_ready
 from .events import user_ready
-from .config import CONFIGURATION
 from .config import PROGRAM_NAME
-from .config import VIEW
+# from .config import CONFIGURATION
+# from .config import VIEW
+
+# for importing with import_lib in Controller::_dynamicCreateClass()
+# add pylo/root
+sys.path.append(os.path.dirname(__file__))
+# add microscopes path
+sys.path.append(os.path.join(os.path.dirname(__file__), "microscopes"))
+# add current working directory
+sys.path.append(os.getcwd())
 
 CONFIG_SETUP_GROUP = "setup"
 
@@ -38,6 +49,21 @@ class Controller:
     """
 
     def __init__(self):
+        """Create the controller object.
+
+        Fired Events
+        ------------
+        before_start
+            Fired right after the function is called, nothing is set up
+        """
+
+        before_start()
+
+        # import values here, otherwise they cannot be changed dynamically
+        # which is (only?) required for the tests
+        from .config import CONFIGURATION
+        from .config import VIEW
+
         self.configuration = CONFIGURATION
         self.view = VIEW
 
@@ -102,25 +128,38 @@ class Controller:
         else:
             return class_()
     
-    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[str, typing.Optional[typing.Collection]]]) -> typing.Tuple[Savable]:
+    def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]]) -> typing.Tuple[Savable]:
         """Get the configuration values or ask for them if they are not given.
+
+        Note that this never returns the default! If there is a default value 
+        in the configuration, this default value is ignored.
 
         Parameters
         ----------
-        tuple : 
-            A tuple with the group at index 0, the key at index 1 and optional
-            the allowed options at index 2
+        list of tuples:
+            Each tuple defines one configuration value to loop up, the index 0
+            is the group, the index 1 is the key. Index 2 is optional and can
+            hold options to show to the user if the configuration value is not 
+            defined
+        
+        Returns
+        -------
+        tuple
+            A tuple with the length of the `config_lookup`, for each lookup the 
+            value will be returned
         """
 
         # the values to return
-        values = {}
+        values = []
         # the values to ask
         input_params = {}
 
         for i, (group, key, *_) in enumerate(config_lookup):
             try:
-                values[i] = self.configuration.getValue(group, key)
+                values.append(self.configuration.getValue(group, key,
+                                                         fallback_default=False))
             except KeyError:
+                values.append(None)
                 # set the name to ask for
                 input_param = {"name": "{} ({})".format(key, group)}
 
@@ -150,7 +189,7 @@ class Controller:
         # check if there are values to ask for
         if len(input_params) > 0:
             # save the results of the user
-            results = self.view.askFor(list(input_params.values()))
+            results = self.view.askFor(*list(input_params.values()))
             # check where the results should be saved in
             target_keys = list(input_params.keys())
 
@@ -158,16 +197,21 @@ class Controller:
                 # replace the missing value with the asked result
                 values[target_keys[i]] = result
         
-        return tuple(values.values())
+        return tuple(values)
     
     def startProgramLoop(self) -> None:
         """Start the program loop.
         
         Fired Events
         ------------
+        before_init
+            Fired right after the function start, before everything is 
+            initialize
         init_ready
             Fired after the initializiation is done
         """
+
+        before_init()
 
         # the default microscope options
         default_module_path = os.path.join(os.path.dirname(__file__), 
@@ -182,8 +226,8 @@ class Controller:
             try:
                 # get the microscope from the config or from the user
                 self.microscope = self._dynamicCreateClass("microscope-module", 
-                                                        "microscope-class",
-                                                        modules)
+                                                           "microscope-class",
+                                                           modules)
             except ModuleNotFoundError:
                 self.view.showError("The microscope module could not be " + 
                                     "found.")
@@ -220,8 +264,7 @@ class Controller:
 
         # build the view
         measurement_layout = None
-        while (not isinstance(measurement_layout, typing.Collection) or 
-               len(measurement_layout) <= 1):
+        while not isinstance(self.measurement, Measurement):
             try:
                 measurement_layout = self.view.showCreateMeasurement()
             except StopProgram:
@@ -232,12 +275,12 @@ class Controller:
                len(measurement_layout) <= 1):
                 self.view.showError("The measurement layout contains errors.")
         
-        # fire user_ready event
-        user_ready()
+                # fire user_ready event
+                user_ready()
 
-        self.measurement = Measurement.fromSeries(self, 
-                                                  measurement_layout[0], 
-                                                  measurement_layout[1])
+                self.measurement = Measurement.fromSeries(self, 
+                                                          measurement_layout[0], 
+                                                          measurement_layout[1])
         
         # fire series_ready event
         series_ready()
