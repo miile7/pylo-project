@@ -568,6 +568,50 @@ class AbstractConfiguration:
         # taken from https://stackoverflow.com/a/15715924/5934316
         del self.configuration[group][key]["value"][-count:]
     
+    def removeValue(self, group: str, key: str) -> None:
+        """Remove the value only for the given group and key.
+
+        This will make the group and key stay initialized but without a value.
+        This is equal to the state when calling 
+        `AbstractConfiguration::addConfigurationOption()`
+
+        If the group and key do not exist, nothing will happen.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        """
+
+        if self._keyExists(group, key):
+            self.configuration[group][key]["value"] = []
+    
+    def removeElement(self, group: str, key: str) -> None:
+        """Remove the everything for the given group and key.
+
+        This will remove the key completely including the value, the datatype
+        and all the other settings. If the group is empty, it will be removed
+        too.
+
+        If the group and key do not exist, nothing will happen.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        """
+
+        if self._keyExists(group, key):
+            del self.configuration[group][key]
+
+            if len(self.configuration[group]):
+                # group is empty, delete it too
+                del self.configuration[group]
+    
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 
