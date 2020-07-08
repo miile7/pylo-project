@@ -10,6 +10,7 @@ from collections import defaultdict
 from .abstract_configuration import AbstractConfiguration
 from .blocked_function_error import BlockedFunctionError
 from .measurement_variable import MeasurementVariable
+from .stop_program import StopProgram
 # from .controller import Controller
 from .events import microscope_ready
 from .events import measurement_ready
@@ -58,11 +59,10 @@ class Measurement:
         self.tags = {}
         self.steps = steps
 
-        self.save_dir = self.controller.configuration.getValue(
-            "measurement", "save-directory"
-        )
-        self.name_format = self.controller.configuration.getValue(
-            "measurement", "save-file-format"
+        self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
+            ("measurement", "save-directory"),
+            ("measurement", "save-file-format"),
+            fallback_default=True
         )
         
         self.current_image = None
@@ -194,7 +194,11 @@ class Measurement:
                 return
             
             # trigger microscope ready event
-            microscope_ready()
+            try:
+                microscope_ready()
+            except StopProgram:
+                self.stop()
+                return
 
             for self._step_index, step in enumerate(self.steps):
                 # start going through steps
@@ -203,7 +207,11 @@ class Measurement:
                     return
                 
                 # fire event before recording
-                before_record()
+                try:
+                    before_record()
+                except StopProgram:
+                    self.stop()
+                    return
 
                 # the asynchronous threads to set the values at the micrsocope
                 measurement_variable_threads = []
@@ -246,7 +254,11 @@ class Measurement:
                     return
                 
                 # fire event after recording but before saving
-                after_record()
+                try:
+                    after_record()
+                except StopProgram:
+                    self.stop()
+                    return
 
                 if not self.running:
                     # stop() is called, maybe by after_record() event handler
@@ -283,7 +295,11 @@ class Measurement:
             # reset everything to the state before measuring
             self.running = False
             self._step_index = -1
-            measurement_ready()
+            try:
+                measurement_ready()
+            except StopProgram:
+                self.stop()
+                return
         except Exception:
             # stop if any error occurres, just to be sure
             self.stop()
