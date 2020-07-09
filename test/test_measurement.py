@@ -7,7 +7,6 @@ if __name__ == "__main__":
 
 from PIL import Image as PILImage
 import numpy as np
-import threading
 import datetime
 import pytest
 import random
