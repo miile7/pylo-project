@@ -6,8 +6,8 @@ import numpy as np
 from PIL import Image as PILImage
 
 from .exception_thread import ExceptionThread
-from .config import PROGRAM_NAME
 from .config import TIFF_IMAGE_TAGS_INDEX
+from .config import PROGRAM_NAME
 
 
 class Image:
@@ -29,7 +29,7 @@ class Image:
         object
     """
 
-    def __init__(self, image_data: typing.Any, tags: typing.Optional[dict]={}):
+    def __init__(self, image_data: typing.Any, tags: typing.Optional[dict]={}) -> None:
         """Create an image.
         
         Parameters
@@ -139,7 +139,7 @@ class Image:
                 "The file extension {} is not supported.".format(file_type)
             )
 
-def _export_image_object_to_jpg(file_path: str, image: Image):
+def _export_image_object_to_jpg(file_path: str, image: Image) -> None:
     """Save the given image object to the given file_path as a JPG file.
 
     The if the file already exists, it will be overwritten silently. If the 
@@ -163,7 +163,7 @@ def _export_image_object_to_jpg(file_path: str, image: Image):
     save_img = PILImage.fromarray(image.image_data, mode="L")
     save_img.save(file_path, format="jpeg", quality=100, optimize=False)
 
-def _export_image_object_to_tiff(file_path: str, image: Image):
+def _export_image_object_to_tiff(file_path: str, image: Image) -> None:
     """Save the given image object to the given file_path as a TIFF file.
 
     The if the file already exists, it will be overwritten silently. If the 

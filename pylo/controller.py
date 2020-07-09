@@ -8,7 +8,6 @@ import os
 from .microscopes.microscope_interface import MicroscopeInterface
 from .camera_interface import CameraInterface
 from .exception_thread import ExceptionThread
-from .abstract_configuration import Savable
 from .stop_program import StopProgram
 from .measurement import Measurement
 from .events import before_start
@@ -52,7 +51,7 @@ class Controller:
         The measurement to do
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create the controller object.
 
         Fired Events
@@ -82,7 +81,7 @@ class Controller:
     def _dynamicCreateClass(self, config_key_module: str, config_key_class: str, 
                               module_options: typing.Optional[typing.Collection]=None, 
                               class_options: typing.Optional[typing.Collection]=None,
-                              constructor_args: typing.Optional[typing.Collection]=None) -> typing.Any:
+                              constructor_args: typing.Optional[typing.Collection]=None) -> object:
         """Dynamically create the an object of the given module and class where
         the module and class are loaded form the config.
 
@@ -140,7 +139,7 @@ class Controller:
     
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
-                                    fallback_default: typing.Optional[bool]=False) -> typing.Tuple[Savable]:
+                                    fallback_default: typing.Optional[bool]=False) -> typing.Tuple[typing.Union[str, int, float, bool, None]]:
         """Get the configuration values or ask for them if they are not given.
 
         If the user is asked for the value, the value will be saved for the 
@@ -424,7 +423,7 @@ class Controller:
                 self.stopProgramLoop()
                 return
     
-    def waitForProgram(self, raise_error_when_not_started=False):
+    def waitForProgram(self, raise_error_when_not_started: typing.Optional[bool]=False) -> None:
         """Wait until the program has finished.
 
         Raises
@@ -476,13 +475,13 @@ class Controller:
             
             self.measurement.waitForAllImageSavings()
     
-    def restartProgramLoop(self):
+    def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
         self.stopProgramLoop()
-        return self.startProgramLoop()
+        self.startProgramLoop()
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration"):
+    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
         """Define which configuration options this class requires.
 
         Parameters

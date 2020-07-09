@@ -1,7 +1,4 @@
-import typing
-
 from .vulnerable_machine import VulnerableMachine
-from .image import Image
 
 class CameraInterface(VulnerableMachine):
     """This class represents the camera.
@@ -12,11 +9,11 @@ class CameraInterface(VulnerableMachine):
         Any values that should be saved for the camera
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create a new camera interface object."""
         self.tags = {}
     
-    def recordImage(self) -> Image:
+    def recordImage(self) -> "Image":
         """Get the image of the current camera.
 
         Returns

@@ -3,15 +3,12 @@ import typing
 import os
 
 import numpy as np
-
 from collections import defaultdict
 
-from .abstract_configuration import AbstractConfiguration
 from .blocked_function_error import BlockedFunctionError
 from .measurement_variable import MeasurementVariable
 from .exception_thread import ExceptionThread
 from .stop_program import StopProgram
-# from .controller import Controller
 from .events import microscope_ready
 from .events import measurement_ready
 from .events import before_record
@@ -54,7 +51,7 @@ class Measurement:
         Stop the measurement if the event is fired
     """
 
-    def __init__(self, controller: "Controller", steps: typing.List[dict]):
+    def __init__(self, controller: "Controller", steps: typing.List[dict]) -> None:
         self.controller = controller
         self.tags = {}
         self.steps = steps
@@ -79,7 +76,7 @@ class Measurement:
                    variables: typing.Optional[dict]=None,
                    imgtags: typing.Optional[dict]=None,
                    time: typing.Optional[datetime.datetime]=None,
-                   counter: typing.Optional[int]=None):
+                   counter: typing.Optional[int]=None) -> str:
         """Format the given name_format.
 
         The following placeholders are supported:
@@ -147,7 +144,7 @@ class Measurement:
             date=time, datetime=time, counter=counter, number=counter, 
             num=counter))
     
-    def _setSafe(self):
+    def _setSafe(self) -> None:
         """Set the microscope and the camera to be in safe state and stop the 
         measurement."""
 
@@ -300,7 +297,7 @@ class Measurement:
             self.stop()
             raise e
     
-    def waitForAllImageSavings(self):
+    def waitForAllImageSavings(self) -> None:
         """Wait until all threads where images are saved have finished."""
         for thread in self._image_save_threads:
             thread.join()
@@ -579,7 +576,7 @@ class Measurement:
         return steps
     
     @staticmethod
-    def defineConfigurationOptions(configuration: AbstractConfiguration):
+    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
         """Define which configuration options this class requires.
 
         Parameters

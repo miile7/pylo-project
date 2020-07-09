@@ -31,7 +31,7 @@ class AbstractConfiguration:
         indices
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create a new abstract configuration.
         
         This calls the loadConfiguration() function automatically."""

@@ -27,9 +27,9 @@ class Event(list):
     Taken from https://stackoverflow.com/a/2022629/5934316
 
     """
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> None:
         for f in self:
             f(*args, **kwargs)
 
-    def __repr__(self):
-        return "Event(%s)" % list.__repr__(self)
+    def __repr__(self) -> str:
+        return "Event({})".format(list.__repr__(self))
