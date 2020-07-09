@@ -1,5 +1,4 @@
 from ..vulnerable_machine import VulnerableMachine
-from ..measurement_variable import MeasurementVariable
 
 class MicroscopeInterface(VulnerableMachine):
     """
@@ -14,8 +13,8 @@ class MicroscopeInterface(VulnerableMachine):
         focus and possibly the tilt of the speciemen
     """
 
-    def __init__(self):
-        """Get the microscope instance"""
+    def __init__(self) -> None:
+        """Get the microscope instance."""
         self.supported_measurement_variables = []
         self.supports_parallel_measurement_variable_setting = True
 
@@ -130,7 +129,7 @@ class MicroscopeInterface(VulnerableMachine):
         
         return False
     
-    def getMeasurementVariableById(self, id_: str) -> MeasurementVariable:
+    def getMeasurementVariableById(self, id_: str) -> "MeasurementVariable":
         """Get the measurement variable object by its id.
 
         Raises

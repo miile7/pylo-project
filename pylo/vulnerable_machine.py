@@ -1,4 +1,5 @@
 import inspect
+
 from .blocked_function_error import BlockedFunctionError
 from .blocked_function import BlockedFunction
 from .events import emergency
@@ -23,7 +24,7 @@ class VulnerableMachine:
         Set the machine to emergency state when the emergency event is fired
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create the vulnerable machine object"""
         self._in_emergency_state = False
 

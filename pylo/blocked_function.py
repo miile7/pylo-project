@@ -13,7 +13,7 @@ class BlockedFunction:
         The name of the method
     """
 
-    def __init__(self, func: callable, func_name: str):
+    def __init__(self, func: callable, func_name: str) -> None:
         """Create a blocked function object.
 
         Parameters
@@ -27,7 +27,7 @@ class BlockedFunction:
         self.func = func
         self.func_name = func_name
     
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> None:
         """Allow calling this, this will always raise an error.
 
         The object method is replaced with this object so it. To allow calling
