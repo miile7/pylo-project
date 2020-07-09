@@ -1,4 +1,3 @@
-import threading
 import importlib
 import inspect
 import typing
@@ -7,6 +6,7 @@ import os
 
 from .microscopes.microscope_interface import MicroscopeInterface
 from .camera_interface import CameraInterface
+from .exception_thread import ExceptionThread
 from .abstract_configuration import Savable
 from .stop_program import StopProgram
 from .measurement import Measurement
@@ -245,195 +245,188 @@ class Controller:
 
         try:
             before_init()
-        except StopProgram:
-            return
 
-        # the default microscope options
-        default_module_path = os.path.join(os.path.dirname(__file__), 
-                                           "microscopes")
-        modules = filter(lambda x: (x.endswith(".py") and
-                                    x != "microscope_interface.py" and 
-                                    x != "__init__.py"), 
-                        os.listdir(default_module_path))
+            # the default microscope options
+            default_module_path = os.path.join(os.path.dirname(__file__), 
+                                            "microscopes")
+            modules = filter(lambda x: (x.endswith(".py") and
+                                        x != "microscope_interface.py" and 
+                                        x != "__init__.py"), 
+                            os.listdir(default_module_path))
 
-        # prevent infinite loop
-        security_counter = 0
-        self.microscope = None
-        while (not isinstance(self.microscope, MicroscopeInterface) and 
-               security_counter < MAX_LOOP_COUNT):
-            security_counter += 1
-            try:
-                # get the microscope from the config or from the user
-                self.microscope = self._dynamicCreateClass("microscope-module", 
-                                                           "microscope-class",
-                                                           modules)
-            except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
-                if isinstance(e, ModuleNotFoundError):
-                    msg = "The microscope module could not be found: {}"
-                    fix = ("Change the 'microscope-module' in the '{}' group " + 
-                           "in the configuration or type in a valid value. " + 
-                           "The value can either be a python file or a python " + 
-                           "module. Place that file in the current directory " + 
-                           "where the script is executed or in the " + 
-                           "'microscopes' directory in the {} directory " + 
-                           "({}).").format(CONFIG_SETUP_GROUP, 
-                                os.path.basename(os.path.dirname(__file__)),
-                                os.path.dirname(__file__))
-                    key = "microscope-module"
-                else:
-                    msg = ("The microscope module could be loaded but the " + 
-                           "given microscope class either does not exist or " + 
-                           "is not a class: {}")
-                    fix = ("Change the 'microscope-class' in the '{}' group " + 
-                           "in the configuration or type in a valid value. " + 
-                           "The value has to be the name of the class that " + 
-                           "defines the microscope class. The microscope " + 
-                           "class has to extend the class " + 
-                           "'pylo.microscopes.MicroscopeInterface'.").format(CONFIG_SETUP_GROUP)
-                    key = "microscope-class"
-                self.view.showError(msg.format(e), fix)
-                self.microscope = None
-                # remove the saved value, this either does not exist or is
-                # wrong, in both cases the user will be asked in the next run
-                if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
-                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
-            except StopProgram:
-                self.stopProgramLoop()
-                return
-        
-        # show an error that the max loop count is reached and stop the
-        # execution
-        if security_counter + 1 >= MAX_LOOP_COUNT:
-            self.view.showError(("The program is probably trapped in an " + 
-                                 "infinite loop when trying to get the " + 
-                                 "microsocpe. The execution will be stopped now " + 
-                                 "after {} iterations.").format(security_counter),
-                                 "This is a bigger issue. Look in the code " + 
-                                 "and debug the 'pylo/controller.py' file.")
-            return
-
-        # prevent infinite loop
-        security_counter = 0
-        self.camera = None
-        while (not isinstance(self.camera, CameraInterface) and 
-               security_counter < MAX_LOOP_COUNT):
-            security_counter += 1
-            try:
-                # get the camera form the config or form the user
-                self.camera = self._dynamicCreateClass("camera-module", "camera-class")
-            except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
-                if isinstance(e, ModuleNotFoundError):
-                    msg = "The camera module could not be found: {}"
-                    fix = ("Change the 'camera-module' in the '{}' group " + 
-                           "in the configuration or type in a valid value. " + 
-                           "The value can either be a python file or a python " + 
-                           "module. Place that file in the current directory " + 
-                           "where the script is executed or in in the {} " + 
-                           "directory ({}).").format(CONFIG_SETUP_GROUP, 
-                                os.path.basename(os.path.dirname(__file__)),
-                                os.path.dirname(__file__))
-                    key = "camera-module"
-                else:
-                    msg = ("The camera module could be loaded but the " + 
-                           "given camera class either does not exist or " + 
-                           "is not a class: {}")
-                    fix = ("Change the 'camera-class' in the '{}' group " + 
-                           "in the configuration or type in a valid value. " + 
-                           "The value has to be the name of the class that " + 
-                           "defines the camera class. The camera " + 
-                           "class has to extend the class " + 
-                           "'pylo.CameraInterface'.").format(CONFIG_SETUP_GROUP)
-                    key = "camera-class"
-                self.view.showError(msg.format(e), fix)
-                self.camera = None
-                # remove the saved value, this either does not exist or is
-                # wrong, in both cases the user will be asked in the next run
-                if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
-                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
-            except StopProgram:
-                self.stopProgramLoop()
+            # prevent infinite loop
+            security_counter = 0
+            self.microscope = None
+            while (not isinstance(self.microscope, MicroscopeInterface) and 
+                security_counter < MAX_LOOP_COUNT):
+                security_counter += 1
+                try:
+                    # get the microscope from the config or from the user
+                    self.microscope = self._dynamicCreateClass("microscope-module", 
+                                                            "microscope-class",
+                                                            modules)
+                except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
+                    if isinstance(e, ModuleNotFoundError):
+                        msg = "The microscope module could not be found: {}"
+                        fix = ("Change the 'microscope-module' in the '{}' group " + 
+                            "in the configuration or type in a valid value. " + 
+                            "The value can either be a python file or a python " + 
+                            "module. Place that file in the current directory " + 
+                            "where the script is executed or in the " + 
+                            "'microscopes' directory in the {} directory " + 
+                            "({}).").format(CONFIG_SETUP_GROUP, 
+                                    os.path.basename(os.path.dirname(__file__)),
+                                    os.path.dirname(__file__))
+                        key = "microscope-module"
+                    else:
+                        msg = ("The microscope module could be loaded but the " + 
+                            "given microscope class either does not exist or " + 
+                            "is not a class: {}")
+                        fix = ("Change the 'microscope-class' in the '{}' group " + 
+                            "in the configuration or type in a valid value. " + 
+                            "The value has to be the name of the class that " + 
+                            "defines the microscope class. The microscope " + 
+                            "class has to extend the class " + 
+                            "'pylo.microscopes.MicroscopeInterface'.").format(CONFIG_SETUP_GROUP)
+                        key = "microscope-class"
+                    self.view.showError(msg.format(e), fix)
+                    self.microscope = None
+                    # remove the saved value, this either does not exist or is
+                    # wrong, in both cases the user will be asked in the next run
+                    if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+            
+            # show an error that the max loop count is reached and stop the
+            # execution
+            if security_counter + 1 >= MAX_LOOP_COUNT:
+                self.view.showError(("The program is probably trapped in an " + 
+                                    "infinite loop when trying to get the " + 
+                                    "microsocpe. The execution will be stopped now " + 
+                                    "after {} iterations.").format(security_counter),
+                                    "This is a bigger issue. Look in the code " + 
+                                    "and debug the 'pylo/controller.py' file.")
                 return
 
-        # show an error that the max loop count is reached and stop the
-        # execution
-        if security_counter + 1 >= MAX_LOOP_COUNT:
-            self.view.showError(("The program is probably trapped in an " + 
-                                 "infinite loop when trying to get the " + 
-                                 "camera. The execution will be stopped now " + 
-                                 "after {} iterations.").format(security_counter),
-                                 "This is a bigger issue. Look in the code " + 
-                                 "and debug the 'pylo/controller.py' file.")
-            return
-        
-        self.measurement = None
+            # prevent infinite loop
+            security_counter = 0
+            self.camera = None
+            while (not isinstance(self.camera, CameraInterface) and 
+                security_counter < MAX_LOOP_COUNT):
+                security_counter += 1
+                try:
+                    # get the camera form the config or form the user
+                    self.camera = self._dynamicCreateClass("camera-module", "camera-class")
+                except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
+                    if isinstance(e, ModuleNotFoundError):
+                        msg = "The camera module could not be found: {}"
+                        fix = ("Change the 'camera-module' in the '{}' group " + 
+                            "in the configuration or type in a valid value. " + 
+                            "The value can either be a python file or a python " + 
+                            "module. Place that file in the current directory " + 
+                            "where the script is executed or in in the {} " + 
+                            "directory ({}).").format(CONFIG_SETUP_GROUP, 
+                                    os.path.basename(os.path.dirname(__file__)),
+                                    os.path.dirname(__file__))
+                        key = "camera-module"
+                    else:
+                        msg = ("The camera module could be loaded but the " + 
+                            "given camera class either does not exist or " + 
+                            "is not a class: {}")
+                        fix = ("Change the 'camera-class' in the '{}' group " + 
+                            "in the configuration or type in a valid value. " + 
+                            "The value has to be the name of the class that " + 
+                            "defines the camera class. The camera " + 
+                            "class has to extend the class " + 
+                            "'pylo.CameraInterface'.").format(CONFIG_SETUP_GROUP)
+                        key = "camera-class"
+                    self.view.showError(msg.format(e), fix)
+                    self.camera = None
+                    # remove the saved value, this either does not exist or is
+                    # wrong, in both cases the user will be asked in the next run
+                    if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
 
-        # fire init_ready event
-        try:
-            init_ready()
-        except StopProgram:
-            return
-
-        # prevent infinite loop
-        security_counter = 0
-        # build the view
-        measurement_layout = None
-        while (not isinstance(self.measurement, Measurement) and 
-               security_counter < MAX_LOOP_COUNT):
-            security_counter += 1
-            try:
-                measurement_layout = self.view.showCreateMeasurement()
-            except StopProgram:
-                self.stopProgramLoop()
+            # show an error that the max loop count is reached and stop the
+            # execution
+            if security_counter + 1 >= MAX_LOOP_COUNT:
+                self.view.showError(("The program is probably trapped in an " + 
+                                    "infinite loop when trying to get the " + 
+                                    "camera. The execution will be stopped now " + 
+                                    "after {} iterations.").format(security_counter),
+                                    "This is a bigger issue. Look in the code " + 
+                                    "and debug the 'pylo/controller.py' file.")
                 return
             
-            if(not isinstance(measurement_layout, typing.Collection) or 
-               len(measurement_layout) <= 1):
-                self.view.showError("The view returned an invalid measurement.",
-                                    "Try to input your measurement again, if " + 
-                                    "it still doesn't work you have to debug " + 
-                                    "your view in 'pylo/{}'.".format(
-                                        inspect.getfile(self.view.__class__)))
-        
-            # fire user_ready event
-            try:
+            self.measurement = None
+
+            # fire init_ready event
+            init_ready()
+
+            # prevent infinite loop
+            security_counter = 0
+            # build the view
+            measurement_layout = None
+            while (not isinstance(self.measurement, Measurement) and 
+                security_counter < MAX_LOOP_COUNT):
+                security_counter += 1
+                
+                measurement_layout = self.view.showCreateMeasurement()
+                
+                if(not isinstance(measurement_layout, typing.Collection) or 
+                len(measurement_layout) <= 1):
+                    self.view.showError("The view returned an invalid measurement.",
+                                        "Try to input your measurement again, if " + 
+                                        "it still doesn't work you have to debug " + 
+                                        "your view in 'pylo/{}'.".format(
+                                            inspect.getfile(self.view.__class__)))
+            
+                # fire user_ready event
                 user_ready()
-            except StopProgram:
+
+                try:
+                    self.measurement = Measurement.fromSeries(self, 
+                                                              measurement_layout[0], 
+                                                              measurement_layout[1])
+                except (KeyError, ValueError) as e:
+                    self.view.showError("The measurement could not be initialized " + 
+                                        "because it is not formatted correctly: " + 
+                                        "{}".format(e),
+                                        "Try again and make sure you entered a " + 
+                                        "valid value for this.")
+
+            # show an error that the max loop count is reached and stop the
+            # execution
+            if security_counter + 1 >= MAX_LOOP_COUNT:
+                self.view.showError(("The program is probably trapped in an " + 
+                                    "infinite loop when trying to initialize the " + 
+                                    "measurement. The execution will be stopped now " + 
+                                    "after {} iterations.").format(security_counter),
+                                    "This is a bigger issue. Look in the code " + 
+                                    "and debug the 'pylo/controller.py' file.")
                 return
-
-            try:
-                self.measurement = Measurement.fromSeries(self, 
-                                                          measurement_layout[0], 
-                                                          measurement_layout[1])
-            except (KeyError, ValueError) as e:
-                self.view.showError("The measurement could not be initialized " + 
-                                    "because it is not formatted correctly: " + 
-                                    "{}".format(e),
-                                    "Try again and make sure you entered a " + 
-                                    "valid value for this.")
-
-        # show an error that the max loop count is reached and stop the
-        # execution
-        if security_counter + 1 >= MAX_LOOP_COUNT:
-            self.view.showError(("The program is probably trapped in an " + 
-                                 "infinite loop when trying to initialize the " + 
-                                 "measurement. The execution will be stopped now " + 
-                                 "after {} iterations.").format(security_counter),
-                                 "This is a bigger issue. Look in the code " + 
-                                 "and debug the 'pylo/controller.py' file.")
-            return
-        
-        # fire series_ready event
-        try:
+            
+            # fire series_ready event
             series_ready()
+
+            self._measurement_thread = ExceptionThread(
+                target=self.measurement.start
+            )
+            self._measurement_thread.start()
+            self._measurement_thread.join()
+
+            if len(self._measurement_thread.exceptions):
+                for error in self._measurement_thread.exceptions:
+                    raise error
+            
         except StopProgram:
+            self.stopProgramLoop()
             return
-
-        self._measurement_thread = threading.Thread(
-            target=self.measurement.start
-        )
-        self._measurement_thread.start()
-
-        self._measurement_thread.join()
+        except Exception as e:
+            try:
+                self.view.showError("An exception occurred: {}".format(e))
+            except StopProgram:
+                self.stopProgramLoop()
+                return
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
@@ -444,7 +437,7 @@ class Controller:
         if isinstance(self.measurement, Measurement) and self.measurement.running:
             self.measurement.stop()
 
-            if isinstance(self._measurement_thread, threading.Thread):
+            if isinstance(self._measurement_thread, ExceptionThread):
                 self._measurement_thread.join()
             
             self.measurement.waitForAllImageSavings()
