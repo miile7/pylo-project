@@ -16,6 +16,9 @@ import pylo
 
 pylo_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pylo")
 
+class DummyViewShowsError(AssertionError):
+    pass
+
 # class DummyView(pylo.AbstractView):
 class DummyView:
     def __init__(self):
@@ -23,6 +26,9 @@ class DummyView:
     
     def clear(self):
         self.shown_create_measurement_times = []
+        # contains the comparator at index 0 (one or more strings that have to
+        # be in the name it is asked for) or a callable, contains the repsonse
+        # or a callable at index 1
         self.ask_for_response = []
         self.error_log = []
         self.inputs = []
@@ -33,9 +39,6 @@ class DummyView:
             {"variable": "measurement-var", "start": 0, "end": 1, "step-width": 1}
         )
     
-    def setAskForResponseValues(self, name_contains, response):
-        self.ask_for_response.append((name_contains, response))
-
     def askFor(self, *inputs):
         self.inputs = inputs
 
@@ -44,18 +47,25 @@ class DummyView:
         for i, inp in enumerate(self.inputs):
             if "name" in inp:
                 for name_contains, response in self.ask_for_response:
+                    is_correct_name = False
+
                     if (isinstance(name_contains, str) and 
                         name_contains in inp["name"]):
-                        responses.append(response)
+                        is_correct_name = True
                     elif isinstance(name_contains, (list, tuple)):
                         is_correct_name = True
                         for n in name_contains:
                             if not n in inp["name"]:
                                 is_correct_name = False
                                 break
+                    elif callable(name_contains) and name_contains(inp):
+                        is_correct_name = True
+
+                    if is_correct_name:
+                        if callable(response):
+                            response = response(inp)
                         
-                        if is_correct_name:
-                            responses.append(response)
+                        responses.append(response)
 
             if len(responses) < i + 1:
                 # no response found
@@ -66,11 +76,20 @@ class DummyView:
     def showCreateMeasurement(self):
         self.shown_create_measurement_times.append(time.time())
         
-        return self.measurement_to_create
+        ret = self.measurement_to_create
+        if callable(ret):
+            ret = ret()
+
+        return ret
     
     def showError(self, error, how_to_fix=None):
         self.error_log.append((error, how_to_fix))
-        raise pylo.StopProgram
+        print("DummyView::showError() is called.")
+        print("\tError: {}".format(error))
+        print("\tFix: {}".format(how_to_fix))
+        
+        # display errors, if they are inteded use pytest.raises()
+        raise DummyViewShowsError(error)
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
@@ -113,6 +132,7 @@ class DummyCamera(pylo.CameraInterface):
     def resetToSafeState(self):
         pass
 
+measurement_duration_time = -1
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self):
         super().__init__()
@@ -133,6 +153,9 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     
     def setMeasurementVariableValue(self, id_, value):
         self.performed_steps.append((id_, value, time.time()))
+
+        if measurement_duration_time > 0:
+            time.sleep(measurement_duration_time)
     
     def resetToSafeState(self):
         pass
@@ -192,12 +215,26 @@ def remove_test_files():
 
 @pytest.fixture()
 def controller():
+    global measurement_duration_time
+
+    measurement_duration_time = -1
     pylo.config.CONFIGURATION = DummyConfiguration()
     pylo.config.CONFIGURATION.clear()
     pylo.config.VIEW = DummyView()
     controller = pylo.Controller()
 
     yield controller
+
+    # clear events
+    pylo.before_start.clear()
+    pylo.before_init.clear()
+    pylo.init_ready.clear()
+    pylo.user_ready.clear()
+    pylo.series_ready.clear()
+    pylo.microscope_ready.clear()
+    pylo.before_record.clear()
+    pylo.after_record.clear()
+    pylo.measurement_ready.clear()
 
     controller.view.clear()
     controller.configuration.clear()
@@ -276,9 +313,9 @@ class TestController:
                 )
 
                 # set the responses for the view ask
-                controller.view.setAskForResponseValues((lookup_dir["key"], 
-                                                        lookup_dir["group"]),
-                                                        lookup_dir["value"])
+                controller.view.ask_for_response.append(((lookup_dir["key"], 
+                                                          lookup_dir["group"]),
+                                                          lookup_dir["value"]))
 
             l = [lookup_dir["group"], lookup_dir["key"]]
             if "options" in lookup_dir:
@@ -576,7 +613,8 @@ class TestController:
     
     def init_start_program_test(self, controller, save_files=True, 
                                 change_save_path=True, change_microscope=True,
-                                change_camera=True, before_start=None):
+                                change_camera=True, before_start=None,
+                                wait_for_finish=True):
         """Initialize for testing the startProgramLoop() function and execute 
         startProgramLoop() function.
         
@@ -599,6 +637,8 @@ class TestController:
             configurations so the `DummyCamera` in this file will be used
         before_start : callable
             Executed right before the program loop is started
+        wait_for_finish : bool
+            Whether to wait until the program has finished
         """
         global use_dummy_images, TMP_TEST_DIR_NAME
 
@@ -645,8 +685,12 @@ class TestController:
 
         self.start_time = time.time()
         controller.startProgramLoop()
+
+        if wait_for_finish:
+            controller.waitForProgram()
     
-    def raise_stop_program(self):
+    def raise_stop_program(self, *args, **kwargs):
+        """Raise a StopProgram Exception."""
         raise pylo.StopProgram
 
     @pytest.mark.usefixtures("controller")
@@ -865,7 +909,9 @@ class TestController:
         controller.configuration.setValue("setup", "microscope-module", "nontexistingmodule")
         controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
 
-        self.init_start_program_test(controller, change_microscope=False)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller, change_microscope=False)
 
         found = False
         for e in controller.view.error_log:
@@ -881,8 +927,9 @@ class TestController:
 
         controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
         controller.configuration.setValue("setup", "microscope-class", "NonExistingClass")
-
-        self.init_start_program_test(controller, change_microscope=False)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller, change_microscope=False)
 
         found = False
         for e in controller.view.error_log:
@@ -898,8 +945,9 @@ class TestController:
 
         controller.configuration.setValue("setup", "camera-module", "nontexistingmodule")
         controller.configuration.setValue("setup", "camera-class", "DummyCamera")
-
-        self.init_start_program_test(controller, change_camera=False)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
@@ -915,8 +963,9 @@ class TestController:
 
         controller.configuration.setValue("setup", "camera-module", "test_controller.py")
         controller.configuration.setValue("setup", "camera-class", "NonExistingClass")
-
-        self.init_start_program_test(controller, change_camera=False)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
@@ -932,8 +981,9 @@ class TestController:
         the showCreateMeasurement() function."""
         
         controller.view.measurement_to_create = False
-
-        self.init_start_program_test(controller)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller)
 
         found = False
         for e in controller.view.error_log:
@@ -953,8 +1003,9 @@ class TestController:
             {},
             {"variable": "notexisting", "start": 0, "end": 1, "step-width": 1}
         )
-
-        self.init_start_program_test(controller)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller)
 
         found = False
         for e in controller.view.error_log:
@@ -974,8 +1025,9 @@ class TestController:
             {"measurement-var": 0},
             {}
         )
-
-        self.init_start_program_test(controller)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller)
 
         found = False
         for e in controller.view.error_log:
@@ -995,8 +1047,9 @@ class TestController:
             {},
             {}
         )
-
-        self.init_start_program_test(controller)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(controller)
 
         found = False
         for e in controller.view.error_log:
@@ -1008,14 +1061,19 @@ class TestController:
     
     def raise_test_exception(self):
         """Raise an exception"""
-        raise Exception("Test exception")
+        raise Exception("TestController: Test exception")
     
     @pytest.mark.usefixtures("controller")
     def test_error_when_exception_in_controller_event(self, controller):
         """Test if an error is shown when there is an exception raised in the 
         controller event."""
-        
-        self.init_start_program_test(controller, before_start=lambda: pylo.init_ready.append(self.raise_test_exception))
+
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(
+                controller, 
+                before_start=lambda: pylo.init_ready.append(self.raise_test_exception)
+            )
 
         found = False
         for e in controller.view.error_log:
@@ -1030,9 +1088,12 @@ class TestController:
         """Test if an error is shown when there is an exception raised in the 
         measurement event."""
         
-        self.init_start_program_test(controller, before_start=lambda: pylo.after_record.append(self.raise_test_exception))
-
-        print(controller.view.error_log)
+        with pytest.raises(DummyViewShowsError):
+            # DummyView raises DummyViewShowsError when showError() is called
+            self.init_start_program_test(
+                controller, 
+                before_start=lambda: pylo.after_record.append(self.raise_test_exception)
+            )
 
         found = False
         for e in controller.view.error_log:
@@ -1041,6 +1102,218 @@ class TestController:
                 break
         
         assert found
+    
+    @pytest.mark.usefixtures("controller")
+    @pytest.mark.parametrize("group,key,for_camera", [
+        ("setup", "microscope-module", False),
+        ("setup", "microscope-class", False),
+        ("setup", "camera-module", True),
+        ("setup", "camera-class", True),
+    ])
+    def test_stop_program_exception_stops_in_ask_for_microscope_or_camera(self, controller, group, key, for_camera):
+        """Test if the program is stopped if the view raises the StopProgram
+        Exception while it is aksing for the micrsocope or camera. This is 
+        equal to the user clicking the cancel button."""
+
+        controller.view.ask_for_response.append(
+            ((group, key), 
+             self.raise_stop_program)
+        )
+
+        controller.configuration.removeElement(group, key)
+        
+        self.init_start_program_test(
+            controller, 
+            change_microscope=for_camera, 
+            change_camera=False
+        )
+
+        assert len(self.before_init_times) == 1
+        assert len(self.init_ready_times) == 0
+        assert len(self.user_ready_times) == 0
+        assert len(self.series_ready_times) == 0
+
+        assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
+                for_camera)
+        assert not isinstance(controller.camera, pylo.CameraInterface)
+        assert not isinstance(controller.measurement, pylo.Measurement)
+    
+    @pytest.mark.usefixtures("controller")
+    def test_stop_program_exception_stops_in_ask_for_measurement(self, controller):
+        """Test if the program is stopped if the view raises the StopProgram
+        Exception while it is aksing for the measurement. This is 
+        equal to the user clicking the cancel button."""
+
+        controller.view.measurement_to_create = self.raise_stop_program
+        
+        self.init_start_program_test(controller)
+
+        assert len(self.before_init_times) == 1
+        assert len(self.init_ready_times) == 1
+        assert len(self.user_ready_times) == 0
+        assert len(self.series_ready_times) == 0
+
+        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
+        assert not isinstance(controller.measurement, pylo.Measurement)
+    
+    @pytest.mark.usefixtures("controller")
+    def test_stop_program_stops_current_measurement(self, controller):
+        """Test if the program is stopped if the view raises the StopProgram
+        Exception while it is aksing for the measurement. This is 
+        equal to the user clicking the cancel button."""
+
+        controller.view.measurement_to_create = self.raise_stop_program
+        
+        self.init_start_program_test(controller)
+
+        assert len(self.before_init_times) == 1
+        assert len(self.init_ready_times) == 1
+        assert len(self.user_ready_times) == 0
+        assert len(self.series_ready_times) == 0
+
+        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
+        assert not isinstance(controller.measurement, pylo.Measurement)
+    
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("controller")
+    def test_stop_program_loop_stops_program_while_working(self, controller):
+        """Test if the program loop is stoppend when calling 
+        Controller::stopProgramLoop() in another thread."""
+
+        global measurement_duration_time
+
+        # add a listener to the microscope_ready event
+        pylo.microscope_ready.clear()
+        pylo.measurement_ready.clear()
+
+        self.microscope_ready_times = []
+        self.measurement_ready_times = []
+
+        pylo.microscope_ready.append(self.microscope_ready_handler)
+        pylo.measurement_ready.append(self.measurement_ready_handler)
+
+        # let the microscope take one second to arrange the measuremnet 
+        # variable
+        measurement_duration_time = 1
+        
+        # program is running
+        self.init_start_program_test(controller, wait_for_finish=False)
+        
+        # wait some time until the measurement should be started
+        time.sleep(measurement_duration_time * 2 / 3)
+
+        # stop the program
+        controller.stopProgramLoop()
+        controller.waitForProgram()
+        end_time = time.time()
+
+        # there should not pass that much time until the program is eded
+        assert self.start_time + measurement_duration_time <= end_time
+
+        # make sure the test is correct, the measurement has started
+        assert len(self.before_init_times) == 1
+        assert len(self.init_ready_times) == 1
+        assert len(self.user_ready_times) == 1
+        assert len(self.series_ready_times) == 1
+        assert len(self.microscope_ready_times) == 1
+
+        # make sure the measurement has not finised
+        assert len(self.measurement_ready_times) == 0
+    
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("controller")
+    def test_restart_program_loop_works_program_while_working(self, controller):
+        """Test if the program loop is stoppend when calling 
+        Controller::restartProgramLoop() in another thread."""
+
+        global measurement_duration_time
+
+        # add a listener to the microscope_ready event
+        pylo.microscope_ready.clear()
+        pylo.measurement_ready.clear()
+
+        self.microscope_ready_times = []
+        self.measurement_ready_times = []
+
+        pylo.microscope_ready.append(self.microscope_ready_handler)
+        pylo.measurement_ready.append(self.measurement_ready_handler)
+
+        # let the microscope take one second to arrange the measuremnet 
+        # variable
+        measurement_duration_time = 1
+        
+        # program is running
+        self.init_start_program_test(controller, wait_for_finish=False)
+        
+        # wait some time until the measurement should be started
+        time.sleep(measurement_duration_time * 2 / 3)
+
+        # stop the program
+        controller.restartProgramLoop()
+        restart_time = time.time()
+        controller.waitForProgram()
+        end_time = time.time()
+
+        assert self.start_time < restart_time
+        assert restart_time < end_time
+        
+        # contains the request with group at index 0 and key at index 1
+        requests = []
+        request_times_dict = {}
+        for group, key, t in controller.configuration.request_log:
+            requests.append((group, key))
+
+            k = "{}-{}".format(group, key)
+            if not k in request_times_dict:
+                request_times_dict[k] = []
+            
+            request_times_dict[k].append(t)
+
+        # all the events must be triggered twice because the program runs twice
+        assert len(self.before_init_times) == 2
+        assert len(self.init_ready_times) == 2
+        assert len(self.user_ready_times) == 2
+        assert len(self.series_ready_times) == 2
+        assert len(self.microscope_ready_times) == 2
+
+        # showCreateMeasurement() is shown twice
+        assert len(controller.view.shown_create_measurement_times) == 2
+
+        # check if mircoscope and camera are created twice
+        assert requests.count(("setup", "microscope-module")) == 2
+        assert requests.count(("setup", "microscope-class")) == 2
+        assert requests.count(("setup", "camera-module")) == 2
+        assert requests.count(("setup", "camera-class")) == 2
+
+        # all first events are triggered before the restart
+        assert self.before_init_times[0] <= restart_time
+        assert self.init_ready_times[0] <= restart_time
+        assert self.user_ready_times[0] <= restart_time
+        assert self.microscope_ready_times[0] <= restart_time
+
+        # all first requests are made before the restart
+        assert min(request_times_dict["setup-microscope-module"]) <= restart_time
+        assert min(request_times_dict["setup-microscope-class"]) <= restart_time
+        assert min(request_times_dict["setup-camera-module"]) <= restart_time
+        assert min(request_times_dict["setup-camera-class"]) <= restart_time
+
+        # all second events are triggered after the restart
+        assert restart_time <= self.before_init_times[1]
+        assert restart_time <= self.init_ready_times[1]
+        assert restart_time <= self.user_ready_times[1]
+        assert restart_time <= self.microscope_ready_times[1]
+
+        # all first requests are made before the restart
+        assert restart_time <= max(request_times_dict["setup-microscope-module"])
+        assert restart_time <= max(request_times_dict["setup-microscope-class"])
+        assert restart_time <= max(request_times_dict["setup-camera-module"])
+        assert restart_time <= max(request_times_dict["setup-camera-class"])
+
+        # the measurement finishes only one time
+        assert len(self.measurement_ready_times) == 1
+        
 
 if __name__ == "__main__":
     t = TestController()

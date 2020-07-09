@@ -142,3 +142,5 @@ cython_debug/
 
 # test files
 test/tmp_test_files
+
+PyJEM
