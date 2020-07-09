@@ -1,4 +1,5 @@
 import importlib
+import threading
 import inspect
 import typing
 import sys
@@ -412,11 +413,6 @@ class Controller:
                 target=self.measurement.start
             )
             self._measurement_thread.start()
-            self._measurement_thread.join()
-
-            if len(self._measurement_thread.exceptions):
-                for error in self._measurement_thread.exceptions:
-                    raise error
             
         except StopProgram:
             self.stopProgramLoop()
@@ -427,6 +423,44 @@ class Controller:
             except StopProgram:
                 self.stopProgramLoop()
                 return
+    
+    def waitForProgram(self, raise_error_when_not_started=False):
+        """Wait until the program has finished.
+
+        Raises
+        ------
+        RuntimeError
+            When `raise_error_when_not_started` is True and the 
+            `Controller::startProgramLoop()` is not called before or the 
+            program has already finished
+        
+        Parameters
+        ----------
+        raise_error_when_not_started : bool
+            Whether to raise an error when this function is called but the 
+            program loop is not started
+        """
+
+        if (isinstance(self._measurement_thread, threading.Thread) and 
+            self._measurement_thread.is_alive()):
+            try:
+                self._measurement_thread.join()
+
+                if len(self._measurement_thread.exceptions):
+                    for error in self._measurement_thread.exceptions:
+                        raise error
+            except StopProgram:
+                self.stopProgramLoop()
+                return
+            except Exception as e:
+                try:
+                    self.view.showError("An exception occurred: {}".format(e))
+                except StopProgram:
+                    self.stopProgramLoop()
+                    return
+        elif raise_error_when_not_started:
+            raise RuntimeError("Cannot wait for the program if the program " + 
+                               "is not started or has already finished.")
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
