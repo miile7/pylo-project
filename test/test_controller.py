@@ -26,6 +26,12 @@ class DummyView:
         self.ask_for_response = []
         self.error_log = []
         self.inputs = []
+        self.measurement_to_create = (
+            # start conditions
+            {"measurement-var": 0},
+            # series definition
+            {"variable": "measurement-var", "start": 0, "end": 1, "step-width": 1}
+        )
     
     def setAskForResponseValues(self, name_contains, response):
         self.ask_for_response.append((name_contains, response))
@@ -60,24 +66,18 @@ class DummyView:
     def showCreateMeasurement(self):
         self.shown_create_measurement_times.append(time.time())
         
-        return (
-            # start conditions
-            {"measurement-var": 0},
-            # series definition
-            {"variable": "measurement-var", "start": 0, "end": 1, "step-width": 1}
-        )
+        return self.measurement_to_create
     
     def showError(self, error, how_to_fix=None):
         self.error_log.append((error, how_to_fix))
-        print(error, how_to_fix)
-        assert False
+        raise pylo.StopProgram
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
         super().__init__()
     
     def getValue(self, group, key, fallback_default=True):
-        self.request_log.append((group, key))
+        self.request_log.append((group, key, time.time()))
         return super().getValue(group, key, fallback_default)
     
     def loadConfiguration(self):
@@ -103,7 +103,8 @@ class DummyCamera(pylo.CameraInterface):
     
     def recordImage(self):
         self.recorded_images.append(time.time())
-        args = (np.zeros((5, 5), dtype=np.uint8), {"dummy-tag": True})
+        img_data = (np.random.rand(5, 5) * 255).astype(dtype=np.uint8)
+        args = (img_data, {"dummy-tag": True})
         if use_dummy_images:
             return DummyImage(*args)
         else:
@@ -160,6 +161,35 @@ configuration_test_setup = [
         "datatype": bool, "value": True})
 ]
 
+TMP_TEST_DIR_NAME = "tmp_test_files"
+def remove_test_files():
+    """Removes the files that are created for testing."""
+
+    root = os.path.dirname(pylo_root)
+    tmp_path = os.path.join(root, "test", TMP_TEST_DIR_NAME)
+    
+    files = (
+        # all the controller test files
+        glob.glob(os.path.join(root, "controllertestdummyclass*.py")) + 
+        glob.glob(os.path.join(root, "pylo", "controllertestdummyclass*.py")) + 
+        glob.glob(os.path.join(root, "test", "controllertestdummyclass*.py")) + 
+        glob.glob(os.path.join(root, "pylo", "microscopes", "controllertestdummyclass*.py")) + 
+        # all the files in tmp_test_files
+        glob.glob(os.path.join(tmp_path, "*.*"))
+    )
+
+    for f in files:
+        try:
+            os.remove(f)
+        except (WindowsError, OSError) as e:
+            print(e)
+    
+    if os.path.isdir(tmp_path):
+        try:
+            os.removedirs(tmp_path)
+        except (WindowsError, OSError) as e:
+            print(e)
+
 @pytest.fixture()
 def controller():
     pylo.config.CONFIGURATION = DummyConfiguration()
@@ -171,7 +201,7 @@ def controller():
 
     controller.view.clear()
     controller.configuration.clear()
-
+    remove_test_files()
 
 class TestController:
     @pytest.mark.usefixtures("controller")
@@ -345,28 +375,6 @@ class TestController:
 
         return filename, path, module, class_name
     
-    def remove_test_files(self):
-        """Removes the files for the dynamic import test."""
-
-        root = os.path.dirname(pylo_root)
-        tmp_path = os.path.join(root, "test", "tmp_test_files")
-        
-        files = (
-            # all the controller test files
-            glob.glob(os.path.join(root, "controllertestdummyclass*.py")) + 
-            glob.glob(os.path.join(root, "pylo", "controllertestdummyclass*.py")) + 
-            glob.glob(os.path.join(root, "test", "controllertestdummyclass*.py")) + 
-            glob.glob(os.path.join(root, "pylo", "microscopes", "controllertestdummyclass*.py")) + 
-            # all the files in tmp_test_files
-            glob.glob(os.path.join(tmp_path, "*.*"))
-        )
-
-        for f in files:
-            os.remove(f)
-        
-        if os.path.isdir(tmp_path):
-            os.removedirs(tmp_path)
-    
     def check_dynamic_created_object(self, obj, class_name, constructor_args=None):
         """Check if the `obj` is created correctly."""
 
@@ -392,8 +400,6 @@ class TestController:
                                              "dummy-test-class-name")
         
         self.check_dynamic_created_object(obj, class_name)
-        
-        self.remove_test_files()
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_extension(self, controller):
@@ -408,9 +414,6 @@ class TestController:
         obj = controller._dynamicCreateClass("dummy-test-module-name", 
                                              "dummy-test-class-name")
         
-        self.check_dynamic_created_object(obj, class_name)
-        
-        self.remove_test_files()
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_args(self, controller):
@@ -428,8 +431,6 @@ class TestController:
                                              constructor_args=args)
         
         self.check_dynamic_created_object(obj, class_name, args)
-        
-        self.remove_test_files()
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_args_and_class_2(self, controller):
@@ -456,8 +457,6 @@ class TestController:
         
         self.check_dynamic_created_object(obj1, class_name, args1)
         self.check_dynamic_created_object(obj2, class_name2, args2)
-        
-        self.remove_test_files()
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_submodule(self, controller):
@@ -474,8 +473,6 @@ class TestController:
                                              "dummy-test-class-name")
         
         self.check_dynamic_created_object(obj, class_name)
-        
-        self.remove_test_files()
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_cwd(self, controller):
@@ -497,8 +494,6 @@ class TestController:
                                              "dummy-test-class-name")
         
         self.check_dynamic_created_object(obj, class_name)
-        
-        self.remove_test_files()
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_test(self, controller):
@@ -520,8 +515,6 @@ class TestController:
                                              "dummy-test-class-name")
         
         self.check_dynamic_created_object(obj, class_name)
-        
-        self.remove_test_files()
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_module_does_not_exist(self, controller):
@@ -536,8 +529,6 @@ class TestController:
         with pytest.raises(ModuleNotFoundError):
             controller._dynamicCreateClass("dummy-test-module-name", 
                                            "dummy-test-class-name")
-
-        self.remove_test_files()
         
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_class_does_not_exist(self, controller):
@@ -552,8 +543,6 @@ class TestController:
         with pytest.raises(AttributeError):
             controller._dynamicCreateClass("dummy-test-module-name", 
                                            "dummy-test-class-name")
-
-        self.remove_test_files()
         
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_class_is_not_a_class(self, controller):
@@ -568,8 +557,6 @@ class TestController:
         with pytest.raises((NameError, TypeError)):
             controller._dynamicCreateClass("dummy-test-module-name", 
                                            "dummy-test-class-name")
-
-        self.remove_test_files()
     
     def before_init_handler(self):
         """The event handler for the before_init event."""
@@ -587,15 +574,39 @@ class TestController:
         """The event handler for the series_ready event."""
         self.series_ready_times.append(time.time())
     
-    def init_start_program_test(self, controller, save_files=True, change_save_path=True):
-        """Initialize for testing the startProgram() function and execute the 
-        function."""
-        global use_dummy_images
+    def init_start_program_test(self, controller, save_files=True, 
+                                change_save_path=True, change_microscope=True,
+                                change_camera=True, before_start=None):
+        """Initialize for testing the startProgramLoop() function and execute 
+        startProgramLoop() function.
+        
+        Parameters
+        ----------
+        controller : Controller
+            The controller to start the program loop of
+        save_files : bool
+            Whether to save the files, this changes the `DummyCamera` to use 
+            `DummyImage`s or normal `pylo.Image`s, the `DummyImage`s do not 
+            have a (valid) `Image::saveTo()` function.
+        change_save_path : bool
+            Whether to change the path of the images to save to the test tmp
+            dir or not
+        change_microscope : bool
+            Whether to change the 'microscope-module' and 'microscope-class' 
+            configurations so the `DummyMicroscope` in this file will be used
+        change_camera : bool
+            Whether to change the 'camera-module' and 'camera-class' 
+            configurations so the `DummyCamera` in this file will be used
+        before_start : callable
+            Executed right before the program loop is started
+        """
+        global use_dummy_images, TMP_TEST_DIR_NAME
 
         # prepare event time storage
         self.before_init_times = []
         self.init_ready_times = []
         self.user_ready_times = []
+        self.series_ready_times = []
         self.series_ready_times = []
 
         # clear events
@@ -610,21 +621,27 @@ class TestController:
         pylo.user_ready.append(self.user_ready_handler)
         pylo.series_ready.append(self.series_ready_handler)
 
-        # define the microscope to use
-        controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
-        controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+        if change_microscope:
+            # define the microscope to use
+            controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
+            controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
 
-        # define the camera to use
-        controller.configuration.setValue("setup", "camera-module", "test_controller.py")
-        controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+        if change_camera:
+            # define the camera to use
+            controller.configuration.setValue("setup", "camera-module", "test_controller.py")
+            controller.configuration.setValue("setup", "camera-class", "DummyCamera")
 
         if change_save_path:
             # # define the save path
-            tmp_path = os.path.join(os.path.dirname(pylo_root), "test", "tmp_test_files")
+            tmp_path = os.path.join(os.path.dirname(pylo_root), "test", TMP_TEST_DIR_NAME)
             os.makedirs(tmp_path, exist_ok=True)
             controller.configuration.setValue("measurement", "save-directory", tmp_path)
+            controller.configuration.setValue("measurement", "save-file-format", "{counter}-dummy-img.tif")
         
         use_dummy_images = not save_files
+
+        if callable(before_start):
+            before_start()
 
         self.start_time = time.time()
         controller.startProgramLoop()
@@ -647,8 +664,10 @@ class TestController:
     def test_measurement_save_paths_custom(self, controller):
         """Test if the save directory and file name can be modified correctly 
         by changing the settings."""
+
+        global TMP_TEST_DIR_NAME
         
-        path = os.path.join(os.path.dirname(pylo_root), "test", "tmp_test_files")
+        path = os.path.join(os.path.dirname(pylo_root), "test", TMP_TEST_DIR_NAME)
         os.makedirs(path, exist_ok=True)
         name_format = "{counter}-dummy-file.tif"
 
@@ -661,7 +680,7 @@ class TestController:
         assert controller.measurement.save_dir == path
         assert controller.measurement.name_format == name_format
 
-        self.remove_test_files()
+        remove_test_files()
 
     @pytest.mark.usefixtures("controller")
     def test_event_times(self, controller):
@@ -677,10 +696,10 @@ class TestController:
         assert len(self.series_ready_times) == 1
 
         # check the time order of the events is ready
-        assert self.start_time <= self.before_init_times[0]
-        assert self.before_init_times[0] <= self.init_ready_times[0]
-        assert self.init_ready_times[0] <= self.user_ready_times[0]
-        assert self.user_ready_times[0] <= self.series_ready_times[0]
+        assert self.start_time <= min(self.before_init_times)
+        assert max(self.before_init_times) <= min(self.init_ready_times)
+        assert max(self.init_ready_times) <= min(self.user_ready_times)
+        assert max(self.user_ready_times) <= min(self.series_ready_times)
 
         # test if the init event is fired before the microscope and camera are
         # created
@@ -692,18 +711,24 @@ class TestController:
         """Test if the microscope is asked from the configuration."""
         self.init_start_program_test(controller)
 
+        # contains the request with group at index 0 and key at index 1
+        requests = [r[:2] for r in controller.configuration.request_log]
+
         # check if mircoscope is asked from the configuration
-        assert ("setup", "microscope-module") in controller.configuration.request_log
-        assert ("setup", "microscope-class") in controller.configuration.request_log
+        assert ("setup", "microscope-module") in requests
+        assert ("setup", "microscope-class") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_camera_from_configuration(self, controller):
         """Test if the camera is asked from the configuration."""
         self.init_start_program_test(controller)
 
+        # contains the request with group at index 0 and key at index 1
+        requests = [r[:2] for r in controller.configuration.request_log]
+
         # check if camera is asked from the configuration
-        assert ("setup", "camera-module") in controller.configuration.request_log
-        assert ("setup", "camera-class") in controller.configuration.request_log
+        assert ("setup", "camera-module") in requests
+        assert ("setup", "camera-class") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_microscope_and_camera_are_valid(self, controller):
@@ -741,3 +766,288 @@ class TestController:
 
         # shown exactly one time
         assert isinstance(controller.measurement, pylo.Measurement)
+    
+    @pytest.mark.usefixtures("controller")
+    def test_series_ready_after_measurement_is_created(self, controller):
+        """Test if the series_ready event is fired after the measurement is 
+        ready."""
+        
+        self.init_start_program_test(controller)
+
+        # contains the request with group at index 0 and key at index 1
+        requests = [r[:2] for r in controller.configuration.request_log]
+        index = requests.index(("measurement", "save-directory"))
+        measurement_time = controller.configuration.request_log[index][2]
+
+        # shown exactly one time
+        assert measurement_time <= self.series_ready_times[0]
+
+    def microscope_ready_handler(self):
+        """The handler for the microscope_ready event."""
+        self.microscope_ready_times.append(time.time())
+
+    def before_record_handler(self):
+        """The handler for the before_record event."""
+        self.before_record_times.append(time.time())
+
+    def after_record_handler(self):
+        """The handler for the after_record event."""
+        self.after_record_times.append(time.time())
+
+    def measurement_ready_handler(self):
+        """The handler for the measurement_ready event."""
+        self.measurement_ready_times.append(time.time())
+    
+    @pytest.mark.usefixtures("controller")
+    def test_by_event_measurement_is_started(self, controller):
+        """Test if the measuremnet fires the events which means it has started."""
+        
+        # clear events
+        pylo.microscope_ready.clear()
+        pylo.before_record.clear()
+        pylo.after_record.clear()
+        pylo.measurement_ready.clear()
+
+        # clear time logs
+        self.microscope_ready_times = []
+        self.before_record_times = []
+        self.after_record_times = []
+        self.measurement_ready_times = []
+
+        # bind handler
+        pylo.microscope_ready.append(self.microscope_ready_handler)
+        pylo.before_record.append(self.before_record_handler)
+        pylo.after_record.append(self.after_record_handler)
+        pylo.measurement_ready.append(self.measurement_ready_handler)
+
+        self.init_start_program_test(controller)
+
+        # contains the request with group at index 0 and key at index 1
+        requests = [r[:2] for r in controller.configuration.request_log]
+        index = requests.index(("measurement", "save-directory"))
+        measurement_time = controller.configuration.request_log[index][2]
+
+        # events are fired
+        assert len(self.microscope_ready_times) == 1
+        assert len(self.before_record_times) >= 1
+        assert len(self.after_record_times) >= 1
+        assert len(self.measurement_ready_times) == 1
+
+        # events are fired after the measurement is created
+        assert measurement_time <= min(self.microscope_ready_times)
+        assert measurement_time <= min(self.before_record_times)
+        assert measurement_time <= min(self.after_record_times)
+        assert measurement_time <= min(self.measurement_ready_times)
+    
+    @pytest.mark.usefixtures("controller")
+    def test_by_files_measurement_is_started(self, controller):
+        """Test if the measuremnet creates at least one file."""
+
+        self.init_start_program_test(controller)
+
+        tmp_path = os.path.join(pylo_root, "..", "test", TMP_TEST_DIR_NAME)
+        files = os.listdir(tmp_path)
+
+        assert len(files) > 0
+
+        for f in files:
+            mtime = os.path.getmtime(os.path.join(tmp_path, f))
+
+            assert self.start_time < mtime
+            assert max(self.before_init_times) < mtime
+            assert max(self.init_ready_times) < mtime
+            assert max(self.user_ready_times) < mtime
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_microscope_module_wrong(self, controller):
+        """Test if an error is shown when the microsocpe could not be loaded."""
+
+        controller.configuration.setValue("setup", "microscope-module", "nontexistingmodule")
+        controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+
+        self.init_start_program_test(controller, change_microscope=False)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The microscope module could not be found" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_microscope_class_wrong(self, controller):
+        """Test if an error is shown when the microsocpe could not be loaded."""
+
+        controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
+        controller.configuration.setValue("setup", "microscope-class", "NonExistingClass")
+
+        self.init_start_program_test(controller, change_microscope=False)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The microscope module could be loaded" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_camera_module_wrong(self, controller):
+        """Test if an error is shown when the microsocpe could not be loaded."""
+
+        controller.configuration.setValue("setup", "camera-module", "nontexistingmodule")
+        controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+
+        self.init_start_program_test(controller, change_camera=False)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The camera module could not be found" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_camera_class_wrong(self, controller):
+        """Test if an error is shown when the camera could not be loaded."""
+
+        controller.configuration.setValue("setup", "camera-module", "test_controller.py")
+        controller.configuration.setValue("setup", "camera-class", "NonExistingClass")
+
+        self.init_start_program_test(controller, change_camera=False)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The camera module could be loaded" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_create_measurement_wrong_return_type(self, controller):
+        """Test if an error is shown when the view returns a wrong type from 
+        the showCreateMeasurement() function."""
+        
+        controller.view.measurement_to_create = False
+
+        self.init_start_program_test(controller)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The view returned an invalid measurement" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_create_measurement_incomplete1(self, controller):
+        """Test if an error is shown when the view returns an incomplete 
+        measurement layout."""
+        
+        # do not give a start setup
+        controller.view.measurement_to_create = (
+            {},
+            {"variable": "notexisting", "start": 0, "end": 1, "step-width": 1}
+        )
+
+        self.init_start_program_test(controller)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The measurement could not be initialized" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_create_measurement_incomplete2(self, controller):
+        """Test if an error is shown when the view returns an incomplete 
+        measurement layout."""
+        
+        # do not give a start setup
+        controller.view.measurement_to_create = (
+            {"measurement-var": 0},
+            {}
+        )
+
+        self.init_start_program_test(controller)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The measurement could not be initialized" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_shown_create_measurement_incomplete3(self, controller):
+        """Test if an error is shown when the view returns an incomplete 
+        measurement layout."""
+        
+        # do not give a start setup
+        controller.view.measurement_to_create = (
+            {},
+            {}
+        )
+
+        self.init_start_program_test(controller)
+
+        found = False
+        for e in controller.view.error_log:
+            if "The measurement could not be initialized" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    def raise_test_exception(self):
+        """Raise an exception"""
+        raise Exception("Test exception")
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_when_exception_in_controller_event(self, controller):
+        """Test if an error is shown when there is an exception raised in the 
+        controller event."""
+        
+        self.init_start_program_test(controller, before_start=lambda: pylo.init_ready.append(self.raise_test_exception))
+
+        found = False
+        for e in controller.view.error_log:
+            if "Test exception" in e[0]:
+                found = True
+                break
+        
+        assert found
+    
+    @pytest.mark.usefixtures("controller")
+    def test_error_when_exception_in_measurement_event(self, controller):
+        """Test if an error is shown when there is an exception raised in the 
+        measurement event."""
+        
+        self.init_start_program_test(controller, before_start=lambda: pylo.after_record.append(self.raise_test_exception))
+
+        print(controller.view.error_log)
+
+        found = False
+        for e in controller.view.error_log:
+            if "Test exception" in e[0]:
+                found = True
+                break
+        
+        assert found
+
+if __name__ == "__main__":
+    t = TestController()
+
+    pylo.config.CONFIGURATION = DummyConfiguration()
+    pylo.config.CONFIGURATION.clear()
+    pylo.config.VIEW = DummyView()
+    c = pylo.Controller()
+
+    t.init_start_program_test(c)
