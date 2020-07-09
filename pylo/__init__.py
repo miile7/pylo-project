@@ -10,6 +10,7 @@ from .events import microscope_ready
 from .events import before_record
 from .events import after_record
 from .events import measurement_ready
+from .exception_thread import ExceptionThread
 from .measurement_variable import MeasurementVariable
 from .blocked_function import BlockedFunction
 from .blocked_function_error import BlockedFunctionError
