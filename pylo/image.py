@@ -1,10 +1,11 @@
 import os
 import json
 import typing
-import threading
 import numpy as np
 
 from PIL import Image as PILImage
+
+from .exception_thread import ExceptionThread
 from .config import PROGRAM_NAME
 from .config import TIFF_IMAGE_TAGS_INDEX
 
@@ -52,7 +53,7 @@ class Image:
     
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
-               file_type: typing.Optional[str]=None) -> threading.Thread:
+               file_type: typing.Optional[str]=None) -> ExceptionThread:
         """Save the image to the given file_path.
 
         Note that the saving is done in another thread. The thread will be 
@@ -90,7 +91,7 @@ class Image:
         
         Returns
         -------
-        threading.Thread
+        ExceptionThread
             The thread that is currently saving
         """
 
@@ -125,7 +126,7 @@ class Image:
 
             if (file_type in self.export_extensions and 
                 callable(self.export_extensions[file_type])):
-                thread = threading.Thread(target=self.export_extensions[file_type], 
+                thread = ExceptionThread(target=self.export_extensions[file_type], 
                                           args=(file_path, self))
                 thread.start()
                 return thread
