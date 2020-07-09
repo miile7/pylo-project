@@ -306,3 +306,49 @@ class TestConfiguration:
         # check if resetting to inital value works
         self.configuration.resetValue("overwrite-group", "value2", -1)
         assert (self.configuration.getValue("overwrite-group", "value2") == 1)
+
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_remove_element(self, group, key, value, args, expected):
+        """Test whether the group and key do not exist anymore if the 
+        removeElement() function is called."""
+        
+        self.configuration.removeElement(group, key)
+
+        assert self.configuration._keyExists(group, key) == False
+        with pytest.raises(KeyError):
+            self.configuration.getValue(group, key, fallback_default=False)
+        with pytest.raises(KeyError):
+            self.configuration.getValue(group, key)
+    
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_remove_value(self, group, key, value, args, expected):
+        """Test whether the value is removed while the all the other settings 
+        stay existent when the removeValue() is called."""
+        
+        self.configuration.removeValue(group, key)
+
+        assert self.configuration._keyExists(group, key)
+        assert self.configuration.valueExists(group, key) == False
+
+        with pytest.raises(KeyError):
+            self.configuration.getValue(group, key, fallback_default=False)
+        
+        if "datatype" in args:
+            assert self.configuration.getDatatype(group, key) == args["datatype"]
+        
+        if "default_value" in args:
+            assert self.configuration.defaultExists(group, key)
+            assert (self.configuration.getDefault(group, key) == 
+                    args["default_value"])
+        
+        if "ask_if_not_present" in args:
+            assert (self.configuration.getAskIfNotPresent(group, key) == 
+                    args["ask_if_not_present"])
+
+        if "description" in args:
+            assert self.configuration.getDescription(group, key) == args["description"]
+            
+        if "restart_required" in args:
+            assert (self.configuration.getRestartRequired(group, key) == 
+                    args["restart_required"])
+        

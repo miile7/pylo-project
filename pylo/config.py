@@ -23,5 +23,14 @@ DEFAULT_SAVE_DIRECTORY = os.path.join(os.path.expanduser("~"), "pylo-measurement
 
 # The name to use for each file if the user does not change it
 # Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4" (Needs 
-# Digital Micrograph extension)
+# Digital Micrograph extension for the file extension, use .tif otherwise)
 DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4"
+
+# from .abstract_configuration import AbstractConfiguration
+# The configuration object to use
+# Default: DMConfiguration (Needs Digital Micrograph extension)
+CONFIGURATION = None
+
+# The view object to use
+# Default: DMView (Needs Digital Micrograph extension)
+VIEW = None
