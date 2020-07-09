@@ -11,6 +11,7 @@ import threading
 import datetime
 import pytest
 import random
+import copy
 import glob
 import math
 import time
@@ -234,6 +235,14 @@ class DummyController(pylo.Controller):
         self.microscope = DummyMicroscope()
         self.camera = DummyCamera(self.microscope)
         self.configuration = DummyConfiguration()
+        self.view = DummyView()
+
+class DummyView():
+    def askFor(*args, **kwargs):
+        return ("DEFAULT_ASK_FOR_ANSWER", )
+    
+    def showError(*args, **kwargs):
+        pass
 
 class PerformedMeasurement:
     """This class performs one measurement and saves some specific values which
@@ -341,9 +350,11 @@ class PerformedMeasurement:
         if auto_start:
             # start in separate thread for testing, this will probaobly be in a 
             # separate thread later too, so include it for testing
-            thread = threading.Thread(target=self.measurement.start())
+            thread = pylo.ExceptionThread(target=self.measurement.start())
             thread.start()
             thread.join()
+
+            self.measurement.waitForAllImageSavings()
 
             self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
                                         self.get_image_paths()))
@@ -746,7 +757,7 @@ class TestMeasurement:
         setSleepTime(operation_time)
 
         performed_measurement = PerformedMeasurement(0, auto_start=False)
-        thread = threading.Thread(target=self.stop_measurement_after, 
+        thread = pylo.ExceptionThread(target=self.stop_measurement_after, 
                                   args=(performed_measurement, 
                                         operation_time / 2))
         thread.start()
@@ -783,7 +794,7 @@ class TestMeasurement:
         setSleepTime(operation_time)
 
         performed_measurement = PerformedMeasurement(0, auto_start=False)
-        thread = threading.Thread(target=self.stop_measurement_after, 
+        thread = pylo.ExceptionThread(target=self.stop_measurement_after, 
                                   args=(performed_measurement, 
                                         operation_time * 1.5))
         thread.start()
@@ -832,7 +843,7 @@ class TestMeasurement:
         performed_measurement = PerformedMeasurement(0, auto_start=False)
 
         # start the measurement another thread
-        thread = threading.Thread(target=performed_measurement.measurement.start)
+        thread = pylo.ExceptionThread(target=performed_measurement.measurement.start)
         thread.start()
 
         # stop the measurement
@@ -1038,15 +1049,30 @@ class TestMeasurement:
         with pytest.raises(ValueError):
             pylo.Measurement._parseSeries(controller, start, series)
     
-    def test_parse_series_wrong_missing_key_raises_exception(self):
+    def test_parse_series_missing_key_raises_exception(self):
         """Test if missing keys raise an exception."""
         controller = DummyController()
         start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
 
         for key in series:
-            invalid_series = series.copy()
+            invalid_series = copy.deepcopy(series)
             del invalid_series[key]
+
+            with pytest.raises(KeyError):
+                pylo.Measurement._parseSeries(controller, start, invalid_series)
+    
+    def test_parse_series_missing_key_in_subseries_raises_exception(self):
+        """Test if missing keys raise an exception."""
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1,
+                  "on-each-step": {"variable": "x-tilt", "start": -5, "end": 5,
+                                   "step-width": 5}}
+
+        for key in series["on-each-step"]:
+            invalid_series = copy.deepcopy(series)
+            del invalid_series["on-each-step"][key]
 
             with pytest.raises(KeyError):
                 pylo.Measurement._parseSeries(controller, start, invalid_series)
@@ -1062,22 +1088,121 @@ class TestMeasurement:
         with pytest.raises(ValueError):
             pylo.Measurement._parseSeries(controller, start, series)
 
-    @pytest.mark.parametrize("focus_start,focus_end", ((-1, 10), (0, 15)))
-    def test_parse_series_stays_in_bondaries(self, focus_start, focus_end):
-        """Test if the series stays in the boundaries of the 
-        `MeasurementVariable` even if it is told not to be."""
+    def test_parse_series_wrong_boundaries_raises_exception(self):
+        """Test if an exception is raised when the value is out of the 
+        boundaries."""
         
         controller = DummyController()
         start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
-        series = {"variable": "focus", "start": focus_start, "end": focus_end, 
-                  "step-width": 1}
-        steps = pylo.Measurement._parseSeries(controller, start, series)
+        
+        for var in controller.microscope.supported_measurement_variables:
+            wrong_start_series = {"variable": var.unique_id, 
+                                  "start": var.min_value - random.randint(1, 100),
+                                  "end": var.max_value,
+                                  "step-width": 1}
+            with pytest.raises(ValueError):
+                pylo.Measurement._parseSeries(controller, start, 
+                                              wrong_start_series)
 
-        measurement_var = controller.microscope.getMeasurementVariableById(series["variable"])
+            wrong_end_series = {"variable": var.unique_id, 
+                                "start": var.min_value,
+                                "end": var.max_value + random.randint(1, 100),
+                                "step-width": 1}
+            with pytest.raises(ValueError):
+                pylo.Measurement._parseSeries(controller, start, 
+                                              wrong_end_series)
 
-        for step in steps:
-            assert measurement_var.min_value <= step[series["variable"]]
-            assert step[series["variable"]] <= measurement_var.max_value
+    def test_parse_series_uneven_step_width_stays_in_boundaries(self):
+        """Test if the all the steps are in the boundaries if the step width 
+        does not fit even times in the range between start and end
+        (e.g. start=1, end=2, step-width = 0.6)."""
+        
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        
+        for var in controller.microscope.supported_measurement_variables:
+            series = {"variable": var.unique_id, "start": var.min_value,
+                      "end": var.max_value, 
+                      "step-width": (var.max_value - var.min_value) * 2 / 3}
+            
+            steps = pylo.Measurement._parseSeries(controller, start, series)
+
+            for s in steps:
+                assert var.min_value <= s[var.unique_id]
+                assert s[var.unique_id] <= var.max_value
+
+    def test_parse_series_too_big_step_width_stays_in_boundaries(self):
+        """Test if the all the steps are in the boundaries if the step width 
+        is bigger than the range between start and end
+        (e.g. start=1, end=2, step-width = 4)."""
+        
+        controller = DummyController()
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        
+        for var in controller.microscope.supported_measurement_variables:
+            series = {"variable": var.unique_id, "start": var.min_value,
+                      "end": var.max_value, 
+                      "step-width": (var.max_value - var.min_value) * 4}
+            
+            steps = pylo.Measurement._parseSeries(controller, start, series)
+
+            for s in steps:
+                assert var.min_value <= s[var.unique_id]
+                assert s[var.unique_id] <= var.max_value
+    
+    def test_parse_series_missing_key_in_start_conditions_raises_exception(self):
+        """Test if a value out of the boundaries in the start conditions raises
+        an exception."""
+        controller = DummyController()
+
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "magnetic-field", "start": 0, "end": 3, "step-width": 1}
+
+        for key in start:
+            invalid_start = start.copy()
+            del invalid_start[key]
+            
+            if key == series["variable"]:
+                # if the series variable is the removed key, the start 
+                # conditions are fully given because the series defines the 
+                # start conditions then
+                assert isinstance(
+                    pylo.Measurement._parseSeries(controller, invalid_start, series),
+                    (list, tuple)
+                )
+            else:
+                with pytest.raises(KeyError):
+                    pylo.Measurement._parseSeries(controller, invalid_start, series)
+    
+    def test_parse_series_wrong_value_in_start_conditions_raises_exception(self):
+        """Test if a missing measuremnet variable in the start conditions 
+        raises an exception."""
+        controller = DummyController()
+
+        # missing focus
+        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
+
+        for var in controller.microscope.supported_measurement_variables:
+            start_too_small = start.copy()
+            start_too_small[var.unique_id] = var.min_value - random.randint(1, 100)
+
+            # if the series variable is given, it defines the start conditions
+            if var.unique_id == series["variable"]:
+                series["start"] = start_too_small[var.unique_id]
+
+            with pytest.raises(ValueError):
+                pylo.Measurement._parseSeries(controller, start_too_small, series)
+            
+            start_too_big = start.copy()
+            start_too_big[var.unique_id] = var.max_value + random.randint(1, 100)
+
+            # if the series variable is given, it defines the start conditions
+            if var.unique_id == series["variable"]:
+                series["start"] = start_too_big[var.unique_id]
+
+            with pytest.raises(ValueError):
+                pylo.Measurement._parseSeries(controller, start_too_big, series)
 
 if __name__ == "__main__":
     pass
