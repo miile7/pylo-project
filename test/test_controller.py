@@ -1251,8 +1251,8 @@ class TestController:
         time.sleep(measurement_duration_time * 2 / 3)
 
         # stop the program
-        controller.restartProgramLoop()
         restart_time = time.time()
+        controller.restartProgramLoop()
         controller.waitForProgram()
         end_time = time.time()
 
