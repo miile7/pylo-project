@@ -21,3 +21,4 @@ from .camera_interface import CameraInterface
 from .measurement import Measurement
 from .controller import Controller
 from .stop_program import StopProgram
+from .abstract_view import AbstractView
