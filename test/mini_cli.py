@@ -1,11 +1,77 @@
+import textwrap
+import sys
 import os
 import re
+
+maxlen = None
+
+def prnt(*values, sep=" ", end="\n", file=sys.stdout, flush=False, inset=""):
+    """Print some values.
+
+    This is a wrapper that executes the python `print()` function but if a 
+    `maxlen` is given, the text will be added with new line characters after 
+    this width.
+
+    Parameters
+    ----------
+    inset : str
+        A inset to apply before every line (including the first)
+    """
+
+    global maxlen
+    
+    if isinstance(maxlen, int):
+        text = sep.join(list(map(str, values)))
+        text = wrap(text, inset)
+        values = (text, )
+        sep = ""
+
+    print(*values, sep=sep, end=end, file=file, flush=flush)
+
+def inpt(prompt, inset=""):
+    """User input some values.
+
+    This is a wrapper that executes the python `input()` function but if a 
+    `maxlen` is given, the text will be added with new line characters after 
+    this width.
+
+    Parameters
+    ----------
+    inset : str
+        A inset to apply before every line (including the first)
+    """
+    
+    prompt = wrap(prompt, inset)
+    return input(prompt)
+
+def wrap(text, inset=""):
+    """Add new lines to the given `text` if the text is longer that the 
+    `maxlen`.
+
+    If the `maxlen` is not given, the text will be returned.
+
+    Parameters
+    ----------
+    inset : str
+        A inset to apply before every line (including the first)
+    """
+
+    global maxlen
+
+    if isinstance(maxlen, int):
+        lines = textwrap.wrap(inset + text, maxlen, drop_whitespace=False, 
+                              replace_whitespace=False)
+        text = ("\n" + inset).join(lines)
+    else:
+        text = inset + text
+    
+    return text
 
 def clear():
     """Clear the current command line."""
     os.system('cls' if os.name=='nt' else 'clear')
 
-def _input_value(text, input_text, is_valid, error):
+def _input_value(text, input_text, is_valid, error, post_process=None, **kwargs):
     """Input a value.
 
     Print the `text` to the user. The `input_text` is optional, if it is given
@@ -27,6 +93,26 @@ def _input_value(text, input_text, is_valid, error):
         A function that returns the error message if the value is not valid 
         (if `is_valid` returns False). The first and only parameter will be the
         value as a string
+    post_process : callable, optional
+        A function to call after the input is detected, the first and only
+        argument is the user input, if not callable it will be ignored, 
+        default: None
+    
+    Keyword Args
+    ------------
+    lines_before : int
+        The number of empty lines before the question starts, default: 2
+    inset : int
+        The number of spaces to use for the inset, default: 0
+    add_inset : int
+        The number of spaces to use before the question to ask, this is added
+        to the `inset`
+    add_choices : dict
+        A dict where the keys hold the text that is also allowed, the value is 
+        the value that is returned if the user puts in this text, default: {}
+    post_process_add_choices : bool
+        Whether to use the `post_process` function on the value of the 
+        `add_choices` too or not, default: False
     
     Returns
     -------
@@ -34,24 +120,51 @@ def _input_value(text, input_text, is_valid, error):
         The user input as a string
     """
 
-    print("\n")
+    kwkeys = (
+        ("lines_before", 2, int),
+        ("inset", 0, int),
+        ("add_inset", 3, int),
+        ("add_choices", {}, dict),
+        ("post_process_add_choices", False, bool),
+    )
+
+    for key, default, datatype in kwkeys:
+        if not key in kwargs:
+            kwargs[key] = default
+        elif not isinstance(kwargs[key], datatype):
+            raise TypeError(("The '{}' index of the kwargs has to be of type " + 
+                            "{} but it is {}.").format(key, datatype, 
+                            type(kwargs[key])))
+
+    inset = " " * kwargs["inset"]
+    prnt("\n" * kwargs["lines_before"], end="")
     if input_text != "":
-        print(text)
+        prnt(text, inset=inset)
     else:
-        print(text, end="")
+        prnt(text, inset=inset, end="")
 
-    tabs = "   "
-    input_text = tabs + input_text + ": "
+    tabs = " " * (kwargs["add_inset"] + kwargs["inset"])
+    input_text = input_text + ": "
 
-    inp = input(input_text).lower().strip()
-    while not is_valid(inp):
-        print("")
-        print(tabs + "Error: " + error(inp))
-        inp = input(input_text).lower().strip()
+    inp = inpt(input_text, inset=tabs).lower().strip()
+    while not is_valid(inp) and inp not in kwargs["add_choices"]:
+        prnt("")
+        prnt("Error: " + error(inp), inset=tabs)
+        inp = inpt(input_text, inset=tabs).lower().strip()
     
+    if inp in kwargs["add_choices"]:
+        inp = kwargs["add_choices"][inp]
+        is_choice = True
+    else:
+        is_choice = False
+
+    if (callable(post_process) and not is_choice or 
+        kwargs["post_process_add_choices"]):
+        inp = post_process(inp)
+
     return inp
 
-def input_inline_choices(text, choices, short_text=""):
+def input_inline_choices(text, choices, short_text="", **kwargs):
     """Let the user select a value from the `choices`.
 
     If the `choices` is a dict, the keys have to be the values the user can 
@@ -112,12 +225,17 @@ def input_inline_choices(text, choices, short_text=""):
         text, 
         input_text,
         lambda x: x in return_values_dict, 
-        lambda x: error_msg.format(x)
+        lambda x: error_msg.format(x),
+        **kwargs
     )
     
-    return return_values_dict[inp]
+    if inp in return_values_dict:
+        return return_values_dict[inp]
+    else:
+        # if there are 'add_choices' given
+        return inp
 
-def input_yn(text, short_text=""):
+def input_yn(text, short_text="", **kwargs):
     """Ask a Yes-No-question to the user.
 
     Parameters
@@ -132,9 +250,10 @@ def input_yn(text, short_text=""):
     bool
         True for "yes" and False for "no"
     """
-    return input_inline_choices(text, {"Yes": True, "No": False}, short_text)
+    return input_inline_choices(text, {"Yes": True, "No": False}, short_text,
+                                **kwargs)
 
-def input_confirm(text, short_text=""):
+def input_confirm(text, short_text="", **kwargs):
     """Ask the user to confirm something, "ok" and "cancel" are shown
 
     Parameters
@@ -149,9 +268,10 @@ def input_confirm(text, short_text=""):
     bool
         True for "Ok" and False for "Cancel"
     """
-    return input_inline_choices(text, {"Ok": True, "Cancel": False}, short_text)
+    return input_inline_choices(text, {"Ok": True, "Cancel": False}, short_text,
+                                **kwargs)
 
-def input_int(text, short_text="", min_value=None, max_value=None):
+def input_int(text, short_text="", min_value=None, max_value=None, **kwargs):
     """Ask the user for an integer value.
 
     Parameters
@@ -194,14 +314,16 @@ def input_int(text, short_text="", min_value=None, max_value=None):
     short_text = " ".join(short_text)
     error_msg += "."
 
-    return int(_input_value(
+    return _input_value(
         text, 
         short_text,
         is_valid, 
-        lambda x: error_msg
-    ))
+        lambda x: error_msg,
+        post_process=int,
+        **kwargs
+    )
 
-def input_text(text, short_text="", allow_empty_string=False):
+def input_text(text, short_text="", allow_empty_string=False, **kwargs):
     """Ask the user for a text value.
 
     Parameters
@@ -229,10 +351,12 @@ def input_text(text, short_text="", allow_empty_string=False):
         text, 
         short_text,
         is_valid, 
-        lambda x: error_msg
+        lambda x: error_msg,
+        **kwargs
     )
 
-def input_filesave(text, short_text="", default_filename="", extensions="", allow_overwrite=False):
+def input_filesave(text, short_text="", default_filename="", extensions="", 
+                   allow_overwrite=False, **kwargs):
     """Show a file save to the user.
 
     Parameters
@@ -285,9 +409,11 @@ def input_filesave(text, short_text="", default_filename="", extensions="", allo
         )
     )
     
-    return os.path.abspath(_input_value(
+    return _input_value(
         text, 
         short_text,
         is_valid, 
-        error_msg
-    ))
+        error_msg,
+        post_process=os.path.abspath,
+        **kwargs
+    )
