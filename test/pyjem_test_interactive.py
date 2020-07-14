@@ -51,8 +51,13 @@ def check_x_tilt(value):
         print("X tilt:", stage.position[3])
 
 def check_focus(value):
-    eos.SetObjFocus(value)
+    raise NotImplementedError("Which focus to use?")
 
+    eos.SetObjFocus(value)
+    eos.SetDiffFocus(value) # +-1 to 50
+    lense_control.SetDiffFocus(value) # +-1 to 50
+    lense_control.SetILFocus(value)
+    lense_control.SetPLFocus(value)
 
     if offline_mode:
         print("object focus:", eos.objfocus)
