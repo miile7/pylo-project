@@ -13,10 +13,11 @@ class AbstractConfiguration:
         "group": {
             "key": {
                 "value": ["init val", "1st overwrite val", "2nd overwrite val"],
-                "type": str
-                "default": "default",
+                "datatype": str
+                "default_value": "default",
                 "ask_if_not_present": True
-                "description": "The description of the value to set"
+                "description": "The description of the value to set",
+                "restart_required": True
             }
         }
     }
@@ -27,8 +28,8 @@ class AbstractConfiguration:
     configuration : dict with dicts with dicts
         The configuration as a dict, outer dict contains the groups, the inner 
         dict contains the key, the value is another dict with the "value", the
-        "type", the "default", the "ask_if_not_present" and the "description" 
-        indices
+        "datatype", the "default_value", the "ask_if_not_present" and the 
+        "description" indices
     """
 
     def __init__(self) -> None:
@@ -98,15 +99,18 @@ class AbstractConfiguration:
             Whether the default value exists or not
         """
         return (self._keyExists(group, key) and 
-                "default" in self.configuration[group][key])
+                "default_value" in self.configuration[group][key])
     
-    def setValue(self, group: str, key: str, value: Savable, 
-                 datatype: typing.Optional[type]=None, 
-                 default_value: typing.Optional[Savable]=None, 
-                 ask_if_not_present: typing.Optional[bool]=None, 
-                 description: typing.Optional[str]=None,
-                 restart_required: typing.Optional[bool]=None) -> None:
+    def setValue(self, group: str, key: str, value: Savable,
+                 **kwargs: typing.Union[type, Savable, bool, str]) -> None:
         """Set the value to the group and key.
+
+        Raises
+        ------
+        KeyError
+            When the kwarg key is not defined
+        TypeError
+            When the kwarg value is of the wrong type
 
         Parameters
         ----------
@@ -116,46 +120,48 @@ class AbstractConfiguration:
             The key name for the value
         value : str, int, float, bool or None
             The value
+
+        Keyword Args
+        ------------
         datatype : type, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
-            given the type of the value will be used, default: str
+            given the type of the value will be used, default: *not-set*
         default_value : str, int, float, bool or None, optional
-            The default value to use if the value is not given, default: None
+            The default value to use if the value is not given, 
+            default: *not-set*
         ask_if_not_present : bool, optional
             Whether to ask the user for the value if it is not saved, if given 
             this will overwite the ask_if_not_present if it exists already, if 
             it does not exist and is not given False will be used, default: 
-            False
+            *not-set*
         description : str, optional
             The description to save in the ini file or to show to the user as 
             explenation what he is putting int, if given this will overwite the 
             description if it exists already, default: ""
         restart_required : bool, optional
             Whether a restart is required that the changes will apply, default: 
-            False
+            *not-set*
         """
-
-        if datatype is None and value is not None:
-            datatype = type(value)
-
-        self.addConfigurationOption(group, key, datatype, default_value, 
-                                    ask_if_not_present, description,
-                                    restart_required)
+        
+        self.addConfigurationOption(group, key, **kwargs)
 
         self.configuration[group][key]["value"] = [value]
     
     def addConfigurationOption(self, group: str, key: str, 
-                 datatype: typing.Optional[type]=None, 
-                 default_value: typing.Optional[Savable]=None, 
-                 ask_if_not_present: typing.Optional[bool]=None, 
-                 description: typing.Optional[str]=None,
-                 restart_required: typing.Optional[bool]=None) -> None:
+                               **kwargs: typing.Union[type, Savable, bool, str]) -> None:
         """Define the property for the given group and key.
 
         This is for the configuration and the view to know what to expect and 
         what to ask for.
+
+        Raises
+        ------
+        KeyError
+            When the kwarg key is not defined
+        TypeError
+            When the kwarg value is of the wrong type
 
         Parameters
         ----------
@@ -163,13 +169,17 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name for the value
+
+        Keyword Args
+        ------------
         datatype : type, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
-            given the type of the value will be used, default: str
+            given the type of the value will be used, default: *not-set*
         default_value : str, int, float, bool or None, optional
-            The default value to use if the value is not given, default: None
+            The default value to use if the value is not given, 
+            default: *not-set*
         ask_if_not_present : bool, optional
             Whether to ask the user for the value if it is not saved, if given 
             this will overwite the ask_if_not_present if it exists already, if 
@@ -192,27 +202,34 @@ class AbstractConfiguration:
         if not "value" in self.configuration[group][key]:
             self.configuration[group][key]["value"] = []
 
-        if (datatype is not None or 
-            "type" not in self.configuration[group][key]):
-            self.configuration[group][key]["type"] = datatype
+        supported_args = {
+            "datatype": type,
+            "default_value": typing.Any,
+            "ask_if_not_present": bool,
+            "description": str,
+            "restart_required": bool
+        }
+        
+        default_kwargs = {
+            "ask_if_not_present": False,
+            "restart_required": False
+        }
+        
+        for k, v in default_kwargs.items():
+            if k not in kwargs:
+                kwargs[k] = v
 
-        if (default_value is not None or 
-            "default" not in self.configuration[group][key]):
-            self.configuration[group][key]["default"] = default_value
-
-        if ask_if_not_present is not None: 
-            self.configuration[group][key]["ask_if_not_present"] = ask_if_not_present
-        elif "ask_if_not_present" not in self.configuration[group][key]:
-            self.configuration[group][key]["ask_if_not_present"] = False
-
-        if (description is not None or 
-            "description" not in self.configuration[group][key]):
-            self.configuration[group][key]["description"] = description
-
-        if restart_required is not None: 
-            self.configuration[group][key]["restart_required"] = restart_required
-        elif "restart_required" not in self.configuration[group][key]:
-            self.configuration[group][key]["restart_required"] = False
+        for k, v in kwargs.items():
+            if k not in supported_args:
+                raise KeyError(("The key '{}' is not supported as a keyword " + 
+                                "argument").format(k))
+            elif (supported_args[k] != typing.Any and 
+                  not isinstance(v, supported_args[k])):
+                    raise TypeError(("The key '{}' in the kwargs has to be of " + 
+                                     "type {} but it is {}.").format(
+                                         k, supported_args[k], type(v)))
+            else:
+                self.configuration[group][key][k] = kwargs[k]
     
     def getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True) -> Savable:
@@ -243,7 +260,7 @@ class AbstractConfiguration:
         if self.valueExists(group, key):
             return self._parseValue(group, key, self.configuration[group][key]["value"][-1])
         elif fallback_default and self.defaultExists(group, key):
-            return self.configuration[group][key]["default"]
+            return self.configuration[group][key]["default_value"]
         else:
             raise KeyError(
                 ("The value for the key {} within the group {} has not been " + 
@@ -277,13 +294,13 @@ class AbstractConfiguration:
                 ("The key {} does not exist in the group {}, therefore it " + 
                  "cannot be overwritten.").format(key, group)
             )
-        elif ("type" not in self.configuration[group][key] or
-              self.configuration[group][key]["type"] == None):
+        elif ("datatype" not in self.configuration[group][key] or
+              self.configuration[group][key]["datatype"] == None):
             raise KeyError(
                 "There is no type for the key {} with the group {}.".format(key, group)
             )
         else:
-            return self.configuration[group][key]["type"]
+            return self.configuration[group][key]["datatype"]
     
     def _parseValue(self, group: str, key: str, value: Savable) -> Savable:
         """Parse the value to the datatype defined by the group and key, if 
@@ -310,14 +327,8 @@ class AbstractConfiguration:
         except KeyError:
             datatype = None
         
-        if datatype == int:
-            return int(value)
-        elif datatype == float:
-            return float(value)
-        elif datatype == str:
-            return str(value)
-        elif datatype == bool:
-            return bool(value)
+        if callable(datatype):
+            return datatype(value)
         else:
             return value
     
@@ -380,7 +391,7 @@ class AbstractConfiguration:
             The default value
         """
         try:
-            return self._getIndexValue(group, key, "default")
+            return self._getIndexValue(group, key, "default_value")
         except KeyError:
             raise
     
@@ -405,7 +416,7 @@ class AbstractConfiguration:
             The datatype
         """
         try:
-            return self._getIndexValue(group, key, "type")
+            return self._getIndexValue(group, key, "datatype")
         except KeyError:
             raise
     
