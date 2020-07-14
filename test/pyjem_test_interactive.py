@@ -1,8 +1,8 @@
-import easygui
 import datetime
+from mini_cli import input_yn, input_confirm, input_int, input_filesave
 
 if (__name__ == "__main__" and 
-    easygui.ynbox("Is the microscope attatched to the computer?")):
+    input_yn("Is the microscope attatched to the computer?")):
     from PyJEM.TEM3 import Lens3
     from PyJEM.TEM3 import Stage3
     from PyJEM.TEM3 import EOS3
@@ -92,9 +92,9 @@ if __name__ == "__main__":
     for box, descr, short, confirm, test in tests:
         val = None
         if box == "yn":
-            do_test = easygui.ynbox(descr, short, choices=("Ok", "Cancel"))
+            do_test = input_confirm(descr, short)
         elif box == "int":
-            val = easygui.integerbox(descr, short, 0, -9999999, 9999999)
+            val = input_int(descr, short)
 
             do_test = val is not None
         
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
             log(
                 short,
-                easygui.ynbox(confirm, "Did it work?")
+                input_yn(confirm, "Did it work?")
             )
         else:
             break
@@ -125,8 +125,9 @@ if __name__ == "__main__":
         print("\n")
     
     print(out)
-    fn = easygui.filesavebox("Save the log", "Save log", "pyjem-test.log", ".log;.txt")
+    fn = input_filesave("Save the log", "Save log", "pyjem-test.log", ".log;.txt")
 
     if fn != None:
         with open(fn, "w+") as f:
             f.write(out)
+            print("Wrote log to {}.".format(fn))
