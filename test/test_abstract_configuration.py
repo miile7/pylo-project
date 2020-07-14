@@ -37,6 +37,7 @@ complete_test_configuration = [
         {"value": False}),
     ("set-group", "value5", "-1.787898922", {"datatype": float}, 
         {"value": -1.787898922}),
+    ("set-group", "value6", 1, {"default_value": None}, {}),
     ("options-group", "value1", None, {"datatype": int, "default_value": 0,
         "ask_if_not_present": False, "description": "Value 1"}, {}),
     ("options-group", "value2", None, {"datatype": float,
@@ -46,6 +47,7 @@ complete_test_configuration = [
     ("options-group", "value4", None, {"datatype": str, 
         "default_value": "Default"}, {}),
     ("options-group", "value5", None, {}, {}),
+    ("options-group", "value6", None, {"default_value": None}, {}),
 ]
 
     # normalize the expected
@@ -136,6 +138,17 @@ if len(complete_test_configuration_with_defaults) == 0:
           "complete_test_configuration_with_defaults")
     assert False
         
+# test configuration with only the configs that do not have defaults set, set up
+# in setup_method()
+complete_test_configuration_without_defaults = list(
+    filter(lambda y: "default_value" not in y[4], 
+    complete_test_configuration))
+
+if len(complete_test_configuration_without_defaults) == 0:
+    print("Warning: There are no parameters given for " + 
+          "complete_test_configuration_without_defaults")
+    assert False
+        
 # test configuration withonly the configs that have descriptions set, set 
 # up in setup_method()
 complete_test_configuration_width_description = list(
@@ -223,14 +236,23 @@ class TestConfiguration:
         with pytest.raises(KeyError):
             self.configuration.getValue(group, key, False)
 
-    @pytest.mark.parametrize("group,key", [
-        ("options-group", "value1"),
-        ("options-group", "value3"),
-        ("options-group", "value4"),
-    ])
-    def test_default_exist(self, group, key):
+    # @pytest.mark.parametrize("group,key", [
+    #     ("options-group", "value1"),
+    #     ("options-group", "value3"),
+    #     ("options-group", "value4"),
+    # ])
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_with_defaults)
+    def test_default_exist(self, group, key, value, args, expected):
         """Test the set default exist."""
         assert self.configuration.defaultExists(group, key)
+
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_without_defaults)
+    def test_default_not_exist(self, group, key, value, args, expected):
+        """Test the set default exist."""
+        assert not self.configuration.defaultExists(group, key)
+
+        with pytest.raises(KeyError):
+            self.configuration.getDefault(group, key)
 
     @pytest.mark.parametrize("group,key,value,args,expected", test_configuration_without_option_groups)
     def test_values_are_correct(self, group, key, value, args, expected):
@@ -351,4 +373,19 @@ class TestConfiguration:
         if "restart_required" in args:
             assert (self.configuration.getRestartRequired(group, key) == 
                     args["restart_required"])
+    
+    @pytest.mark.parametrize("group,key,args,expected_error", [
+        ("invalid-kwargs-group", "Key1", {"invalid-arg": False}, KeyError),
+        ("invalid-kwargs-group", "Key2", {"datatype": int, "invalid-arg": False}, 
+         KeyError),
+        ("invalid-kwargs-group", "Key3", {"datatype": False}, TypeError),
+        ("invalid-kwargs-group", "Key4", {"datatype": int, "description": None}, 
+         TypeError),
+    ])
+    def test_kwargs_wrong_key(self, group, key, args, expected_error):
+        """Test if a wrong key in the kwargs in the addConfigurationOption()
+        function raises an error."""
+
+        with pytest.raises(expected_error):
+            self.configuration.addConfigurationOption(group, key, **args)
         
