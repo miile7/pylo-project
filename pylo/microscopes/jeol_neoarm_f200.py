@@ -10,6 +10,27 @@ from ..measurement_variable import MeasurementVariable
 # microscope
 CONFIG_JEOLNEOARMF200_GROUP = "JEOLNeoARMF200"
 
+# the function modes for TEM mode
+FUNCTION_MODE_TEM_MAG = 0
+FUNCTION_MODE_TEM_MAG2 = 1
+FUNCTION_MODE_TEM_LowMAG = 2
+FUNCTION_MODE_TEM_SAMAG = 3
+FUNCTION_MODE_TEM_DIFF = 4
+
+# the function modes for STEM mode
+FUNCTION_MODE_STEM_ALIGN = 0
+FUNCTION_MODE_STEM_SM_LMAG = 1
+FUNCTION_MODE_STEM_SM_MAG = 2
+FUNCTION_MODE_STEM_AMAG = 3
+FUNCTION_MODE_STEM_uuDIFF = 4
+FUNCTION_MODE_STEM_ROCKING = 5
+
+# the probe modes
+PROBE_MODE_TEM = 0
+PROBE_MODE_EDS = 1
+PROBE_MODE_NBD = 2
+PROBE_MODE_CBD = 3
+
 # the stage position constants in TEM3.stage3
 STAGE_INDEX_X_POS = 0
 STAGE_INDEX_Y_POS = 1
@@ -105,10 +126,13 @@ class JEOLNeoARMF200(MicroscopeInterface):
             MeasurementVariable("y-tilt", "Y Tilt", -10, 10, "deg"),
         ]
 
-        self.magnetic_field_calibration_factor = (
-            self.controller.configuration.getValue(
-                CONFIG_JEOLNEOARMF200_GROUP, 
-                "objective-lense-magnetic-field-calibration"))
+        try:
+            self.magnetic_field_calibration_factor = (
+                self.controller.configuration.getValue(
+                    CONFIG_JEOLNEOARMF200_GROUP, 
+                    "objective-lense-magnetic-field-calibration"))
+        except KeyError:
+            self.magnetic_field_calibration_factor = None
 
         if isinstance(self.magnetic_field_calibration_factor, (int, float)):
             self.supported_measurement_variables.append(
@@ -197,7 +221,18 @@ class JEOLNeoARMF200(MicroscopeInterface):
     def setInLorenzMode(self, lorenz_mode : bool) -> None:
         """Set the microscope to be in lorenz mode.
 
-        This disables the objective lense (OL)
+        This sets the probe mode to *TEM* and the function mode to *LowMAG*. It
+        disables the objective lense (OL fine and coarse) and sets them to 0.
+
+        Raises
+        ------
+        IOError
+            When there is no holder inserted.
+
+        Parameters
+        ----------
+        lorenz_mode : bool
+            Whether the microscope should be in lorenz mode or not
         """
 
         # make sure only this function is currently using the microscope,
@@ -209,6 +244,11 @@ class JEOLNeoARMF200(MicroscopeInterface):
             raise IOError("The holder is not inserted.")
 
         if lorenz_mode:
+            # select TEM mode
+            self._eos.SelectProbMode(PROBE_MODE_TEM)
+            # select low mag mode
+            self._eos.SelectFunctionMode(FUNCTION_MODE_TEM_LowMAG)
+
             # endable free lense control for objective fine and coarse lense
             self._lense_control.SetFLCSw(OL_FINE_LENSE_ID, 1)
             self._lense_control.SetFLCSw(OL_COARSE_LENSE_ID, 1)
@@ -218,10 +258,21 @@ class JEOLNeoARMF200(MicroscopeInterface):
             self._lense_control.SetOLf(0)
 
             # self._lense_control.SetOLSuperFineNeutral()
+
         else:
             # disable free lense control for objective fine and coarse lense
             self._lense_control.SetFLCSw(OL_FINE_LENSE_ID, 0)
             self._lense_control.SetFLCSw(OL_COARSE_LENSE_ID, 0)
+
+            # keep tem mode
+            self._eos.SelectProbMode(PROBE_MODE_TEM)
+            # select normal mag mode
+            self._eos.SelectFunctionMode(FUNCTION_MODE_TEM_MAG)
+
+            # set neutral?
+            # self._lense_control.SetNtrl((Lens3)arg1, (int)arg2)
+            # NTRL within only value range.
+            # 0:Brightness, 1:OBJ Focus, 2:DIFF Focus, 3:IL Focus, 4:PL Focus, 5:FL Focus
 
         # let other functions access the microscope
         self._action_lock.release()
@@ -305,13 +356,17 @@ class JEOLNeoARMF200(MicroscopeInterface):
         value : float
             The focus value
         """
-        self._action_lock.acquire()
-        self._eos.SetObjFocus(value)
-
-        self._action_lock.release()
 
         raise Exception("The focus does not properly work at the moment. This " + 
                         "probably is the wrong focus.")
+
+        self._action_lock.acquire()
+        self._eos.SetObjFocus(value)
+        # self._eos.SetDiffFocus(value) +-1 to 50
+        # self._lense_control.SetDiffFocus(value) +-1 to 50
+        # self._lense_control.SetILFocus(value)
+        # self._lense_control.SetPLFocus(value)
+        self._action_lock.release()
 
     def _setObjectiveLenseCurrent(self, value : float) -> None:
         """Set the objective lense current.
