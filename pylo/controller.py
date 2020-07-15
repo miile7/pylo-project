@@ -424,6 +424,7 @@ class Controller:
             self.stopProgramLoop()
             return
         except Exception as e:
+            raise e
             try:
                 self.view.showError("An exception occurred: {}".format(e))
             except StopProgram:
