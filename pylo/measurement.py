@@ -433,7 +433,8 @@ class Measurement:
             When the `start_conditions` or the `series` 'step' or 'end' 
             contains invalid values (e.g. values are out of the bounds the 
             `MeasurementVariable` defines) or the `series` 'step-width' index
-            is smaller or equal to zero
+            is smaller or equal to zero or the 'on-each-point' contains a
+            variable that is measured already
         TypeError
             When one of the values has the wrong type
 
@@ -536,6 +537,12 @@ class Measurement:
             raise ValueError(("The variable '{}' in the series{} is not a " + 
                               "valid measurement variable id.").format(
                                   series["variable"], error_str))
+        
+        if series_variable.unique_id in error_path:
+            raise ValueError(("The variable '{}' in the series{} is " + 
+                              "already measured in one of the parent " +
+                              "series.").format(series_variable.unique_id, 
+                                                error_str))
 
         # test if step is > 0
         if series["step-width"] <= 0:
