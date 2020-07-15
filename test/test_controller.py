@@ -302,13 +302,15 @@ class TestController:
             else:
                 # define the configuration options so the datatype ect. are 
                 # known
+                args = {}
+                if "datatype" in lookup_dir:
+                    args["datatype"] = lookup_dir["datatype"]
+                if "description" in lookup_dir:
+                    args["description"] = lookup_dir["description"]
                 controller.configuration.addConfigurationOption(
                     lookup_dir["group"], 
                     lookup_dir["key"],
-                    datatype=(lookup_dir["datatype"] if "datatype" in lookup_dir 
-                            else None),
-                    description=(lookup_dir["description"] if "description" in lookup_dir 
-                                else None)
+                    **args
                 )
 
                 # set the responses for the view ask
@@ -1134,7 +1136,7 @@ class TestController:
 
         assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
                 for_camera)
-        assert not isinstance(controller.camera, pylo.CameraInterface)
+        assert not isinstance(controller.camera, pylo.cameras.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1153,7 +1155,7 @@ class TestController:
         assert len(self.series_ready_times) == 0
 
         assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.CameraInterface)
+        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1172,7 +1174,7 @@ class TestController:
         assert len(self.series_ready_times) == 0
 
         assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.CameraInterface)
+        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.slow()
