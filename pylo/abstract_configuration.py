@@ -6,6 +6,11 @@ class AbstractConfiguration:
     """This class is the base class for configurations.
 
     The implementing class only sets the way how the data is saved persistantly.
+    For this overwrite the `AbstractConfiguration::loadConfiguration()` and the 
+    `AbstractConfiguration::saveConfiguration()`. The load function should use 
+    the `AbstractConfiguration::setValue()` function to set the values. Note
+    that only the value is required. Other properties (datatype, default, ...)
+    are defined by the program itself.
 
     The internal configuration may look like this:
     ```
@@ -626,9 +631,13 @@ class AbstractConfiguration:
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 
-        raise NotImplementedError()
+        # This should be implemented by child classes, otherwise there is no 
+        # persistant storage
+        pass
     
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
-        raise NotImplementedError()
+        # This should be implemented by child classes, otherwise there is no 
+        # persistant storage
+        pass
