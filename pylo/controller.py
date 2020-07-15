@@ -22,12 +22,16 @@ from .config import PROGRAM_NAME
 MAX_LOOP_COUNT = 1000
 
 # for importing with import_lib in Controller::_dynamicCreateClass()
-# add pylo/root
-sys.path.append(os.path.dirname(__file__))
-# add microscopes path
-sys.path.append(os.path.join(os.path.dirname(__file__), "microscopes"))
-# add current working directory
-sys.path.append(os.getcwd())
+# add pylo/root, the key is the text to display in the help, the value will be
+# added to the sys.path
+import_dirs = {
+    "root": os.path.dirname(__file__),
+    "microscopes": os.path.join(os.path.dirname(__file__), "microscopes"),
+    "cameras": os.path.join(os.path.dirname(__file__), "cameras"),
+    "current working directory": os.getcwd()
+}
+for v in import_dirs.values():
+    sys.path.append(v)
 
 CONFIG_SETUP_GROUP = "setup"
 
@@ -337,7 +341,7 @@ class Controller:
                             "The value has to be the name of the class that " + 
                             "defines the camera class. The camera " + 
                             "class has to extend the class " + 
-                            "'pylo.CameraInterface'.").format(CONFIG_SETUP_GROUP)
+                            "'pylo.camerasCameraInterface'.").format(CONFIG_SETUP_GROUP)
                         key = "camera-class"
                     self.view.showError(msg.format(e), fix)
                     self.camera = None
@@ -490,39 +494,64 @@ class Controller:
             The configuration to define the required options in
         """
         
+        # create a human readable list separated by comma and the last one
+        # with an 'or', parameter is the list
+        humanlist = lambda x: ", ".join(x[:-1]) + " or " + x[-1]
+        # the path names where the Controller::_dynamicCreateClass() function 
+        # looks in
+        path_names = humanlist(list(map(str, import_dirs.keys())))
+        # the root path to make other paths relative to this
+        root = os.path.realpath(os.path.dirname(__file__))
+        # the paths the Controller::_dynamicCreateClass() function looks in
+        paths = list(map(lambda p: str(os.path.realpath(p)).replace(root, ""), 
+                         import_dirs.values()))
+        # a callback to create the file paths that are looked in, parameter is 
+        # the file name
+        files = lambda x: humanlist(list(map(lambda p: os.path.join(p, x), paths)))
+        
         # add the option for the microscope module
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, "microscope-module", str, description=("The " + 
-            "module name where the microscope to use is defined. This must " + 
-            "be a valid python module name relative to the {name} root. So " + 
-            "if you are outside {name}, you should type pylo<your input>" + 
-            "(usually including the first dot). For example use " + 
-            ".microscopes.my_custom_microscope. (The file is then " + 
-            "pylo/microscopes/my_custom_microscope.py)").format(name=PROGRAM_NAME),
+            CONFIG_SETUP_GROUP, 
+            "microscope-module", 
+            datatype=str, 
+            description=("The module name where the microscope to use is " + 
+            "defined. This must be a valid python module name. The file can " + 
+            "be placed in {paths} directory. For example the input " + 
+            "`my_custom_microscope` will check for the files " + 
+            "{files}.").format(name=PROGRAM_NAME, paths=path_names, 
+                               files=files("my_custom_microscope.py")),
             restart_required=True
         )
         # the configuration option for the microscope class
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, "microscope-class", str, description=("The " + 
-            "class name of the microscope class that communicates with the " + 
-            "physical microscope. The class name must be in the " + 
-            "'microscope-module'."), restart_required=True
+            CONFIG_SETUP_GROUP, 
+            "microscope-class", 
+            datatype=str, 
+            description=("The class name of the microscope class that " + 
+            "communicates with the physical microscope. The class name must " + 
+            "be defined in the 'microscope-module' file."), 
+            restart_required=True
         )
         # add the option for the camera module
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, "camera-module", str, description=("The " + 
-            "camera name where the camera to use is defined. This must " + 
-            "be a valid python module name relative to the {name} root. So " + 
-            "if you are outside {name}, you should type pylo<your input>" + 
-            "(usually including the first dot). For example use " + 
-            ".my_custom_camera. (The file is then " + 
-            "pylo/my_custom_camera.py)").format(name=PROGRAM_NAME),
+            CONFIG_SETUP_GROUP, 
+            "camera-module", 
+            datatype=str, 
+            description=("The module name where the camera to use is " + 
+            "defined. This must be a valid python module name. The file can " + 
+            "be placed in {paths} directory. For example the input " + 
+            "`my_custom_camera` will check for the files " + 
+            "{files}.").format(name=PROGRAM_NAME, paths=path_names, 
+                               files=files("my_custom_camera.py")),
             restart_required=True
         )
         # the configuration option for the camera class
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, "camera-class", str, description=("The " + 
-            "class name of the camera class that communicates with the " + 
-            "physical camera. The class name must be in the " + 
-            "'camera-module'."), restart_required=True
+            CONFIG_SETUP_GROUP, 
+            "camera-class", 
+            datatype=str, 
+            description=("The class name of the camera class that " + 
+            "communicates with the physical camera. The class name must " + 
+            "be defined in the 'camera-module' file."), 
+            restart_required=True
         )
