@@ -164,7 +164,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.is_in_safe_state = True
 
 dummy_camera_name = "DummyCamera for testing"
-class DummyCamera(pylo.CameraInterface):
+class DummyCamera(pylo.cameras.CameraInterface):
     def __init__(self, microscope):
         super().__init__()
         self.microscope = microscope

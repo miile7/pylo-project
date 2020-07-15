@@ -1,4 +1,4 @@
-from .vulnerable_machine import VulnerableMachine
+from ..vulnerable_machine import VulnerableMachine
 
 class CameraInterface(VulnerableMachine):
     """This class represents the camera.

@@ -17,7 +17,6 @@ from .blocked_function_error import BlockedFunctionError
 from .vulnerable_machine import VulnerableMachine
 from .image import Image
 from .abstract_configuration import AbstractConfiguration
-from .camera_interface import CameraInterface
 from .measurement import Measurement
 from .controller import Controller
 from .stop_program import StopProgram

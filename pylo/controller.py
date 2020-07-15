@@ -6,7 +6,7 @@ import sys
 import os
 
 from .microscopes.microscope_interface import MicroscopeInterface
-from .camera_interface import CameraInterface
+from .cameras.camera_interface import CameraInterface
 from .exception_thread import ExceptionThread
 from .stop_program import StopProgram
 from .measurement import Measurement
