@@ -9,7 +9,7 @@ import pylo
 
 class TestCameraInterface:
     def test_for_not_implemented(self):
-        camera = pylo.CameraInterface()
+        camera = pylo.cameras.CameraInterface()
 
         with pytest.raises(NotImplementedError):
             camera.recordImage()

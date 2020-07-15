@@ -111,7 +111,7 @@ class DummyImage(pylo.Image):
         pass
 
 use_dummy_images = False
-class DummyCamera(pylo.CameraInterface):
+class DummyCamera(pylo.cameras.CameraInterface):
     def __init__(self):
         super().__init__()
         self.clear()
