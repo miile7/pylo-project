@@ -1,24 +1,28 @@
-import importlib
-import threading
+import os
+import sys
 import inspect
 import typing
-import sys
-import os
+import importlib
+import threading
 
-from .microscopes.microscope_interface import MicroscopeInterface
-from .cameras.camera_interface import CameraInterface
-from .exception_thread import ExceptionThread
-from .stop_program import StopProgram
-from .measurement import Measurement
-from .events import before_start
-from .events import series_ready
-from .events import before_init
 from .events import init_ready
 from .events import user_ready
-from .config import PROGRAM_NAME
+from .events import before_init
+from .events import before_start
+from .events import series_ready
+
+from .measurement import Measurement
+from .stop_program import StopProgram
+from .exception_thread import ExceptionThread
+from .cameras.camera_interface import CameraInterface
+from .microscopes.microscope_interface import MicroscopeInterface
+
+# from .config import PROGRAM_NAME
 # from .config import CONFIGURATION
 # from .config import VIEW
 
+# the number of times the user is asked for the input, this is for avoiding
+# infinite loops that are caused by any error
 MAX_LOOP_COUNT = 1000
 
 # for importing with import_lib in Controller::_dynamicCreateClass()
@@ -66,8 +70,7 @@ class Controller:
 
         before_start()
 
-        # import values here, otherwise they cannot be changed dynamically
-        # which is (only?) required for the tests
+        # import as late as possible to allow changes by extensions
         from .config import CONFIGURATION
         from .config import VIEW
 
@@ -493,6 +496,9 @@ class Controller:
         configuration : AbstractConfiguration
             The configuration to define the required options in
         """
+
+        # import as late as possible to allow changes by extensions        
+        from .config import PROGRAM_NAME
         
         # create a human readable list separated by comma and the last one
         # with an 'or', parameter is the list

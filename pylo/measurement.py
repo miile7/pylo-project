@@ -3,22 +3,24 @@ import typing
 import os
 
 import numpy as np
+
 from collections import defaultdict
 
-from .blocked_function_error import BlockedFunctionError
-from .measurement_variable import MeasurementVariable
-from .exception_thread import ExceptionThread
-from .stop_program import StopProgram
-from .events import microscope_ready
-from .events import measurement_ready
-from .events import before_record
-from .events import after_record
 from .events import emergency
 from .events import after_stop
-from .image import Image
+from .events import microscope_ready
+from .events import before_record
+from .events import after_record
+from .events import measurement_ready
 
-from .config import DEFAULT_SAVE_DIRECTORY
-from .config import DEFAULT_SAVE_FILE_NAME
+from .image import Image
+from .stop_program import StopProgram
+from .exception_thread import ExceptionThread
+from .measurement_variable import MeasurementVariable
+from .blocked_function_error import BlockedFunctionError
+
+# from .config import DEFAULT_SAVE_DIRECTORY
+# from .config import DEFAULT_SAVE_FILE_NAME
 
 class Measurement:
     """This class represents one measurement.
@@ -584,6 +586,10 @@ class Measurement:
         configuration : AbstractConfiguration
             The configuration to define the required options in
         """
+
+        # import as late as possible to allow changes by extensions
+        from .config import DEFAULT_SAVE_DIRECTORY
+        from .config import DEFAULT_SAVE_FILE_NAME
         
         # add an entry to the config and ask the user if there is nothing
         # saved

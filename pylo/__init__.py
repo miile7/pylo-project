@@ -10,14 +10,15 @@ from .events import microscope_ready
 from .events import before_record
 from .events import after_record
 from .events import measurement_ready
-from .exception_thread import ExceptionThread
-from .measurement_variable import MeasurementVariable
-from .blocked_function import BlockedFunction
-from .blocked_function_error import BlockedFunctionError
-from .vulnerable_machine import VulnerableMachine
+
 from .image import Image
-from .abstract_configuration import AbstractConfiguration
-from .measurement import Measurement
 from .controller import Controller
+from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
+from .exception_thread import ExceptionThread
+from .blocked_function import BlockedFunction
+from .vulnerable_machine import VulnerableMachine
+from .measurement_variable import MeasurementVariable
+from .blocked_function_error import BlockedFunctionError
+from .abstract_configuration import AbstractConfiguration
