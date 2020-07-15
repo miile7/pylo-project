@@ -42,6 +42,7 @@ __doc__ += str(__event_docs__)
 
 from .image import Image
 from .controller import Controller
+from .cli_view import Controller
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
