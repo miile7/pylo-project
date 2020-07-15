@@ -41,8 +41,8 @@ from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
 from .image import Image
+from .cli_view import CLIView
 from .controller import Controller
-from .cli_view import Controller
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
