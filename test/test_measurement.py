@@ -236,7 +236,7 @@ class DummyController(pylo.Controller):
         self.configuration = DummyConfiguration()
         self.view = DummyView()
 
-class DummyView():
+class DummyView(pylo.AbstractView):
     def askFor(*args, **kwargs):
         return ("DEFAULT_ASK_FOR_ANSWER", )
     
