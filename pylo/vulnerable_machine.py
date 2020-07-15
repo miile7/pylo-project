@@ -1,8 +1,8 @@
 import inspect
 
-from .blocked_function_error import BlockedFunctionError
-from .blocked_function import BlockedFunction
 from .events import emergency
+from .blocked_function import BlockedFunction
+from .blocked_function_error import BlockedFunctionError
 
 class VulnerableMachine:
     """

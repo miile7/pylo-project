@@ -6,8 +6,9 @@ import numpy as np
 from PIL import Image as PILImage
 
 from .exception_thread import ExceptionThread
-from .config import TIFF_IMAGE_TAGS_INDEX
-from .config import PROGRAM_NAME
+
+# from .config import PROGRAM_NAME
+# from .config import TIFF_IMAGE_TAGS_INDEX
 
 
 class Image:
@@ -179,6 +180,10 @@ def _export_image_object_to_tiff(file_path: str, image: Image) -> None:
         image : Image
             The image object to save
     """
+
+    # import as late as possible to allow changes by extensions
+    from .config import PROGRAM_NAME
+    from .config import TIFF_IMAGE_TAGS_INDEX
 
     # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
     # mode defines whether RGB, RGBA, Grayscale, ... is used

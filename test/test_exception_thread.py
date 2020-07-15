@@ -29,7 +29,7 @@ class TestExceptionThread:
 
     def get_thread(self):
         """Get the ExceptionThread for testing."""
-        self.counter = -1;
+        self.counter = -1
         t = pylo.ExceptionThread(target=self.thread_callback)
 
         t.start()
