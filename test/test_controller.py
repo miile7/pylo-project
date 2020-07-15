@@ -19,8 +19,7 @@ pylo_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pylo")
 class DummyViewShowsError(AssertionError):
     pass
 
-# class DummyView(pylo.AbstractView):
-class DummyView:
+class DummyView(pylo.AbstractView):
     def __init__(self):
         self.clear()
     
