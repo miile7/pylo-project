@@ -13,6 +13,7 @@ import time
 import numpy as np
 
 import pylo
+import pylo.config
 
 pylo_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pylo")
 
