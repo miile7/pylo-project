@@ -19,15 +19,10 @@ class CLIView(AbstractView):
         The current error to display
     """
 
-    def __init__(self, controller: "Controller") -> None:
+    def __init__(self) -> None:
         """Get the CLIView object.
-        
-        Parameters
-        ----------
-        controller : Controller
-            The controller
         """
-        super().__init__(controller)
+        super().__init__()
 
         self.line_length = min(79, os.get_terminal_size().columns)
         self.error = ""
@@ -70,20 +65,41 @@ class CLIView(AbstractView):
         ----------
         values : str or object
             The value to print
-        sep : str
+        sep : str, optional
             The separator between two values, default: " "
-        end : str
+        end : str, optional
             The end character to end a line, default: "\n"
-        inset : str
-            Some characters to print before every line
+        inset : str, optional
+            Some characters to print before every line, default: ""
         """
 
         text = inset + sep.join(map(str, values)) + end
         text = textwrap.wrap(text, self.line_length, drop_whitespace=False,
                              replace_whitespace=False)
-        text = ("\n" + inset).join(lines)
+        text = ("\n" + inset).join(text)
 
         print(text, sep="", end="")
+    
+    def input(self, text: str, inset: typing.Optional[str]="") -> str:
+        """Get the input of the user.
+
+        Parameters
+        ----------
+        text : str
+            The text to show in front of the input
+        inset : str, optional
+            Some characters to print before every line, default: ""
+        
+        Returns
+        -------
+        str
+            The user input
+        """
+        text = textwrap.wrap(text, self.line_length, drop_whitespace=False,
+                             replace_whitespace=False)
+        text = ("\n" + inset).join(text)
+
+        return input(text)
 
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -419,16 +435,166 @@ class CLIView(AbstractView):
         elif 0 <= int(user_input) and int(user_input) <= max_index:
             index = int(user_input)
             id_index_map = list(values.keys())
-            id_ = id_map[index]
+            id_ = id_index_map[index]
             id_args_map = [l["id"] if isinstance(l, dict) else None for l in args]
             args_index = id_args_map.search(id_)
             input_definition = args[args_index]
 
             args = list(args)
-            values[id_] = self._inputValueLoop(input_definition)
+            try:
+                v = self._inputValueLoop(input_definition)
+
+                if (v is not None or (not "required" in input_definition or 
+                    not input_definition["required"])):
+                    values[id_] = v
+            except StopProgram:
+                pass
 
             return values[id_], None
         else:
             # error is shown in CLIView::printTitle
             self.error = "The input '{}' is not valid.".format(user_input)
             self._printSelect(*args)
+    
+    def _inputValueLoop(self, input_definition: dict) -> typing.Any:
+        """Get the input for the `input_definition` by asking the user.
+
+        The `input_definition` is a dict that supports the following keys:
+        - "label": str (required), the name to show to the user
+        - "id": str (required), the id that is used in the returned dict
+        - "datatype": type or list (required), the type, currently 
+          supported: float or a list of possible inputs
+        - "value": <type of "datatype" or None if "required" is False> 
+          (required), the value to use, only if "required" is false, None can 
+          be used too
+        - "min_value": float (optional), the minimum value that is allowed, 
+          only for numeric inputs
+        - "max_value": float (optional), the maximum value that is allowed, 
+          only for numeric inputs
+        - "required": bool (optional), whether the current input has to be
+          set or not, default: False
+        
+        Raises
+        ------
+        StopProgram
+            When the user cancels the input
+        
+        Parameters
+        ----------
+        input_definition : dict
+            The definition of the input
+        
+        Returns
+        -------
+        <input_definition["datatype"]> or None
+            Returns the value entered by the user in the given type, the value 
+            is in the defined boudaries or None if the input is optional and
+            the user wants to remove it
+        """
+
+        self.clear()
+        self.printTitle()
+        
+        empty_command = "x"
+        cancel_command = "c"
+        case_insensitive = True
+        text = "Please set the {} as ".format(input_definition["label"])
+
+        if isinstance(input_definition["datatype"], (list, tuple)):
+            options = list(map(str, input_definition["datatype"]))
+            text += "'{}'.".format("', '".join(options[:-1]) + "' or '" + options[-1])
+
+            options_ci = list(map(lambda x: x.lower(), options))
+            options_ci_max_count = max(map(lambda x: options_ci.count(x), options_ci))
+
+            if options_ci_max_count > 1:
+                # there are some values that are exactly the same exept their
+                # case upper/lower
+                case_insensitive = False
+        else:
+            if input_definition["datatype"] == int:
+                name = "integer number"
+            elif input_definition["datatype"] == float:
+                name = "decimal number"
+            elif input_definition["datatype"] == bool:
+                name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
+            elif input_definition["datatype"] == str:
+                name = "text"
+                case_insensitive = False
+                cancel_command = "!cancel"
+                empty_command = "!empty"
+            else:
+                name = input_definition["datatype"].__name__
+            
+            if "min_value" in input_definition and "max_value" in input_definition:
+                name += " with {} <= value <= {}".format(
+                    input_definition["min_value"], input_definition["max_value"]
+                )
+            elif "min_value" in input_definition:
+                name += " with value >= {}".format(input_definition["min_value"])
+            elif "max_value" in input_definition:
+                name += " with value <= {}".format(input_definition["max_value"])
+            
+            text += " a {}.".format(name)
+        
+        text += " To cancel type '{}'.".format(cancel_command)
+
+        if not "required" in input_definition or not input_definition["required"]:
+            text += (" To leave the input empty (remove the current value) " + 
+                     "type '{}'.").format(empty_command)
+
+        self.print(text)
+
+        val = self.input("{}: ".format(input_definition["label"]))
+        if val.lower() == cancel_command:
+            raise StopProgram
+        elif val.lower() == empty_command:
+            if (not "required" in input_definition or 
+                not input_definition["required"]):
+                return None
+            else:
+                self.error = ("The '{}' is required. You have to put " + 
+                              "in something here.").format(input_definition["name"])
+                return self._inputValueLoop(input_definition)
+        
+        if isinstance(input_definition["datatype"], (list, tuple)):
+            if (case_insensitive and val.lower() not in options_ci or 
+                not case_insensitive and val not in options):
+                self.error(("The value be one of the following: '{}'").format(
+                    "', '".join(options)
+                ))
+
+                return self._inputValueLoop(input_definition)
+        elif input_definition["datatype"] == bool:
+            if val.lower() in ("yes", "y", "true", "t", "on"):
+                val = True
+            elif val.lower() in ("no", "n", "false", "f", "off"):
+                val = False
+            else:
+                self.error(("Please use 'yes', 'y', 'true', 't' or 'on' to " + 
+                            "indicate a true boolean, use 'no', 'n', 'false', " + 
+                            "'f' or 'off' to represent a false (case " + 
+                            "insensitive)"))
+                return self._inputValueLoop(input_definition)
+        elif callable(input_definition["datatype"]):
+            val = input_definition["datatype"]
+
+        if "min_value" in input_definition:
+            try:
+                if val < input_definition["min_value"]:
+                    self.error = ("The value must be greater than or equal to " + 
+                                  "{}.").format(input_definition["min_value"])
+                    return self._inputValueLoop(input_definition)
+            except TypeError:
+                pass
+
+        if "max_value" in input_definition:
+            try:
+                if val > input_definition["max_value"]:
+                    self.error = ("The value must be lesser than or equal to " + 
+                                  "{}.").format(input_definition["max_value"])
+                    return self._inputValueLoop(input_definition)
+            except TypeError:
+                pass
+        
+        return val
