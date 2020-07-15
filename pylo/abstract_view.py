@@ -41,13 +41,19 @@ class AbstractView:
         else:
             self.__progress = progress
 
-    def showCreateMeasurement(self) -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
         ------
         StopProgram
             When the user clicks the cancel button.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
 
         Returns
         -------
@@ -61,7 +67,8 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def showSettings(self, keys: dict=None,
+    def showSettings(self, configuration: "AbstractConfiguration", 
+                     keys: dict=None,
                      set_in_config: typing.Optional[bool]=True) -> dict:
         """Show the settings to the user.
         

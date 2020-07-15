@@ -73,7 +73,7 @@ class DummyView(pylo.AbstractView):
         
         return responses
     
-    def showCreateMeasurement(self):
+    def showCreateMeasurement(self, *args, **kwargs):
         self.shown_create_measurement_times.append(time.time())
         
         ret = self.measurement_to_create
