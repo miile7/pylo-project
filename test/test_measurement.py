@@ -254,11 +254,15 @@ class PerformedMeasurement:
     each test, set the variable cache=False
     """
 
-    def __init__(self, num=2, before_start=None, auto_start=True):
+    def __init__(self, num=2, before_start=None, auto_start=True, 
+                 collect_file_m_times=True):
         self.root = os.path.join(os.path.dirname(__file__), "tmp_test_files")
 
         if not os.path.exists(self.root):
             os.mkdir(self.root, 0o760)
+        else:
+            for f in os.listdir(self.root):
+                os.remove(os.path.join(self.root, f))
 
         self.controller = DummyController()
         self.measurement_steps = []
@@ -355,8 +359,11 @@ class PerformedMeasurement:
 
             self.measurement.waitForAllImageSavings()
 
-            self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
-                                        self.get_image_paths()))
+            if collect_file_m_times:
+                self.file_m_times = list(map(lambda x: os.path.getmtime(x), 
+                                            self.get_image_paths()))
+            else:
+                self.file_m_times = []
     
     def get_image_paths(self, counter=None):
         """A generator that returns the file name until the counter, if the 
@@ -697,7 +704,8 @@ class TestMeasurement:
         """Test if firing the stop event in the microscope_ready event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.microscope_ready.append(m.measurement.stop)
+            lambda m: pylo.microscope_ready.append(m.measurement.stop),
+            collect_file_m_times=False
         )
 
         self.check_measurement_is_stopped(performed_measurement)
@@ -708,12 +716,21 @@ class TestMeasurement:
         assert len(performed_measurement.before_record_time) == 0
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
+
+        # check if no image is recorded
+        file_found = False
+        for f in os.listdir(performed_measurement.root):
+            if f != "." and f != "..":
+                file_found = True
+                break
+        assert not file_found
     
     def test_stop_stops_execution_in_before_record(self):
         """Test if firing the stop event in the before_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.before_record.append(m.measurement.stop)
+            lambda m: pylo.before_record.append(m.measurement.stop),
+            collect_file_m_times=False
         )
 
         self.check_measurement_is_stopped(performed_measurement)
@@ -724,12 +741,21 @@ class TestMeasurement:
         # check that the following events are not executed
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
+
+        # check if no image is recorded
+        file_found = False
+        for f in os.listdir(performed_measurement.root):
+            if f != "." and f != "..":
+                file_found = True
+                break
+        assert not file_found
     
     def test_stop_stops_execution_in_after_record(self):
         """Test if firing the stop event in the after_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.after_record.append(m.measurement.stop)
+            lambda m: pylo.after_record.append(m.measurement.stop),
+            collect_file_m_times=False
         )
 
         self.check_measurement_is_stopped(performed_measurement)
@@ -740,6 +766,15 @@ class TestMeasurement:
         assert len(performed_measurement.after_record_time) == 1
         # check that the following events are not executed
         assert len(performed_measurement.measurement_ready_time) == 0
+
+        # check if no image is recorded, after_record is fired before saving
+        # starts!
+        file_found = False
+        for f in os.listdir(performed_measurement.root):
+            if f != "." and f != "..":
+                file_found = True
+                break
+        assert not file_found
     
     def stop_measurement_after(self, perf_measurement, stop_time):
         """Stop the measurement after the amout of time."""
