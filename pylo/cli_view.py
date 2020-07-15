@@ -107,7 +107,7 @@ class CLIView(AbstractView):
         Raises
         ------
         StopProgram
-            When the user clicks the cancel button.
+            When the user wants to cancel the creation.
         
         Parameters:
         -----------
@@ -131,6 +131,37 @@ class CLIView(AbstractView):
     def _showCreateMeasurementLoop(self, controller: "Controller",
                                    start: typing.Optional[dict]=None,
                                    series: typing.Optional[dict]=None) -> typing.Tuple[dict, dict]:
+        """Show the create measurement view until the measurement is valid or 
+        the user cancels the creation.
+
+        This function calls itself again whenever the user changes something.
+        This way the content is redrawn until the user confirms his/her inputs.
+
+        Note that the parameters are for the recursive call only.
+
+        Raises
+        ------
+        StopProgram
+            When the user wants to cancel the creation.
+
+        Parameters
+        ----------
+        start : dict, optional (for recursive use only!)
+            The start dict as it is required for the `Measurement::fromSeries()`
+            function with the `MeasurementVariable`s as the keys and their 
+            start values as their values
+        series : dict, optional (for recursive use only!)
+            The series dict as it is required for the 
+            `Measurement::fromSeries()` with the 'variable', 'start', 
+            'step-width', 'end' and the optional 'on-each-point' indices.
+        
+        Returns
+        -------
+        dict, dict
+            The valid and filled `start` dict at index 0, the `series` dict at
+            index 1 bot as they are required in the `Measurement::fromSeries()`
+            function.
+        """
 
         default_var = None
         measuremnt_vars_inputs = []
@@ -217,7 +248,6 @@ class CLIView(AbstractView):
         else:
             # restart loop
             return self._parseSeriesInputs(start, series)
-    
     
     def _parseSeriesInputs(self, series: dict, controller: "Controller", 
                            path: typing.Optional[list]=[]) -> typing.Tuple[list, list]:
@@ -347,16 +377,65 @@ class CLIView(AbstractView):
         
         return series_inputs, errors
 
+    def showHint(self, hint : str) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        """
+        self.print(hint)
+
+    def showError(self, error : str, how_to_fix: typing.Optional[str]=None) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        how_to_fix : str, optional
+            A text that helps the user to interpret and avoid this error,
+            default: None
+        """
+        self.printTitle()
+        self.print("Error: {}".format(error))
+
+        if isinstance(how_to_fix, str) and how_to_fix != "":
+            self.print("")
+            self.print(how_to_fix)
+
     def _printSelect(self, *args: typing.Union[str, dict]) -> dict:
         """Show a select overview.
 
-        This does not start a loop. This shows some inputs one time, the user 
-        can modify them one time or continue. In both cases the (new) values 
-        will be returned in a dict including all ids and their values. The 
-        calling function has to take care, if multiple inputs can be changed 
-        (which is nearly always the case).
+        This function offers to change multiple values. Each value will be 
+        displayed in one line. There will be a number in front of each line. 
+        To change a value, the user must enter this number.
+
+        Text can directly be passed to the function and will be output. Inputs
+        are defined by the use of dicts as described below.
+
+        This function will terminate whenever the user decides to continue or 
+        to cancel (by entering the code for continuing or for cancelling) or 
+        when the user changes a value. In the first case True is returned as 
+        the second return value, in the second False. When a value is changed, 
+        the index 1 of the return value will hold None.
+
+        The returned value at index 0 will hold the values after the function 
+        is terminated. The keys are the 'id's of the inputs, the values are 
+        the values in the type that the input defines.
         
-        An input can have the following indices:
+        An input is defined with the following indices:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
         - "datatype": type or list (required), the type, currently 
