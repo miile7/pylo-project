@@ -547,7 +547,7 @@ class CLIView(AbstractView):
             except StopProgram:
                 pass
 
-            return values[id_], None
+            return values, None
         else:
             # error is shown in CLIView::printTitle
             self.error = "The input '{}' is not valid.".format(user_input)
