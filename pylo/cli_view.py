@@ -275,7 +275,7 @@ class CLIView(AbstractView):
             raise StopProgram
         else:
             # restart loop
-            return self._parseSeriesInputs(start, series)
+            return self._showCreateMeasurementLoop(controller, start, series)
     
     def _parseSeriesInputs(self, series: dict, controller: "Controller", 
                            path: typing.Optional[list]=[]) -> typing.Tuple[list, list]:

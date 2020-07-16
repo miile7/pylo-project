@@ -14,7 +14,7 @@ class DummyOut:
 
     def write(self, text):
         self.write_counter += 1
-        if self.write_counter > 250:
+        if self.write_counter > 500:
             realprint(self.io_log)
             raise RecursionError("Too many calls of write().")
         self.out_buffer += text
@@ -25,7 +25,7 @@ class DummyOut:
     
     def read(self):
         self.read_counter += 1
-        if self.read_counter > 250:
+        if self.read_counter > 500:
             realprint(self.io_log)
             raise RecursionError("Too many calls of read().")
         
