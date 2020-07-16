@@ -10,11 +10,12 @@ class DummyOut:
         self.io_log = ""
         self.out_buffer = ""
         self.input_response = ""
+        self.max_write_count = 500
         self.cls()
 
     def write(self, text):
         self.write_counter += 1
-        if self.write_counter > 500:
+        if self.write_counter > self.max_write_count:
             realprint(self.io_log)
             raise RecursionError("Too many calls of write().")
         self.out_buffer += text
@@ -25,7 +26,7 @@ class DummyOut:
     
     def read(self):
         self.read_counter += 1
-        if self.read_counter > 500:
+        if self.read_counter > self.max_write_count:
             realprint(self.io_log)
             raise RecursionError("Too many calls of read().")
         
@@ -713,13 +714,13 @@ class TestCLIView:
          # expecting: start=min, end=max, step-width = end-start/10
          {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5}),
         # create tilt field series
-        (None, None, (
+        (None, {"variable": "tilt"}, (
             "3", "tilt", # variable
             "c"
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "magnetic-field", "start": -5, "end": 5, "step-width": 1}),
+         {"variable": "tilt", "start": -5, "end": 5, "step-width": 1}),
         # create magnetic field series from 1 to 2 with 0.5 stepwidth
         (None, None, (
             "3", "magnetic-field", # vairable
@@ -732,9 +733,9 @@ class TestCLIView:
          {"variable": "magnetic-field", "start": 1, "end": 2, "step-width": 0.5}),
         # create focus series from 0 to 5 with 2 stepwidth
         (None, None, (
-            "1", 0, # start
-            "2", 2, # step width
-            "3", 5, # end
+            "4", 0, # start
+            "5", 2, # step width
+            "6", 5, # end
             "c" # continue
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
@@ -743,18 +744,18 @@ class TestCLIView:
         #   on each point: magnetic field series from 0 to 5, stepwidth 0.5
         #       on each point: focus series from 2 to 4, stepwidth 0.25
         (None, None, (
-            "0", "tilt", # tilt series
-            "1", -5, # start
-            "2", 1, # step width
-            "3", 5, # end
-            "4", "magnetic-field", # on each point
-                "6", 0, # start
-                "7", 0.5, # step width
-                "8", 5, # end
-                "9", "focus", # on each point
-                    "11", 2, # start
-                    "12", 0.25, # step width
-                    "13", 4, # end
+            "3", "tilt", # tilt series
+            "4", -5, # start
+            "5", 1, # step width
+            "6", 5, # end
+            "7", "magnetic-field", # on each point
+                "9", 0, # start
+                "10", 0.5, # step width
+                "11", 5, # end
+                "12", "focus", # on each point
+                    "14", 2, # start
+                    "15", 0.25, # step width
+                    "16", 4, # end
             "c" # continue
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
@@ -800,6 +801,11 @@ class TestCLIView:
         self.response_counter = 0
         self.out_buffers = []
         self.response_answers = user_inputs
+        if len(user_inputs) > 10:
+            # a lot of redrawing of the view will raise an error because the 
+            # maximum write count is reached even though there is no real
+            # infinite loop
+            writer.max_write_count = 1000
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
@@ -808,7 +814,8 @@ class TestCLIView:
         sys.stdin = writer
 
         writer.input_response = self.response_callback
-        start, series = cliview._showCreateMeasurementLoop(controller)
+        start, series = cliview._showCreateMeasurementLoop(controller, start, 
+                                                           series)
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
