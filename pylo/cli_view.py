@@ -24,7 +24,15 @@ class CLIView(AbstractView):
         """
         super().__init__()
 
-        self.line_length = min(79, os.get_terminal_size().columns)
+        self.line_length = 79
+        try:
+            l = os.get_terminal_size().columns
+        except OSError:
+            l = self.line_length
+            pass
+        if l < self.line_length:
+            self.line_length = l
+        
         self.error = ""
 
         self.clear()
@@ -32,6 +40,13 @@ class CLIView(AbstractView):
     
     def clear(self) -> None:
         """Clear the current command line."""
+        try:
+            # for custom implementations of the stdout, especially in the test
+            sys.stdout.clear()
+            sys.stdout.cls()
+        except (NameError, TypeError):
+            pass
+        
         os.system('cls' if os.name=='nt' else 'clear')
     
     def printTitle(self) -> None:
@@ -586,24 +601,50 @@ class CLIView(AbstractView):
             options_ci = list(map(lambda x: x.lower(), options))
             options_ci_max_count = max(map(lambda x: options_ci.count(x), options_ci))
 
+            type_name = "possibility list"
+
             if options_ci_max_count > 1:
                 # there are some values that are exactly the same exept their
                 # case upper/lower
                 case_insensitive = False
+            
+            if cancel_command in options_ci:
+                if "!cancel" not in options_ci:
+                    cancel_command = "!cancel"
+                else:
+                    for i in range(97, 122):
+                        cancel_command = "!{}".format(chr(i))
+
+                        if (cancel_command not in options_ci and
+                            cancel_command != empty_command):
+                            break
+            
+            if empty_command in options_ci:
+                if "!empty" not in options_ci:
+                    empty_command = "!empty"
+                else:
+                    for i in range(97, 122):
+                        empty_command = "!{}".format(chr(i))
+
+                        if (empty_command not in options_ci and
+                            cancel_command != empty_command):
+                            break
         else:
             if input_definition["datatype"] == int:
-                name = "integer number"
+                type_name = "integer number"
             elif input_definition["datatype"] == float:
-                name = "decimal number"
+                type_name = "decimal number"
             elif input_definition["datatype"] == bool:
-                name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
+                type_name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
             elif input_definition["datatype"] == str:
-                name = "text"
+                type_name = "text"
                 case_insensitive = False
                 cancel_command = "!cancel"
                 empty_command = "!empty"
             else:
-                name = input_definition["datatype"].__name__
+                type_name = input_definition["datatype"].__name__
+            
+            name = type_name
             
             if "min_value" in input_definition and "max_value" in input_definition:
                 name += " with {} <= value <= {}".format(
@@ -639,24 +680,34 @@ class CLIView(AbstractView):
         if isinstance(input_definition["datatype"], (list, tuple)):
             if (case_insensitive and val.lower() not in options_ci or 
                 not case_insensitive and val not in options):
-                self.error(("The value be one of the following: '{}'").format(
+                self.error = (("The value be one of the following: '{}'").format(
                     "', '".join(options)
                 ))
 
                 return self._inputValueLoop(input_definition)
+            elif case_insensitive:
+                index = options_ci.index(val.lower())
+                val = options[index]
         elif input_definition["datatype"] == bool:
             if val.lower() in ("yes", "y", "true", "t", "on"):
                 val = True
             elif val.lower() in ("no", "n", "false", "f", "off"):
                 val = False
             else:
-                self.error(("Please use 'yes', 'y', 'true', 't' or 'on' to " + 
+                self.error = (("Please use 'yes', 'y', 'true', 't' or 'on' to " + 
                             "indicate a true boolean, use 'no', 'n', 'false', " + 
                             "'f' or 'off' to represent a false (case " + 
                             "insensitive)"))
                 return self._inputValueLoop(input_definition)
         elif callable(input_definition["datatype"]):
-            val = input_definition["datatype"]
+            try:
+                val = input_definition["datatype"](val)
+            except ValueError:
+                self.error = (("The value '{}' could not be converted to a " + 
+                            "'{}'. Please type in a correct value.").format(
+                                val, type_name
+                            ))
+                return self._inputValueLoop(input_definition)
 
         if "min_value" in input_definition:
             try:
