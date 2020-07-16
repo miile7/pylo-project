@@ -674,7 +674,7 @@ class CLIView(AbstractView):
                 return None
             else:
                 self.error = ("The '{}' is required. You have to put " + 
-                              "in something here.").format(input_definition["name"])
+                              "in something here.").format(input_definition["label"])
                 return self._inputValueLoop(input_definition)
         
         if isinstance(input_definition["datatype"], (list, tuple)):
