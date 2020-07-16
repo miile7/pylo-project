@@ -467,6 +467,9 @@ class CLIView(AbstractView):
         - "inset": str (optional), a string to add in front of the line for the 
           input
         
+        The user can edit the value with the number, continue with 'c' and 
+        quit with 'q'.
+        
         Returns
         -------
         dict, bool or None
@@ -481,7 +484,7 @@ class CLIView(AbstractView):
         label_col_width = max([len(l["label"]) if isinstance(l, dict) else 0 
                                for l in args])
 
-        max_index = len(filter(lambda x: isinstance(x, dict), args)) - 1
+        max_index = len(list(filter(lambda x: isinstance(x, dict), args))) - 1
         index_width = math.floor(math.log10(max_index) + 1)
         index = 0
         values = {}
@@ -492,11 +495,11 @@ class CLIView(AbstractView):
             elif isinstance(line, dict):
                 values[line["id"]] = line["value"]
 
-                text = ("[{:" + index_width + "}]" + 
+                text = ("[{:" + str(index_width) + "}]" + 
                         "{:" + str(label_col_width) + "} {}").format(
                             index,
-                            (str(line["name"]) + 
-                            "*" if "required" in line and line["required"] else "" + 
+                            (str(line["label"]) + 
+                            ("*" if "required" in line and line["required"] else "") + 
                             ":"), 
                             line["value"]
                         )
@@ -519,10 +522,10 @@ class CLIView(AbstractView):
 
         self.print("")
         self.print("Type in the number to change the value of, type [c] for " + 
-                   "continue and [x] for Cancel.")
-        user_input = self.input("Number, [c] or [x]: ")
+                   "continue and [q] for quit.")
+        user_input = self.input("Number, [c]ontinue or [q]uit: ")
 
-        if user_input == "x":
+        if user_input == "q":
             return values, False
         elif user_input == "c":
             return values, True
@@ -531,7 +534,7 @@ class CLIView(AbstractView):
             id_index_map = list(values.keys())
             id_ = id_index_map[index]
             id_args_map = [l["id"] if isinstance(l, dict) else None for l in args]
-            args_index = id_args_map.search(id_)
+            args_index = id_args_map.index(id_)
             input_definition = args[args_index]
 
             args = list(args)
@@ -567,11 +570,14 @@ class CLIView(AbstractView):
           only for numeric inputs
         - "required": bool (optional), whether the current input has to be
           set or not, default: False
+
+        The user can enter the value, 'x' or '!empty' for clear the value (if 
+        not required) and 'a' or '!abort' for aborting.
         
         Raises
         ------
         StopProgram
-            When the user cancels the input
+            When the user aborts the input
         
         Parameters
         ----------
@@ -590,7 +596,7 @@ class CLIView(AbstractView):
         self.printTitle()
         
         empty_command = "x"
-        cancel_command = "c"
+        abort_command = "a"
         case_insensitive = True
         text = "Please set the {} as ".format(input_definition["label"])
 
@@ -608,15 +614,15 @@ class CLIView(AbstractView):
                 # case upper/lower
                 case_insensitive = False
             
-            if cancel_command in options_ci:
-                if "!cancel" not in options_ci:
-                    cancel_command = "!cancel"
+            if abort_command in options_ci:
+                if "!abort" not in options_ci:
+                    abort_command = "!abort"
                 else:
                     for i in range(97, 122):
-                        cancel_command = "!{}".format(chr(i))
+                        abort_command = "!{}".format(chr(i))
 
-                        if (cancel_command not in options_ci and
-                            cancel_command != empty_command):
+                        if (abort_command not in options_ci and
+                            abort_command != empty_command):
                             break
             
             if empty_command in options_ci:
@@ -627,7 +633,7 @@ class CLIView(AbstractView):
                         empty_command = "!{}".format(chr(i))
 
                         if (empty_command not in options_ci and
-                            cancel_command != empty_command):
+                            abort_command != empty_command):
                             break
         else:
             if input_definition["datatype"] == int:
@@ -639,7 +645,7 @@ class CLIView(AbstractView):
             elif input_definition["datatype"] == str:
                 type_name = "text"
                 case_insensitive = False
-                cancel_command = "!cancel"
+                abort_command = "!abort"
                 empty_command = "!empty"
             else:
                 type_name = input_definition["datatype"].__name__
@@ -657,7 +663,7 @@ class CLIView(AbstractView):
             
             text += " a {}.".format(name)
         
-        text += " To cancel type '{}'.".format(cancel_command)
+        text += " To abort type '{}'.".format(abort_command)
 
         if not "required" in input_definition or not input_definition["required"]:
             text += (" To leave the input empty (remove the current value) " + 
@@ -666,7 +672,7 @@ class CLIView(AbstractView):
         self.print(text)
 
         val = self.input("{}: ".format(input_definition["label"]))
-        if val.lower() == cancel_command:
+        if val.lower() == abort_command:
             raise StopProgram
         elif val.lower() == empty_command:
             if (not "required" in input_definition or 
