@@ -16,8 +16,12 @@ def human_concat_list(x, surround="'"):
         return ", ".join(x[:-1]) + " or " + x[-1]
     elif len(x) > 1:
         return " or ".join(x)
-    else:
+    elif len(x) == 1:
         return x[0]
+    elif surround != "":
+        return ""
+    else:
+        return surround * 2
 
 class CLIView(AbstractView):
     """This class represents a very basic CLI view. It uses `print()` and 
@@ -268,6 +272,10 @@ class CLIView(AbstractView):
                         s["step-width"] = float(v)
                     elif match.group(2) == "end":
                         s["end"] = float(v)
+                    elif (match.group(2) == "variable" and v in variable_ids):
+                        s["variable"] = v
+                    elif (match.group(2) == "on-each-point" and v in variable_ids):
+                        s["on-each-point"] = {"variable": v}
 
         if command == True:
             return start, series
@@ -313,7 +321,7 @@ class CLIView(AbstractView):
             path_str = ""
 
         keys = {
-            "start": min(max(0, var.min_value), var.max_value),
+            "start": var.min_value,
             "end": var.max_value,
             "step-width": (var.max_value - var.min_value) / 10
         }
@@ -360,7 +368,7 @@ class CLIView(AbstractView):
         series_inputs = [
             {
                 "id": "series-{}-variable".format(len(path)),
-                "label": "Series over",
+                "label": "Series variable",
                 "datatype": variable_names,
                 "required": True,
                 "value": series["variable"],
@@ -651,11 +659,11 @@ class CLIView(AbstractView):
         empty_command = "x"
         abort_command = "a"
         case_insensitive = True
-        text = "Please set the {} as ".format(input_definition["label"])
+        text = "Please set the {} to ".format(input_definition["label"])
 
         if isinstance(input_definition["datatype"], (list, tuple)):
             options = list(map(str, input_definition["datatype"]))
-            text += human_concat_list(options)
+            text += human_concat_list(options) + "."
 
             options_ci = list(map(lambda x: x.lower(), options))
             options_ci_max_count = max(map(lambda x: options_ci.count(x), options_ci))
@@ -737,8 +745,8 @@ class CLIView(AbstractView):
                 return self._inputValueLoop(input_definition)
         
         if isinstance(input_definition["datatype"], (list, tuple)):
-            if (case_insensitive and val.lower() not in options_ci or 
-                not case_insensitive and val not in options):
+            if ((case_insensitive and val.lower() not in options_ci) or 
+                (not case_insensitive and val not in options)):
                 self.error = (("The value be one of the following: '{}'").format(
                     human_concat_list(options)
                 ))
