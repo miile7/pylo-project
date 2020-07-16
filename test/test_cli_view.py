@@ -9,14 +9,24 @@ class DummyOut:
     def __init__(self):
         self.out_buffer = ""
         self.input_response = ""
+        self.cls()
 
     def write(self, text):
+        self.write_counter += 1
+        if self.write_counter > 250:
+            realprint(self.out_buffer)
+            raise RecursionError("Too many calls of write().")
         self.out_buffer += text
     
     def flush(self):
         pass
     
     def read(self):
+        self.read_counter += 1
+        if self.read_counter > 250:
+            realprint(self.out_buffer)
+            raise RecursionError("Too many calls of read().")
+        
         if callable(self.input_response):
             return self.input_response()
         else:
@@ -26,18 +36,23 @@ class DummyOut:
         return str(self.read()) + "\n"
     
     def cls(self):
+        self.read_counter = 0
+        self.write_counter = 0
         self.out_buffer = ""
 
 writer = DummyOut()
 
 import re
+import string
 import pytest
 import random
 
 import pylo
 
+real_std_out = sys.stdout
 def realprint(*values, sep=" ", end="\n"):
-    print(sep.join(map(str, values)) + end, file=sys.__stdout__)
+    global real_std_out
+    print(sep.join(map(str, values)) + end, file=real_std_out)
 
 reg = re.compile(r"\s+")
 def get_compare_text(text):
@@ -68,6 +83,58 @@ def cliview():
 
     sys.stdout = sys.__stdout__
     sys.stdin = sys.__stdin__
+
+default_valid_select_definition = [
+    # string
+    ({"label": "Label a", "id": "testid", "datatype": str, "value": "", 
+        "required": True}, "testinput", "testinput"),
+    # int
+    ({"label": "Label b", "id": "testid", "datatype": int, "value": 5, 
+        "required": True, "min_value": 2, "max_value": 10}, "10", 10),
+    ({"label": "Label c", "id": "testid", "datatype": int, "value": 5, 
+        "required": True, "min_value": 2, "max_value": 10}, "2", 2),
+    # float
+    ({"label": "Label d", "id": "testid", "datatype": float, "value": 0, 
+        "required": True, "min_value": -1.25, "max_value": 1.25}, "-1.25", -1.25),
+    ({"label": "Label e", "id": "testid", "datatype": float, "value": 0, 
+        "required": True, "min_value": -1.25, "max_value": 1.25}, "1.25", 1.25),
+    # min *or* max, not both
+    ({"label": "Label f", "id": "testid", "datatype": int, "value": 2, 
+        "required": True, "min_value": -10}, "-10", -10),
+    ({"label": "Label g", "id": "testid", "datatype": float, "value": -22, 
+        "required": True, "max_value": -10}, "-10", -10.0),
+    # all boolean possibilites
+    ({"label": "Label h", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "tRuE", True),
+    ({"label": "Label i", "id": "testid", "datatype": bool, "value": False, 
+        "required": True}, "t", True),
+    ({"label": "Label j", "id": "testid", "datatype": bool, "value": False, 
+        "required": True}, "yes", True),
+    ({"label": "Label k", "id": "testid", "datatype": bool, "value": False, 
+        "required": True}, "y", True),
+    ({"label": "Label l", "id": "testid", "datatype": bool, "value": False, 
+        "required": True}, "on", True),
+    ({"label": "Label m", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "fAlSe", False),
+    ({"label": "Label n", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "f", False),
+    ({"label": "Label o", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "no", False),
+    ({"label": "Label p", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "n", False),
+    ({"label": "Label q", "id": "testid", "datatype": bool, "value": True, 
+        "required": True}, "off", False),
+    # possibility list
+    ({"label": "Label r", "id": "testid", "datatype": ["d", "b"], "value": "d", 
+        "required": True}, "b", "b"),
+    ({"label": "Label s", "id": "testid", "datatype": ["d", "b"], "value": "d", 
+        "required": True}, "B", "b"),
+    # abort command and empty commands are possibilities
+    ({"label": "Label t", "id": "testid", "datatype": ["a", "x"], "value": "a", 
+        "required": True}, "a", "a"),
+    ({"label": "Label u", "id": "testid", "datatype": ["a", "x"], "value": "a", 
+        "required": True}, "x", "x")
+]
 
 class TestCLIView:
     @pytest.mark.usefixtures("cliview")
@@ -135,68 +202,20 @@ class TestCLIView:
         assert inp == str(user_input)
     
     @pytest.mark.usefixtures("cliview")
-    @pytest.mark.parametrize("input_definition,user_input,expected", [
-        # string
-        ({"label": "Testinput", "id": "testid", "datatype": str, "value": "", 
-          "required": True}, "testinput", "testinput"),
-        # int
-        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
-          "required": True, "min_value": 2, "max_value": 10}, "10", 10),
-        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
-          "required": True, "min_value": 2, "max_value": 10}, "2", 2),
-        # float
-        ({"label": "Testinput", "id": "testid", "datatype": float, "value": 0, 
-          "required": True, "min_value": -1.25, "max_value": 1.25}, "-1.25", -1.25),
-        ({"label": "Testinput", "id": "testid", "datatype": float, "value": 0, 
-          "required": True, "min_value": -1.25, "max_value": 1.25}, "1.25", 1.25),
-        # min *or* max, not both
-        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 2, 
-          "required": True, "min_value": -10}, "-10", -10),
-        ({"label": "Testinput", "id": "testid", "datatype": float, "value": -22, 
-          "required": True, "max_value": -10}, "-10", -10.0),
-        # all boolean possibilites
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "tRuE", True),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False, 
-          "required": True}, "t", True),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False, 
-          "required": True}, "yes", True),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False, 
-          "required": True}, "y", True),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False, 
-          "required": True}, "on", True),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "fAlSe", False),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "f", False),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "no", False),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "n", False),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": True, 
-          "required": True}, "off", False),
-        # possibility list
-        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a", 
-          "required": True}, "b", "b"),
-        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a", 
-          "required": True}, "B", "b"),
-        # cancel command and empty commands are possibilities
-        ({"label": "Testinput", "id": "testid", "datatype": ["c", "x"], "value": "a", 
-          "required": True}, "c", "c"),
-        ({"label": "Testinput", "id": "testid", "datatype": ["c", "x"], "value": "a", 
-          "required": True}, "x", "x"),
+    @pytest.mark.parametrize("input_definition,user_input,expected", 
+        default_valid_select_definition + [
         # testing optional values
-        ({"label": "Testinput", "id": "testid", "datatype": str, "value": "", 
-          "required": False}, "!empty", None),
-        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
-          "required": False}, "x", None),
+        ({"label": "Label v", "id": "testid", "datatype": str, "value": "", 
+            "required": False}, "!empty", None),
+        ({"label": "Label w", "id": "testid", "datatype": int, "value": 5, 
+            "required": False}, "x", None),
         # not required by default
-        ({"label": "Testinput", "id": "testid", "datatype": float, "value": 5.5}, 
-          "x", None),
-        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False}, 
-          "x", None),
-        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a"}, 
-          "x", None)
+        ({"label": "Label x", "id": "testid", "datatype": float, "value": 5.5}, 
+            "x", None),
+        ({"label": "Label y", "id": "testid", "datatype": bool, "value": False}, 
+            "x", None),
+        ({"label": "Label z", "id": "testid", "datatype": ["d", "b"], "value": "d"}, 
+            "x", None)
     ])
     def test_input_value_loop_valid_values(self, cliview, input_definition, user_input, expected):
         """Test if the _inputValueLoop() function with valid user inputs."""
@@ -271,8 +290,8 @@ class TestCLIView:
         ({"label": "Testinput", "id": "testid", "datatype": float, "value": -22, 
           "required": True, "max_value": -10}, "-6.4334", "-10", -10.0),
         # not in possibilities
-        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a", 
-          "required": True}, "d", "b", "b")
+        ({"label": "Testinput", "id": "testid", "datatype": ["d", "b"], "value": "d", 
+          "required": True}, "w", "b", "b")
     ])
     def test_input_value_loop_invalid_values(self, cliview, input_definition, user_input1, user_input2, expected):
         """Test if the _inputValueLoop() function with invalid user inputs."""
@@ -310,18 +329,18 @@ class TestCLIView:
     @pytest.mark.usefixtures("cliview")
     @pytest.mark.parametrize("input_definition,user_input", [
         ({"label": "Testinput", "id": "testid", "datatype": str, "value": "a", 
-          "required": True}, "!cancel"),
+          "required": True}, "!abort"),
         ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
-          "min_value": 2, "max_value": 10}, "c"),
+          "min_value": 2, "max_value": 10}, "a"),
         ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False}, 
-          "c"),
-        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c"], 
-          "value": "x"}, "!cancel"),
-        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c", "!cancel"], 
+          "a"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "a"], 
+          "value": "x"}, "!abort"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "a", "!abort"], 
           "value": "x"}, "!a"),
     ])
-    def test_input_value_loop_cancel(self, cliview, input_definition, user_input):
-        """Test if cancelling works in the _inputValueLoop() function"""
+    def test_input_value_loop_abort(self, cliview, input_definition, user_input):
+        """Test if aborting works in the _inputValueLoop() function"""
         global writer
 
         # doesn't work to keep it in the fixture, has to be explicit every 
@@ -357,10 +376,10 @@ class TestCLIView:
         values."""
         global writer
 
-        num_cancel_tries = random.randint(1, 4)
+        num_abort_tries = random.randint(1, 4)
         self.response_counter = 0
         self.out_buffers = []
-        self.response_answers = [user_input1] * num_cancel_tries + [user_input2]
+        self.response_answers = [user_input1] * num_abort_tries + [user_input2]
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
@@ -375,7 +394,7 @@ class TestCLIView:
         sys.stdin = sys.__stdin__
         
         # check if asked the correct amount of times
-        assert self.response_counter == num_cancel_tries + 1
+        assert self.response_counter == num_abort_tries + 1
 
         # check if an error was shown
         for i in range(1, self.response_counter):
@@ -392,3 +411,109 @@ class TestCLIView:
         
         assert type(inp) == type(expected)
         assert inp == expected
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("select_definition", [default_valid_select_definition])
+    def test_print_select_output(self, cliview, select_definition):
+        """Test the print select output."""
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        global writer
+
+        expected_value = [d[2] for d in select_definition]
+        user_inputs = [d[1] for d in select_definition]
+        select_definition = [d[0] for d in select_definition]
+
+        # add some random texts to the select overview
+        texts = []
+        letters = string.ascii_lowercase
+        word = lambda: ''.join(random.choice(letters) for _ in range(random.randint(3, 20)))
+        for _ in range(0, random.randint(1, 3)):
+            text = " ".join([word() for _ in range(random.randint(3, 20))])
+            texts.append(text)
+            select_definition.insert(
+                random.randint(0, len(select_definition) - 1),
+                text
+            )
+
+        self.response_counter = 0
+        self.out_buffers = []
+        # confirm
+        self.response_answers = ["c"]
+
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        writer.input_response = self.response_callback
+        cliview._printSelect(*select_definition)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        # check if the overview is correctly built, that means that the order 
+        # is represented in the lines in the output
+        out = writer.out_buffer.split("\n")
+        last_index = -1
+        for input_definition in select_definition:
+            following_out = out[last_index+1:]
+            following_text = get_compare_text("\n".join(following_out))
+
+            if isinstance(input_definition, str):
+                # check if the text comes after the last input_definition
+                assert input_definition in following_text
+                last_word = input_definition.split(" ")[-1]
+            else:
+                found = False
+                for i, line in enumerate(following_out):
+                    # check if the label is given, check if the label string
+                    # is part of the line string, 'label' in following_out does
+                    # not work because that looks for an equal item in the list
+                    if input_definition["label"] in line:
+                        found = True
+                        break
+                
+                assert found
+                last_word = input_definition["label"]
+                
+            for i, line in enumerate(following_out):
+                if last_word in line:
+                    last_index = i
+                    break
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("select_definition,commands,expected", [
+        # continue
+        (default_valid_select_definition, ("c", ), True),
+        # quit
+        (default_valid_select_definition, ("q", ), False),
+        # set any value
+        (default_valid_select_definition, ("0", "random text"), None),
+        # set any value, then abort
+        (default_valid_select_definition, ("0", "c"), None),
+    ])
+    def test_print_select_command_returns(self, cliview, select_definition, commands, expected):
+        """Test the print select output."""
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        global writer
+
+        expected_value = [d[2] for d in select_definition]
+        user_inputs = [d[1] for d in select_definition]
+        select_definition = [d[0] for d in select_definition]
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = commands
+
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        writer.input_response = self.response_callback
+        values, command_return = cliview._printSelect(*select_definition)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        assert command_return == expected
