@@ -58,6 +58,9 @@ def get_compare_text(text):
 
 @pytest.fixture()
 def cliview():
+    global writer
+
+    writer.cls()
     sys.stdout = writer
     sys.stdin = writer
 
@@ -80,6 +83,7 @@ class TestCLIView:
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
+        writer.cls()
         sys.stdout = writer
         sys.stdin = writer
 
@@ -109,6 +113,7 @@ class TestCLIView:
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
+        writer.cls()
         sys.stdout = writer
         sys.stdin = writer
 
@@ -180,6 +185,18 @@ class TestCLIView:
           "required": True}, "c", "c"),
         ({"label": "Testinput", "id": "testid", "datatype": ["c", "x"], "value": "a", 
           "required": True}, "x", "x"),
+        # testing optional values
+        ({"label": "Testinput", "id": "testid", "datatype": str, "value": "", 
+          "required": False}, "!empty", None),
+        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
+          "required": False}, "x", None),
+        # not required by default
+        ({"label": "Testinput", "id": "testid", "datatype": float, "value": 5.5}, 
+          "x", None),
+        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False}, 
+          "x", None),
+        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a"}, 
+          "x", None)
     ])
     def test_input_value_loop_valid_values(self, cliview, input_definition, user_input, expected):
         """Test if the _inputValueLoop() function with valid user inputs."""
@@ -187,6 +204,7 @@ class TestCLIView:
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
+        writer.cls()
         sys.stdout = writer
         sys.stdin = writer
 
@@ -206,19 +224,26 @@ class TestCLIView:
             assert str(input_definition["min_value"]) in out
         if "max_value" in input_definition:
             assert str(input_definition["max_value"]) in out
+
+        # check required
+        assert (inp is not None or not "required" in input_definition or 
+                not input_definition["required"])
         
         # check returned value
-        if isinstance(input_definition["datatype"], list):
-            assert inp in input_definition["datatype"]
-        else:
-            assert type(inp) == input_definition["datatype"]
+        if not inp is None:
+            if isinstance(input_definition["datatype"], list):
+                assert inp in input_definition["datatype"]
+            else:
+                assert type(inp) == input_definition["datatype"]
         
         assert type(inp) == type(expected)
         assert inp == expected
     
     def response_callback(self):
         """The callback for the user input response."""
+        global writer
         self.response_counter += 1
+        self.out_buffers.append(writer.out_buffer)
         return self.response_answers[(self.response_counter - 1) % len(self.response_answers)]
     
     @pytest.mark.usefixtures("cliview")
@@ -247,7 +272,7 @@ class TestCLIView:
           "required": True, "max_value": -10}, "-6.4334", "-10", -10.0),
         # not in possibilities
         ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a", 
-          "required": True}, "d", "b", "b"),
+          "required": True}, "d", "b", "b")
     ])
     def test_input_value_loop_invalid_values(self, cliview, input_definition, user_input1, user_input2, expected):
         """Test if the _inputValueLoop() function with invalid user inputs."""
@@ -255,10 +280,12 @@ class TestCLIView:
 
         num_wrong_answers = random.randint(1, 4)
         self.response_counter = 0
+        self.out_buffers = []
         self.response_answers = [user_input1] * num_wrong_answers + [user_input2]
 
         # doesn't work to keep it in the fixture, has to be explicit every 
         # time :(
+        writer.cls()
         sys.stdout = writer
         sys.stdin = writer
 
@@ -270,6 +297,92 @@ class TestCLIView:
         
         # check if asked the correct amount of times
         assert self.response_counter == num_wrong_answers + 1
+
+        # check returned value
+        if isinstance(input_definition["datatype"], list):
+            assert inp in input_definition["datatype"]
+        else:
+            assert type(inp) == input_definition["datatype"]
+        
+        assert type(inp) == type(expected)
+        assert inp == expected
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("input_definition,user_input", [
+        ({"label": "Testinput", "id": "testid", "datatype": str, "value": "a", 
+          "required": True}, "!cancel"),
+        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
+          "min_value": 2, "max_value": 10}, "c"),
+        ({"label": "Testinput", "id": "testid", "datatype": bool, "value": False}, 
+          "c"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c"], 
+          "value": "x"}, "!cancel"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c", "!cancel"], 
+          "value": "x"}, "!a"),
+    ])
+    def test_input_value_loop_cancel(self, cliview, input_definition, user_input):
+        """Test if cancelling works in the _inputValueLoop() function"""
+        global writer
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        writer.input_response = user_input
+
+        with pytest.raises(pylo.StopProgram):
+            cliview._inputValueLoop(input_definition)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("input_definition,user_input1,user_input2,expected", [
+        ({"label": "Testinput", "id": "testid", "datatype": int, "value": 5, 
+          "required": True, "min_value": 2, "max_value": 10}, "x", "10", 10),
+        ({"label": "Testinput", "id": "testid", "datatype": float, "value": 5, 
+          "required": True, "min_value": -38939.232, "max_value": 1}, "x", 
+          "-323.25", -323.25),
+        ({"label": "Testinput", "id": "testid", "datatype": ["a", "b"], "value": "a", 
+          "required": True}, "x", "b", "b"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c"], "value": "x", 
+          "required": True}, "!empty", "c", "c"),
+        ({"label": "Testinput", "id": "testid", "datatype": ["x", "c", "!empty"], 
+          "value": "x", "required": True}, "!a", "c", "c")
+    ])
+    def test_input_value_loop_missing_required_values(self, cliview, input_definition, user_input1, user_input2, expected):
+        """Test if the _inputValueLoop() does not allow to empty required 
+        values."""
+        global writer
+
+        num_cancel_tries = random.randint(1, 4)
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = [user_input1] * num_cancel_tries + [user_input2]
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        writer.input_response = self.response_callback
+        inp = cliview._inputValueLoop(input_definition)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+        
+        # check if asked the correct amount of times
+        assert self.response_counter == num_cancel_tries + 1
+
+        # check if an error was shown
+        for i in range(1, self.response_counter):
+            o = get_compare_text(self.out_buffers[i])
+            assert "is required" in o
+            assert "have to" in o
+            assert "put in" in o
 
         # check returned value
         if isinstance(input_definition["datatype"], list):
