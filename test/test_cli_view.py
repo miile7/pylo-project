@@ -7,6 +7,7 @@ if __name__ == "__main__":
 
 class DummyOut:
     def __init__(self):
+        self.io_log = ""
         self.out_buffer = ""
         self.input_response = ""
         self.cls()
@@ -14,9 +15,10 @@ class DummyOut:
     def write(self, text):
         self.write_counter += 1
         if self.write_counter > 250:
-            realprint(self.out_buffer)
+            realprint(self.io_log)
             raise RecursionError("Too many calls of write().")
         self.out_buffer += text
+        self.io_log += text
     
     def flush(self):
         pass
@@ -24,18 +26,23 @@ class DummyOut:
     def read(self):
         self.read_counter += 1
         if self.read_counter > 250:
-            realprint(self.out_buffer)
+            realprint(self.io_log)
             raise RecursionError("Too many calls of read().")
         
         if callable(self.input_response):
-            return self.input_response()
+            r = self.input_response()
         else:
-            return self.input_response
+            r = self.input_response
+        
+        self.io_log += " < input: '" + str(r) + "'\n"
+        
+        return r
     
     def readline(self):
         return str(self.read()) + "\n"
     
     def cls(self):
+        self.io_log = ""
         self.read_counter = 0
         self.write_counter = 0
         self.out_buffer = ""
@@ -54,6 +61,57 @@ import random
 
 import pylo
 
+class DummyView(pylo.AbstractView):
+    def showCreateMeasurement(self, *args, **kwargs):
+        pass
+
+    def showSettings(self, *args, **kwargs):
+        pass
+
+    def showHint(self, *args, **kwargs):
+        realprint(args, kwargs)
+
+    def showError(self, *args, **kwargs):
+        realprint(args, kwargs)
+
+    def print(self, *args, **kwargs):
+        realprint(args, kwargs)
+
+    def showRunning(self, *args, **kwargs):
+        pass
+
+    def askFor(self, *args):
+        return ["ASK_FOR_DEFAULT_OUTPUT"] * len(args)
+
+class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
+    def __init__(self):
+        self.supported_measurement_variables = [
+            pylo.MeasurementVariable("focus", "Focus", 0, 5),
+            pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 5),
+            pylo.MeasurementVariable("tilt", "Tilt", -5, 5),
+        ]
+        self.supports_parallel_measurement_variable_setting = False
+        self.values = {}
+
+    def setInLorenzMode(self, lorenz_mode):
+        pass
+
+    def getInLorenzMode(self):
+        return True
+    
+    def setMeasurementVariableValue(self, id_, value):
+        self.values[id_] = value
+    
+    def getMeasurementVariableValue(self, id_):
+        try:
+            return self.values[id_]
+        except KeyError:
+            return None
+        
+    def resetToSafeState(self):
+        realprint("Resetting to safe state")
+        assert False
+    
 reg = re.compile(r"\s+")
 def get_compare_text(text):
     """Get the text with all whitespace replaced to only one space.
@@ -83,6 +141,16 @@ def cliview():
 
     sys.stdout = sys.__stdout__
     sys.stdin = sys.__stdin__
+
+@pytest.fixture()
+def controller():
+    pylo.config.VIEW = DummyView()
+    pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
+
+    controller = pylo.Controller()
+    controller.microscope = DummyMicroscope()
+
+    return controller
 
 default_valid_select_definition = [
     # string
@@ -548,3 +616,202 @@ class TestCLIView:
 
         assert command_return == None
         assert values == expected_values
+    
+    @pytest.mark.usefixtures("cliview", "controller")
+    @pytest.mark.parametrize("series,depth,expecting_errors", [
+        # values are missing
+        ({"variable": "focus"}, 1, False),
+        # values are wrong
+        ({"variable": "focus", "start": -1}, 1, True),
+        ({"variable": "focus", "end": 6}, 1, True),
+        # values are missing in child
+        ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
+          "on-each-point": {"variable": "magnetic-field"}}, 2, False),
+        # values are wrong in child
+        ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
+          "on-each-point": {"variable": "magnetic-field", "start": -1}}, 2, True),
+        ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
+          "on-each-point": {"variable": "magnetic-field", "end": 6}}, 2, True),
+        # invalid on-each-point variable: focus series over focus series
+        ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
+          "on-each-point": {"variable": "focus"}}, 1, True),
+    ])
+    def test_parse_valid_series_input(self, cliview, controller, series, depth, expecting_errors):
+        """Test if the _parseSeriesInputs() function returns the correct 
+        inputs and can deal with easy to correct values."""
+        
+        inputs, messages = cliview._parseSeriesInputs(series, controller)
+        
+        expected_keys = ("variable", "start", "end", "step-width", "on-each-point")
+
+        realprint(inputs)
+        assert len(inputs) == len(expected_keys) * depth
+
+        if expecting_errors:
+            assert len(messages) > 0
+
+        # contains the series depth index as the key, series definition as the 
+        # value
+        measurement_variable_map = {}
+
+        # check if all variable ids are there and valid
+        for i in range(depth):
+            for k in expected_keys:
+                found = False
+
+                for input_definition in inputs:
+                    if input_definition["id"] == "series-{}-{}".format(i, k):
+                        found = True
+
+                        if not i in measurement_variable_map:
+                            measurement_variable_map[i] = {}
+                        
+                        measurement_variable_map[i][k] = input_definition["value"]
+                        break
+                
+                assert found
+        
+        measurement_variable_ids = [v.unique_id for v in 
+                                    controller.microscope.supported_measurement_variables]
+                                
+        for i, series_definition in measurement_variable_map.items():
+            assert series_definition["variable"] in measurement_variable_ids
+
+            v = controller.microscope.getMeasurementVariableById(
+                series_definition["variable"]
+            )
+
+            assert v.min_value <= series_definition["start"] 
+            assert series_definition["start"] <= v.max_value
+
+            assert v.min_value <= series_definition["end"] 
+            assert series_definition["end"] <= v.max_value
+    
+    @pytest.mark.usefixtures("cliview", "controller")
+    @pytest.mark.parametrize("start,series,user_inputs,expected_start,expected_series", [
+        # create default series
+        (None, None, ("c", ), 
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         # expecting: start=min, end=max, step-width = end-start/10
+         {"variable": "focus", "start": 0, "end": 5, "step-width": 0.5}),
+        # change start conditions
+        (None, None, (
+            "0", 2, # focus to 2
+            "1", 3, # magnetic field to 3
+            "2", 4, # tilt to 4
+            "c", 
+        ), 
+         {"focus": 2, "magnetic-field": 3, "tilt": 4},
+         # expecting: start=min, end=max, step-width = end-start/10
+         {"variable": "focus", "start": 0, "end": 5, "step-width": 0.5}),
+        # create magnetic field series
+        (None, None, (
+            "3", "magnetic-field", # variable
+            "c" # continue
+         ), 
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         # expecting: start=min, end=max, step-width = end-start/10
+         {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5}),
+        # create tilt field series
+        (None, None, (
+            "3", "tilt", # variable
+            "c"
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         # expecting: start=min, end=max, step-width = end-start/10
+         {"variable": "magnetic-field", "start": -5, "end": 5, "step-width": 1}),
+        # create magnetic field series from 1 to 2 with 0.5 stepwidth
+        (None, None, (
+            "3", "magnetic-field", # vairable
+            "4", 1, # start
+            "5", 0.5, # step width
+            "6", 2, # end
+            "c" # continue
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         {"variable": "magnetic-field", "start": 1, "end": 2, "step-width": 0.5}),
+        # create focus series from 0 to 5 with 2 stepwidth
+        (None, None, (
+            "1", 0, # start
+            "2", 2, # step width
+            "3", 5, # end
+            "c" # continue
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         {"variable": "focus", "start": 0, "end": 5, "step-width": 2}),
+        # create tilt series from -5 to 5 with 1 stepwidth, 
+        #   on each point: magnetic field series from 0 to 5, stepwidth 0.5
+        #       on each point: focus series from 2 to 4, stepwidth 0.25
+        (None, None, (
+            "0", "tilt", # tilt series
+            "1", -5, # start
+            "2", 1, # step width
+            "3", 5, # end
+            "4", "magnetic-field", # on each point
+                "6", 0, # start
+                "7", 0.5, # step width
+                "8", 5, # end
+                "9", "focus", # on each point
+                    "11", 2, # start
+                    "12", 0.25, # step width
+                    "13", 4, # end
+            "c" # continue
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         {"variable": "tilt", "start": -5, "end": 5, "step-width": 1, "on-each-point":
+            {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5, 
+             "on-each-point":
+                {"variable": "focus", "start": 2, "end": 4, "step-width": 0.25}
+            }
+         }),
+        # # create magnetic field series from -5 to 5 with 1 stepwidth (invalid)
+        # #   on each point focus series from -5 to 10 with stepwidth 1 (invalid)
+        # (None, None, (
+        #     "0", "magnetic-field", # magnetic field series
+        #     "1", -5, # start (invalid)
+        #     "2", 1, # step width
+        #     "3", 5, # end
+        #     "4", "focus", # on each point
+        #         "6", -5, # start (invalid)
+        #         "7", 1, # step width
+        #         "8", 10, # end (invalid)
+        #     "c" # continue
+        #  ),
+        #  {"focus": 0, "magnetic-field": 0, "tilt": 0},
+        #  {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 1, "on-each-point":
+        #     {"variable": "focus", "start": 0, "end": 5, "step-width": 1}
+        #  }),
+        # # create focus series from 1 to 3 with negative step width
+        # (None, None, (
+        #     "3", "magnetic-field", # vairable
+        #     "4", 1, # start
+        #     "5", -10, # step width
+        #     "6", 3, # end
+        #     "c" # continue
+        #  ),
+        #  {"focus": 0, "magnetic-field": 0, "tilt": 0},
+        #  # step-width = max-min/10, min = 0, max = 5
+        #  {"variable": "magnetic-field", "start": 1, "end": 3, "step-width": 0.5}),
+    ])
+    def test_show_create_measurement_loop(self, cliview, controller, start, series, user_inputs, expected_start, expected_series):
+        """Test the _showCreateMeasurementLoop() function."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        writer.input_response = self.response_callback
+        start, series = cliview._showCreateMeasurementLoop(controller)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        assert expected_start == start
+        assert expected_series == series
