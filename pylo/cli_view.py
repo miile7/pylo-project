@@ -7,6 +7,18 @@ import textwrap
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
 
+def human_concat_list(x, surround="'"):
+    if surround != "":
+        x = map(lambda y: "{s}{y}{s}".format(s=surround, y=y), x)
+    x = list(x)
+
+    if len(x) > 2:
+        return ", ".join(x[:-1]) + " or " + x[-1]
+    elif len(x) > 1:
+        return " or ".join(x)
+    else:
+        return x[0]
+
 class CLIView(AbstractView):
     """This class represents a very basic CLI view. It uses `print()` and 
     `input()` functions to display contents and react to user inputs.
@@ -208,7 +220,7 @@ class CLIView(AbstractView):
             
             measuremnt_vars_inputs.append({
                 "id": v.unique_id,
-                "label": str(v.name) + " [{}]".format(v.unit) if v.unit is not None else "",
+                "label": str(v.name) + (" [{}]".format(v.unit) if v.unit is not None else ""),
                 "datatype": float,
                 "min_value": v.min_value,
                 "max_value": v.max_value,
@@ -227,9 +239,10 @@ class CLIView(AbstractView):
 
         values, command = self._printSelect(
             "Define the start conditions",
-            measuremnt_vars_inputs,
+            *measuremnt_vars_inputs,
+            "",
             "Define the series",
-            series_inputs
+            *series_inputs
         )
 
         series_reg = re.compile(r"series-([\d]+)-([\w\-]+)")
@@ -327,7 +340,22 @@ class CLIView(AbstractView):
         # do not allow to make a series of the current variable on each point 
         # of the current series
         on_each_point_names = variable_names.copy()
-        on_each_point_names.remove(series["variable"])
+        try:
+            on_each_point_names.remove(series["variable"])
+        except ValueError:
+            # this is a invalid value, the on-each-point series is the same
+            # series as one of the parents, but this error is dealt with in the 
+            # following code
+            pass
+            
+        if "on-each-point" in series:
+            if (not isinstance(series["on-each-point"], dict) or 
+                not "variable" in series["on-each-point"] or
+                not series["on-each-point"]["variable"] in on_each_point_names):
+                del series["on-each-point"]
+                errors.append(("The series{} '{}' key is invalid. Use " + 
+                               "'{}'.").format(path_str, "on-each-point",
+                               human_concat_list(on_each_point_names)))
 
         series_inputs = [
             {
@@ -373,7 +401,7 @@ class CLIView(AbstractView):
                 "label": "Series on each point",
                 "datatype": on_each_point_names,
                 "required": False,
-                "value": series["on-each-point"] if "on-each-point" in series else None,
+                "value": series["on-each-point"]["variable"] if "on-each-point" in series else None,
                 "inset": len(path) * "  "
             }
         ]
@@ -481,8 +509,14 @@ class CLIView(AbstractView):
         self.clear()
         self.printTitle()
 
-        label_col_width = max([len(l["label"]) if isinstance(l, dict) else 0 
-                               for l in args])
+        none_val = "<empty>"
+
+        # get the label column width, +1 for the colon, +1 for the required 
+        # asterix
+        label_width = max([len(l["label"]) if isinstance(l, dict) else 0 
+                               for l in args]) + 2 
+        value_width = max([len("{}".format(l["value"])) if isinstance(l, dict) else 0 
+                               for l in args] + [len(none_val)])
 
         max_index = len(list(filter(lambda x: isinstance(x, dict), args))) - 1
         index_width = math.floor(math.log10(max_index) + 1)
@@ -495,22 +529,30 @@ class CLIView(AbstractView):
             elif isinstance(line, dict):
                 values[line["id"]] = line["value"]
 
-                text = ("[{:" + str(index_width) + "}]" + 
-                        "{:" + str(label_col_width) + "} {}").format(
-                            index,
-                            (str(line["label"]) + 
-                            ("*" if "required" in line and line["required"] else "") + 
-                            ":"), 
-                            line["value"]
-                        )
-
+                text = ("[{index:" + str(index_width) + "}] " + 
+                        "{label:" + str(label_width) + "} " + 
+                        "{value:<" + str(value_width) + "} " + 
+                        "{conditions}")
+                
+                conditions = ""
                 if "min_value" in line and "max_value" in line:
-                    text += " {} <= val <= {}".format(line["min_value"],
+                    conditions = " {} <= val <= {}".format(line["min_value"],
                                                      line["max_value"])
                 elif "min_value" in line:
-                    text += " >= {}".format(line["min_value"])
+                    conditions = " >= {}".format(line["min_value"])
                 elif "max_value" in line:
-                    text += " >= {}".format(line["max_value"])
+                    conditions = " >= {}".format(line["max_value"])
+
+                text = text.format(
+                    index=index,
+                    label=(
+                        str(line["label"]) + 
+                        ("*" if "required" in line and line["required"] else "") + 
+                        ":"
+                    ), 
+                    value=(none_val if line["value"] is None else line["value"]),
+                    conditions=conditions
+                )
 
                 if "inset" in line:
                     inset = line["inset"]
@@ -529,29 +571,40 @@ class CLIView(AbstractView):
             return values, False
         elif user_input == "c":
             return values, True
-        elif 0 <= int(user_input) and int(user_input) <= max_index:
-            index = int(user_input)
-            id_index_map = list(values.keys())
-            id_ = id_index_map[index]
-            id_args_map = [l["id"] if isinstance(l, dict) else None for l in args]
-            args_index = id_args_map.index(id_)
-            input_definition = args[args_index]
-
-            args = list(args)
-            try:
-                v = self._inputValueLoop(input_definition)
-
-                if (v is not None or (not "required" in input_definition or 
-                    not input_definition["required"])):
-                    values[id_] = v
-            except StopProgram:
-                pass
-
-            return values, None
         else:
-            # error is shown in CLIView::printTitle
-            self.error = "The input '{}' is not valid.".format(user_input)
-            self._printSelect(*args)
+            try:
+                user_input = int(user_input)
+            except ValueError:
+                # error is shown in CLIView::printTitle
+                self.error = ("The input '{}' neither is a number nor a " + 
+                              "command so it cannot be interpreted.").format(user_input)
+                return self._printSelect(*args)
+
+            if 0 <= user_input and user_input <= max_index:
+                index = int(user_input)
+                id_index_map = list(values.keys())
+                id_ = id_index_map[index]
+                id_args_map = [l["id"] if isinstance(l, dict) else None for l in args]
+                args_index = id_args_map.index(id_)
+                input_definition = args[args_index]
+
+                args = list(args)
+                try:
+                    v = self._inputValueLoop(input_definition)
+
+                    if (v is not None or (not "required" in input_definition or 
+                        not input_definition["required"])):
+                        values[id_] = v
+                except StopProgram:
+                    pass
+
+                return values, None
+            else:
+                # error is shown in CLIView::printTitle
+                self.error = ("The input '{}' is out of range. Please type " + 
+                              "a number 0 <= number <= {}.").format(user_input,
+                                                                    max_index)
+                return self._printSelect(*args)
     
     def _inputValueLoop(self, input_definition: dict) -> typing.Any:
         """Get the input for the `input_definition` by asking the user.
@@ -602,7 +655,7 @@ class CLIView(AbstractView):
 
         if isinstance(input_definition["datatype"], (list, tuple)):
             options = list(map(str, input_definition["datatype"]))
-            text += "'{}'.".format("', '".join(options[:-1]) + "' or '" + options[-1])
+            text += human_concat_list(options)
 
             options_ci = list(map(lambda x: x.lower(), options))
             options_ci_max_count = max(map(lambda x: options_ci.count(x), options_ci))
@@ -687,7 +740,7 @@ class CLIView(AbstractView):
             if (case_insensitive and val.lower() not in options_ci or 
                 not case_insensitive and val not in options):
                 self.error = (("The value be one of the following: '{}'").format(
-                    "', '".join(options)
+                    human_concat_list(options)
                 ))
 
                 return self._inputValueLoop(input_definition)
