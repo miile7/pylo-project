@@ -186,7 +186,12 @@ class TestConfiguration:
         # load some values manually
         for group, key, value, args, expected in complete_test_configuration:
             if group == "set-group":
-                self.configuration.setValue(group, key, value, **args)
+                if random.randint(1, 2) == 1:
+                    self.configuration.setValue(group, key, value, **args)
+                else:
+                    self.configuration[group, key] = value
+                    for k in args:
+                        self.configuration[group, key, k] = args[k]
         
         # set some configuration options
         for group, key, value, args, expected in complete_test_configuration:
@@ -215,6 +220,16 @@ class TestConfiguration:
         assert not self.configuration._keyExists(group, key)
 
     @pytest.mark.parametrize("group,key", all_groups_and_keys_having_values)
+    def test_index_keys_exist(self, group, key):
+        """Test whether the groups and keys exist."""
+        assert (group, key) in self.configuration
+    
+    @pytest.mark.parametrize("group,key", non_existing_groups_and_keys)
+    def test_index_invalid_keys_do_not_exist(self, group, key):
+        """Test whether invalid keys do not exist."""
+        assert (group, key) not in self.configuration
+
+    @pytest.mark.parametrize("group,key", all_groups_and_keys_having_values)
     def test_values_exist(self, group, key):
         """Test whether the values exist."""
         assert self.configuration.valueExists(group, key)
@@ -235,6 +250,13 @@ class TestConfiguration:
         value."""
         with pytest.raises(KeyError):
             self.configuration.getValue(group, key, False)
+
+    @pytest.mark.parametrize("group,key", options_groups_and_keys)
+    def test_configuration_option_value_index_raises_error(self, group, key):
+        """Test configuration options raise an error when trying to get the 
+        value."""
+        with pytest.raises(KeyError):
+            self.configuration[group, key]
 
     # @pytest.mark.parametrize("group,key", [
     #     ("options-group", "value1"),
@@ -259,6 +281,21 @@ class TestConfiguration:
         """Test whether the values are correct."""
         assert (self.configuration.getValue(group, key, False) == expected["value"])
 
+    @pytest.mark.parametrize("group,key,value,args,expected", test_configuration_without_option_groups)
+    def test_values_index_are_correct(self, group, key, value, args, expected):
+        """Test whether the values are correct."""
+        assert (self.configuration[group, key] == expected["value"])
+
+    @pytest.mark.parametrize("group,key,value,args,expected", test_configuration_without_option_groups)
+    def test_values_index2_are_correct(self, group, key, value, args, expected):
+        """Test whether the values are correct."""
+        assert (self.configuration[group, key, "value"] == expected["value"])
+
+    @pytest.mark.parametrize("group,key,value,args,expected", test_configuration_without_option_groups)
+    def test_values_index3_are_correct(self, group, key, value, args, expected):
+        """Test whether the values are correct."""
+        assert (self.configuration[group, key, "value"] == self.configuration.getValue(group, key, True))
+
     @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_with_defaults)
     def test_values_default_fallback(self, group, key, value, args, expected):
         """Test whether the default is returned if there is no value are correct."""
@@ -275,6 +312,11 @@ class TestConfiguration:
         """Test whether the defaults are correct."""
         assert (self.configuration.getDefault(group, key) == expected["default_value"])
 
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_with_defaults)
+    def test_default_index_is_correct(self, group, key, value, args, expected):
+        """Test whether the defaults are correct."""
+        assert (self.configuration[group, key, "default_value"] == expected["default_value"])
+
     @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
     def test_ask_if_not_present_is_correct(self, group, key, value, args, expected):
         """Test whether the ask if not peresent value correct."""
@@ -282,6 +324,15 @@ class TestConfiguration:
             expected["ask_if_not_present"] = False
             
         assert (self.configuration.getAskIfNotPresent(group, key) == 
+                expected["ask_if_not_present"])
+    
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_ask_if_not_present_index_is_correct(self, group, key, value, args, expected):
+        """Test whether the ask if not peresent value correct."""
+        if not "ask_if_not_present" in expected:
+            expected["ask_if_not_present"] = False
+            
+        assert (self.configuration[group, key, "ask_if_not_present"] == 
                 expected["ask_if_not_present"])
 
     @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
@@ -293,10 +344,25 @@ class TestConfiguration:
         assert (self.configuration.getRestartRequired(group, key) == 
                 expected["restart_required"])
 
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_restart_required_index_is_correct(self, group, key, value, args, expected):
+        """Test whether the restart required value is correct."""
+        if not "restart_required" in expected:
+            expected["restart_required"] = False
+            
+        assert (self.configuration[group, key, "restart_required"] == 
+                expected["restart_required"])
+
     @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_width_description)
     def test_description_is_correct(self, group, key, value, args, expected):
-        """Test whether the defaults are correct."""
+        """Test whether the descriptions are correct."""
         assert (self.configuration.getDescription(group, key) == 
+                    expected["description"])
+
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration_width_description)
+    def test_description_index_is_correct(self, group, key, value, args, expected):
+        """Test whether the descriptions are correct."""
+        assert (self.configuration[group, key, "description"] == 
                     expected["description"])
 
     def test_single_overwriting_value_is_correct(self):
@@ -335,6 +401,19 @@ class TestConfiguration:
         removeElement() function is called."""
         
         self.configuration.removeElement(group, key)
+
+        assert self.configuration._keyExists(group, key) == False
+        with pytest.raises(KeyError):
+            self.configuration.getValue(group, key, fallback_default=False)
+        with pytest.raises(KeyError):
+            self.configuration.getValue(group, key)
+
+    @pytest.mark.parametrize("group,key,value,args,expected", complete_test_configuration)
+    def test_index_remove_element(self, group, key, value, args, expected):
+        """Test whether the group and key do not exist anymore if the 
+        removeElement() function is called."""
+        
+        del self.configuration[group, key]
 
         assert self.configuration._keyExists(group, key) == False
         with pytest.raises(KeyError):
@@ -388,4 +467,77 @@ class TestConfiguration:
 
         with pytest.raises(expected_error):
             self.configuration.addConfigurationOption(group, key, **args)
+
+    def test_iteration_over_configuration(self):
+        """Test if the iteration over the configuration is correct."""
+
+        # all values plus overwrite groups
+        groups = [x[0] for x in complete_test_configuration] + ["overwrite-group"]
+        keys = [x[1] for x in complete_test_configuration] + ["value1", "value2"]
+
+        visited_groups = []
+        visited_keys = []
+        for group, key in self.configuration:
+            # check if groups exist
+            assert group in groups
+            assert key in keys
+
+            visited_groups.append(group)
+            visited_keys.append(key)
+        
+        # check if all values are visited
+        assert set(visited_groups) == set(groups)
+        assert set(visited_keys) == set(keys)
+    
+    def test_items(self):
+        """Test if the iteration over the configuration is correct."""
+
+        # all values plus overwrite groups
+        groups = [x[0] for x in complete_test_configuration] + ["overwrite-group"]
+        keys = [x[1] for x in complete_test_configuration] + ["value1", "value2"]
+        
+        visited_groups = []
+        visited_keys = []
+        for items in self.configuration.items():
+            assert len(items) == 8
+            (group, key, value, datatype, default_value, ask_if_not_present, 
+                description, restart_required) = items
+            # check if groups exist
+            assert group in groups
+            assert key in keys
+
+            if self.configuration.valueExists(group, key):
+                assert value == self.configuration.getValue(group, key)
+
+            try:
+                assert datatype == self.configuration.getDatatype(group, key)
+            except KeyError:
+                assert datatype == None
+
+            if self.configuration.defaultExists(group, key):
+                assert default_value == self.configuration.getDefault(group, key)
+            else:
+                assert default_value == None
+
+            try:
+                assert ask_if_not_present == self.configuration.getAskIfNotPresent(group, key)
+            except KeyError:
+                assert ask_if_not_present == None
+            
+            try:
+                assert description == self.configuration.getDescription(group, key)
+            except KeyError:
+                assert description == None
+
+            try:
+                assert restart_required == self.configuration.getRestartRequired(group, key)
+            except KeyError:
+                assert restart_required == None
+
+            visited_groups.append(group)
+            visited_keys.append(key)
+        
+        # check if all values are visited
+        assert set(visited_groups) == set(groups)
+        assert set(visited_keys) == set(keys)
         
