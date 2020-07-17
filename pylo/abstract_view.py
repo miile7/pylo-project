@@ -22,6 +22,7 @@ class AbstractView:
 
     def __init__(self):
         """Get the view object."""
+        self.show_running = False
         self.progress_max = 100
         self.progress = 0
 
@@ -40,6 +41,9 @@ class AbstractView:
             self.__progress = self.progress_max
         else:
             self.__progress = progress
+        
+        if self.show_running:
+            self._updateRunning()
 
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -160,6 +164,14 @@ class AbstractView:
         """Show the progress bar and the outputs of the `AbstractView::print()`
         function.
         """
+        self.show_running = True
+    
+    def hideRunning(self) -> None:
+        """Hides the progress bar shown by `AbstractView::showRunning()`."""
+        self.show_running = False
+
+    def _updateRunning(self) -> None:
+        """Update the running indicator, the progress has updated."""
         raise NotImplementedError()
 
     def askFor(self, *inputs: AskInput) -> tuple:
