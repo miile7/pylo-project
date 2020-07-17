@@ -38,7 +38,6 @@ class CLIView(AbstractView):
     def __init__(self) -> None:
         """Get the CLIView object.
         """
-        super().__init__()
 
         self.line_length = 79
         try:
@@ -51,6 +50,7 @@ class CLIView(AbstractView):
         
         self.error = ""
 
+        super().__init__()
         self.clear()
         self.printTitle()
     
@@ -795,3 +795,26 @@ class CLIView(AbstractView):
                 pass
         
         return val
+    
+    def showRunning(self):
+        """Show that the program is running."""
+        self.printTitle()
+        self._updateRunning()
+        super().showRunning()
+    
+    def _updateRunning(self):
+        """Update the running indicator, the progress has updated."""
+
+        counter_width = math.floor(math.log10(self.progress_max)) + 1
+        loader_width = self.line_length - 2 * counter_width - 2
+        prog = round((self.progress / self.progress_max) * loader_width)
+
+        line = ("{:" + str(loader_width) + "} " + 
+                "{:" + str(counter_width) + "}/" + 
+                "{:" + str(counter_width) + "}")
+        
+        self.print("\b" * self.line_length + line.format(
+            "█" * prog + "▒" * (loader_width - prog),
+            self.progress,
+            self.progress_max
+        ), sep="", end="")

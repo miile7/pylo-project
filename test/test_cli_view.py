@@ -19,6 +19,14 @@ class DummyOut:
             realprint(self.io_log)
             raise RecursionError("Too many calls of write().")
         self.out_buffer += text
+        # fix backspace character deleting other characters, allow to remove
+        # old content
+        while "\b" in self.out_buffer:
+            i = self.out_buffer.index("\b")
+            if i > 0:
+                self.out_buffer = self.out_buffer[:i-1] + self.out_buffer[i + 1:]
+            else:
+                self.out_buffer = self.out_buffer[1:]
         self.io_log += text
     
     def flush(self):
@@ -822,3 +830,32 @@ class TestCLIView:
 
         assert expected_start == start
         assert expected_series == series
+    
+    def test_loader(self, cliview):
+        """Test if the loader works."""
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+
+        cliview.progress_max = 100
+        cliview.progress = 2
+        cliview.showRunning()
+
+        assert "2" in get_compare_text(writer.out_buffer)
+        assert "100" in get_compare_text(writer.out_buffer)
+
+        # auto update output
+        cliview.progress = 55
+
+        realprint(writer.out_buffer)
+
+        # old text gets removed
+        assert "2" not in get_compare_text(writer.out_buffer)
+        # check new text
+        assert "55" in get_compare_text(writer.out_buffer)
+        assert "100" in get_compare_text(writer.out_buffer)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
