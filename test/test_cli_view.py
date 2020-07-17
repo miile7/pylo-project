@@ -161,6 +161,21 @@ def controller():
 
     return controller
 
+@pytest.fixture()
+def configuration():
+    configuration = pylo.AbstractConfiguration()
+
+    configuration.addConfigurationOption("options", "key1", datatype=int, 
+        description="Input the value for the first test configuration value.")
+    configuration.addConfigurationOption("options", "key2", datatype=float,
+        default_value=1.0
+    )
+    configuration.setValue("already-set", "key3", "This value is set", 
+        datatype=str
+    )
+
+    return configuration
+
 default_valid_select_definition = [
     # string
     ({"label": "Label a", "id": "testid1", "datatype": str, "value": "", 
@@ -831,6 +846,7 @@ class TestCLIView:
         assert expected_start == start
         assert expected_series == series
     
+    @pytest.mark.usefixtures("cliview")
     def test_loader(self, cliview):
         """Test if the loader works."""
         # doesn't work to keep it in the fixture, has to be explicit every 
@@ -859,3 +875,46 @@ class TestCLIView:
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
+    
+    @pytest.mark.usefixtures("cliview", "configuration")
+    @pytest.mark.parametrize("user_inputs,expected_dict", [
+        (("0", 100, # set key1 (options)
+          "1", -9.81, # set key2 (options)
+          "2", "String", # set key3 (already-set)
+          "c" # continue
+         ), 
+         {"options": {"key1": 100, "key2": -9.81}, "already-set": {"key3": "String"}}
+        )
+    ])
+    def test_show_settings(self, cliview, configuration, user_inputs, expected_dict):
+        """Test if the settings work."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        values = cliview.showSettings(configuration)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        out = get_compare_text(writer.out_buffer)
+        for group, key in configuration:
+            assert group in out
+            assert key in out
+
+            try:
+                assert configuration.getDescription(group, key) in out
+            except KeyError:
+                # there is no description
+                pass
+        
+        assert values == expected_dict

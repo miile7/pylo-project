@@ -5,6 +5,7 @@ import typing
 import textwrap
 
 from .stop_program import StopProgram
+from .abstract_view import AskInput
 from .abstract_view import AbstractView
 
 def human_concat_list(x, surround="'"):
@@ -631,6 +632,7 @@ class CLIView(AbstractView):
           only for numeric inputs
         - "required": bool (optional), whether the current input has to be
           set or not, default: False
+        - "description": str (optional), a description what this value is about
 
         The user can enter the value, 'x' or '!empty' for clear the value (if 
         not required) and 'a' or '!abort' for aborting.
@@ -723,6 +725,13 @@ class CLIView(AbstractView):
                 name += " with value <= {}".format(input_definition["max_value"])
             
             text += " a {}.".format(name)
+        
+        if "description" in input_definition:
+            description = str(input_definition["description"]).strip()
+            if description[-1] not in (".", "?", "!"):
+                description += "."
+
+            text += " {}.".format(description)
         
         text += " To abort type '{}'.".format(abort_command)
 
@@ -818,3 +827,127 @@ class CLIView(AbstractView):
             self.progress,
             self.progress_max
         ), sep="", end="")
+    
+    def showSettings(self, configuration: "AbstractConfiguration", 
+                     keys: dict=None,
+                     set_in_config: typing.Optional[bool]=True) -> dict:
+        """Show the settings to the user.
+        
+        The `keys` can be a dict that contains dicts at each index. The index 
+        of the outer dict is treated as the group, the index of the inner group
+        is the key. The value will be set as the current value to the inputs.
+        
+        When the dialog is confirmed the settings_changed event is fired and 
+        the new settings are returned. If `set_in_config` is True the settings 
+        will also be applied to the configuration.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        keys : collection of tuples, optional
+            A list of tuples where index 0 contains the group and index 1
+            contains the key name of the settings to show. The definitions are 
+            loaded from the configuration, if not given all keys are shown
+        set_in_config : bool, optional
+            Whether to apply the settings to the configuration if confirmed,
+            default: True
+        
+        Returns
+        -------
+        dict of dict
+            A dict that contains the groups as keys, as the value there is 
+            another dict for the keys in that group, the value is the newly set
+            value
+        """
+        values = self._showSettingsLoop(configuration, keys)
+
+        if set_in_config:
+            for group in values:
+                for key in values[group]:
+                    configuration.setValue(group, key, values[group][key])
+        
+        return values
+
+    def _showSettingsLoop(self, configuration: "AbstractConfiguration", 
+                     keys: dict=None,
+                     config_dict: typing.Optional[dict]=None) -> dict:
+        """Show the settings loop.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        keys : collection of tuples, optional
+            A list of tuples where index 0 contains the group and index 1
+            contains the key name of the settings to show. The definitions are 
+            loaded from the configuration, if not given all keys are shown
+        
+        Returns
+        -------
+        dict of dict
+            A dict that contains the groups as keys, as the value there is 
+            another dict for the keys in that group, the value is the newly set
+            value
+        """
+        self.printTitle()
+
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        
+        setting_inputs = []
+
+        for group, key, value, datatype, default, ask, description, restart in configuration.items():
+            if not isinstance(keys, (list, tuple)) or (group, key) in keys:
+                if group in config_dict and key in config_dict[group]:
+                    val = config_dict[group][key]
+                elif value is not None:
+                    val = value
+                else:
+                    val = default
+
+                setting_inputs.append({
+                    "label": "{} ({})".format(key, group),
+                    # escape minus
+                    "id": "{}-{}".format(group.replace("-", "--"), key.replace("-", "--")),
+                    "datatype": datatype,
+                    "value": val,
+                    "description": description
+                })
+            
+                if not group in config_dict:
+                    config_dict[group] = {}
+                
+                config_dict[group][key] = val
+
+        values, command = self._printSelect(
+            "Change settings.",
+            *setting_inputs
+        )
+
+        for id_ in values:
+            # single minus is only used by the separator between group and key
+            group, key = re.split(r"(?<!-)-(?!-)", id_)
+            group = group.replace("--", "-")
+            key = key.replace("--", "-")
+
+            if not group in config_dict:
+                config_dict[group] = {}
+            
+            config_dict[group][key] = values[id_]
+
+        if command == False:
+            raise StopProgram
+        elif command == True:
+            return config_dict
+        else:
+            return self._showSettingsLoop(configuration, keys, config_dict)
+
+    def askFor(self, *inputs: AskInput) -> tuple:
+        pass
