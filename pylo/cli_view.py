@@ -949,5 +949,90 @@ class CLIView(AbstractView):
         else:
             return self._showSettingsLoop(configuration, keys, config_dict)
 
-    def askFor(self, *inputs: AskInput) -> tuple:
-        pass
+    def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
+        """Ask for the specific input when the program needs to know something 
+        from the user. 
+        
+        The following indices are supported for the `inputs`:
+        - 'name' : str, required - The name of the input to show
+        - 'datatype' : type - The datatype to allow
+        - 'description' : str - A description what this value is about
+        - 'options' : list or tuple - A list of options to show to the user to 
+          select from
+        - 'allow_custom' : bool - Whether the user may only use the 'options' 
+          (True) or is is allowed to type in custom values too (False), this 
+          value is ignored if there are no 'options' given, default: False
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        inputs : dict
+            A dict with the 'name' key that defines the name to show. Optional
+            additional keys are 'datatype', 'description', 'options' and 
+            'allow_custom'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, default:
+            "Please enter the following values."
+        
+        Returns
+        -------
+        tuple
+            A tuple of values where the value on index 0 is the value for the 
+            `inputs[0]` and so on
+        """
+
+        return self._askForLoop(inputs, None, **kwargs)
+
+    def _askForLoop(self, inputs: typing.Collection[AskInput], 
+                    ask_dict: typing.Optional[dict]=None, **kwargs):
+        if not isinstance(ask_dict, dict):
+            ask_dict = {}
+
+        input_definitions = []
+
+        if not "text" in kwargs:
+            input_definitions.append("Please enter the following values.")
+        elif isinstance(kwargs["text"], str):
+            input_definitions.append(kwargs["text"])
+        
+        for i, line in enumerate(inputs):
+            l = {
+                "label": line["name"],
+                "id": i,
+                "required": True
+            }
+            if ("options" in line and isinstance(line["options"], (list, tuple)) and 
+                (not "allow_custom" in line or not line["allow_custom"])):
+               l["datatype"] = line["options"]
+            elif isinstance(line["datatype"], type):
+                l["datatype"] = line["datatype"]
+            else:
+                l["datatype"] = str
+            
+            if "description" in line:
+                l["description"] = line["description"]
+            
+            if i in ask_dict:
+                l["value"] = ask_dict[i]
+            else:
+                l["value"] = None
+            
+            input_definitions.append(l)
+        
+        values, command = self._printSelect(
+            *input_definitions
+        )
+
+        if command == False:
+            raise StopProgram
+        elif command == True:
+            return tuple(sorted(values.items(), lambda x: x[0]))
+        else:
+            return self._askForLoop(inputs, values, **kwargs)
