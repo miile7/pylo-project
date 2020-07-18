@@ -176,6 +176,7 @@ def configuration():
 
     return configuration
 
+# input_definition, user_input, expected value
 default_valid_select_definition = [
     # string
     ({"label": "Label a", "id": "testid1", "datatype": str, "value": "", 
@@ -918,3 +919,162 @@ class TestCLIView:
                 pass
         
         assert values == expected_dict
+        
+    @pytest.mark.usefixtures("cliview", "configuration")
+    @pytest.mark.parametrize("input_definition,value,expected", 
+        default_valid_select_definition + [
+            # default not required
+            ({"datatype": int}, None, None),
+            ({"datatype": float}, None, None),
+            ({"datatype": bool}, None, None),
+            ({"datatype": str}, None, None),
+            # not required
+            ({"datatype": int, "required": False}, None, None),
+            ({"datatype": float, "required": False}, None, None),
+            ({"datatype": bool, "required": False}, None, None),
+            ({"datatype": str, "required": False}, None, None),
+        ]
+    )
+    def test_parse_value(self, cliview, input_definition, value, expected):
+        """Test if the _parseValue() function works."""
+
+        assert cliview._parseValue(input_definition, value) == expected
+        
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("input_definition,value", [
+        # invalid types
+        ({"datatype": int}, "str"),
+        ({"datatype": float}, "nofloat"),
+        ({"datatype": bool}, 4),
+        # required is wrong
+        ({"datatype": str, "required": True}, None),
+        ({"datatype": str, "required": True}, None),
+        # not in list
+        ({"datatype": ["val1", "val2"]}, "val3"),
+        # not in list casesensitive
+        ({"datatype": ["val", "VAL"]}, "vAl"),
+        # not in boundaries
+        ({"datatype": int, "min_value": 0, "max_value": 2}, 3),
+        ({"datatype": int, "min_value": 0, "max_value": 2}, -1),
+        ({"datatype": float, "min_value": -0.0001, "max_value": 0.0001}, 0.0002),
+        ({"datatype": float, "min_value": -0.0001, "max_value": 0.0001}, -0.0002),
+        ({"datatype": str, "min_value": "b", "max_value": "d"}, "a"),
+        ({"datatype": str, "min_value": "b", "max_value": "d"}, "e")
+    ])
+    def test_parse_invalid_value(self, cliview, input_definition, value):
+        """Test if the _parseValue() function works."""
+
+        with pytest.raises(ValueError):
+            cliview._parseValue(input_definition, value)
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("ask_definitions,text,user_inputs,expected", [
+        (({"name": "Askval1", "datatype": str, "description": "Type in a str"},
+          {"name": "Askval2", "datatype": int, "description": "Type in an int"},
+          {"name": "Askval3", "datatype": float, "description": "Type in a float"}),
+          "Input those values",
+          ("0", "answerstr", # set Askval1
+           "1", "10", # set Askval2
+           "2", "-8328.8238", # set Askval3
+           "c" # continue
+          ), ("answerstr", 10, -8328.8238)),
+    ])
+    def test_ask_for(self, cliview, ask_definitions, text, user_inputs, expected):
+        """Test if the _parseValue() function works."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview.askFor(*ask_definitions, text=text)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        out = get_compare_text(writer.out_buffer)
+
+        # check if text is printed
+        assert text in out
+        
+        # check if names and descriptions are shown
+        for definition in ask_definitions:
+            assert definition["name"] in out
+            assert definition["description"] in out
+
+        # check results
+        assert len(results) == len(expected)
+
+        for i, r in results:
+            assert r == expected[i]
+            assert type(r) == type(expected[i])
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("ask_definitions,text,user_inputs,expected", [
+        (({"name": "Askval1", "datatype": str, "description": "Type in a str"},
+          {"name": "Askval2", "datatype": int, "description": "Type in an int"},
+          {"name": "Askval3", "datatype": float, "description": "Type in a float"}),
+          "Input those values",
+          ("0", "answerstr", # set Askval1
+           "1", "x", # empty Askval2, this should show an error
+           "8", # set Askval2 after error
+           "c", # continue, should show error because Askval3 is not set
+           "2", "a", # abort setting Askval3
+            "2", "1.01", # set Askval3
+            "c" # continue
+          ), ("answerstr", 8, 1.01)),
+    ])
+    def test_invalid_ask_for(self, cliview, ask_definitions, text, user_inputs, expected):
+        """Test if the _parseValue() function works."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview.askFor(*ask_definitions, text=text)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        out = get_compare_text(writer.out_buffer)
+
+        # check if text is printed
+        assert text in out
+
+        # check if the continue was not performed
+        assert "The values for" in out
+        assert "are invalid" in out
+        assert "(Details" in out
+
+        # check if abort error is shown
+        assert "is required" in out
+        assert "You have to put in something" in out
+        
+        # check if names and descriptions are shown
+        for definition in ask_definitions:
+            assert definition["name"] in out
+            assert definition["description"] in out
+
+        # check results
+        assert len(results) == len(expected)
+
+        for i, r in results:
+            assert r == expected[i]
+            assert type(r) == type(expected[i])
