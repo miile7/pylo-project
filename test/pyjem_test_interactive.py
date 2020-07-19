@@ -1,16 +1,28 @@
+import os
+import sys
 import datetime
-from mini_cli import input_yn, input_confirm, input_int, input_filesave
+import matplotlib.pyplot as plt
+from PIL import Image as PILImage
+from mini_cli import input_yn, input_confirm, input_int, input_filesave, input_text
+
+sys.path.append(os.path.abspath("."))
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 if (__name__ == "__main__" and 
     input_yn("Is the microscope attatched to the computer?")):
     from PyJEM.TEM3 import Lens3
     from PyJEM.TEM3 import Stage3
     from PyJEM.TEM3 import EOS3
+    from PyJEM.detector import Detector
+    from PyJEM.detector.function import get_attached_detector
     offline_mode = False
 else:
     from PyJEM.offline.TEM3.lens3 import Lens3
     from PyJEM.offline.TEM3.stage3 import Stage3
     from PyJEM.offline.TEM3.eos3 import EOS3
+    from PyJEM.offline.detector import Detector
+    from PyJEM.offline.detector.function import get_attached_detector
     offline_mode = True
 
     print("Using offline mode, values are protocolled:\n")
@@ -62,6 +74,14 @@ def check_focus(value):
     if offline_mode:
         print("object focus:", eos.objfocus)
 
+def check_image(detector_name):
+    detector = Detector(detector_name)
+    
+    image_data = detector.snapshot_rawdata()
+    image = PILImage.frombytes('L', (1024,1024), image_data, 'raw')
+    plt.imshow(image)
+    plt.show()
+
 def log(txt, success):
     success_log.append((txt, success))
 
@@ -86,6 +106,13 @@ tests = (
      "Set x tilt",
      "Is the x tilt equal to the input value?",
      check_x_tilt),
+    ("str",
+     "Record an image with the given detector. Possible detectors are: {}".format(
+        ", ".join(map(lambda  x: "'{}'".format(x), get_attached_detector()))
+     ),
+     "Set Detector",
+     "Was a valid image shown?",
+     check_image),
     ("int",
      "Set the focus to the given value.",
      "Set focus",
@@ -100,6 +127,10 @@ if __name__ == "__main__":
             do_test = input_confirm(descr, short)
         elif box == "int":
             val = input_int(descr, short)
+
+            do_test = val is not None
+        elif box == "str":
+            val = input_text(descr, short)
 
             do_test = val is not None
         
