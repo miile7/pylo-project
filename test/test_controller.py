@@ -1079,7 +1079,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "Test exception" in e[0]:
+            if "Test exception" in str(e[0]):
                 found = True
                 break
         

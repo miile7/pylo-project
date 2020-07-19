@@ -474,6 +474,7 @@ class Measurement:
             error_str = "".join([" in 'on-each-step' of {}".format(p) 
                                   for p in error_path])
         else:
+            error_path = []
             error_str = ""
 
         # check type and keys of series

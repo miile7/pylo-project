@@ -123,7 +123,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def showError(self, error : str, how_to_fix: typing.Optional[str]=None) -> None:
+    def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
         """Show the user a hint.
 
         Raises

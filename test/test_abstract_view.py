@@ -67,13 +67,6 @@ class TestAbstractView:
             view.print("Text", "to", "print")
     
     @pytest.mark.usefixtures("view")
-    def test_show_running_not_implemented(self, view):
-        """Test if all the functions raise NotImplementedErrors"""
-        
-        with pytest.raises(NotImplementedError):
-            view.showRunning()
-    
-    @pytest.mark.usefixtures("view")
     def test_ask_for_not_implemented(self, view):
         """Test if all the functions raise NotImplementedErrors"""
         
