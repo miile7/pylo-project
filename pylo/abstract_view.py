@@ -22,6 +22,7 @@ class AbstractView:
 
     def __init__(self):
         """Get the view object."""
+        self.show_running = False
         self.progress_max = 100
         self.progress = 0
 
@@ -40,14 +41,23 @@ class AbstractView:
             self.__progress = self.progress_max
         else:
             self.__progress = progress
+        
+        if self.show_running:
+            self._updateRunning()
 
-    def showCreateMeasurement(self) -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
         ------
         StopProgram
             When the user clicks the cancel button.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
 
         Returns
         -------
@@ -61,7 +71,8 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def showSettings(self, keys: dict=None,
+    def showSettings(self, configuration: "AbstractConfiguration", 
+                     keys: dict=None,
                      set_in_config: typing.Optional[bool]=True) -> dict:
         """Show the settings to the user.
         
@@ -112,7 +123,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def showError(self, error : str, how_to_fix: typing.Optional[str]=None) -> None:
+    def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
         """Show the user a hint.
 
         Raises
@@ -153,6 +164,14 @@ class AbstractView:
         """Show the progress bar and the outputs of the `AbstractView::print()`
         function.
         """
+        self.show_running = True
+    
+    def hideRunning(self) -> None:
+        """Hides the progress bar shown by `AbstractView::showRunning()`."""
+        self.show_running = False
+
+    def _updateRunning(self) -> None:
+        """Update the running indicator, the progress has updated."""
         raise NotImplementedError()
 
     def askFor(self, *inputs: AskInput) -> tuple:

@@ -73,7 +73,7 @@ class DummyView(pylo.AbstractView):
         
         return responses
     
-    def showCreateMeasurement(self):
+    def showCreateMeasurement(self, *args, **kwargs):
         self.shown_create_measurement_times.append(time.time())
         
         ret = self.measurement_to_create
@@ -1079,7 +1079,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "Test exception" in e[0]:
+            if "Test exception" in str(e[0]):
                 found = True
                 break
         

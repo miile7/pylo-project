@@ -628,6 +628,189 @@ class AbstractConfiguration:
                 # group is empty, delete it too
                 del self.configuration[group]
     
+    def items(self) -> typing.Iterator[typing.Tuple[str, str, Savable, type, Savable, bool, str, bool]]:
+        """Get the items to iterate over.
+
+        The returned tuple contains the following values in the following order:
+        - str, group
+        - str, key
+        - Savable, value (the current value only, if not set None is returned)
+        - type, datatype (if not set None is returned)
+        - Savable, default_value (if not set None is returned, Note that the 
+          default can be `None` as a value, for this use 
+          `AbstractConfiguration::defaultExists()`)
+        - bool, ask_if_not_present (if not set None is returned)
+        - str, description (if not set None is returned)
+        - bool, restart_required (if not set None is returned)
+        """
+        for group in self.configuration:
+            for key in self.configuration[group]:
+                row = [group, key]
+
+                try:
+                    row.append(self.getValue(group, key))
+                except KeyError:
+                    row.append(None)
+
+                try:
+                    row.append(self.getDatatype(group, key))
+                except KeyError:
+                    row.append(None)
+
+                try:
+                    row.append(self.getDefault(group, key))
+                except KeyError:
+                    row.append(None)
+
+                try:
+                    row.append(self.getAskIfNotPresent(group, key))
+                except KeyError:
+                    row.append(None)
+
+                try:
+                    row.append(self.getDescription(group, key))
+                except KeyError:
+                    row.append(None)
+
+                try:
+                    row.append(self.getRestartRequired(group, key))
+                except KeyError:
+                    row.append(None)
+
+                yield tuple(row)
+    
+    def __len__(self) -> int:
+        """Get the length of the configuration.
+
+        Note that all elements are counted, also if they do not have a value.
+
+        Returns
+        -------
+        int
+            The number of all configuration definitions
+        """
+        l = 0
+        for group in self.configuration:
+            l += len(self.configuration[group])
+        return l
+    
+    def __getitem__(self, key: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str]]) -> Savable:
+        """Get the item.
+
+        The `key` can either be `("group", "key")` or one of the following:
+        - `("group", "key", "value")`
+        - `("group", "key", "datatype")`
+        - `("group", "key", "default_value")`
+        - `("group", "key", "ask_if_not_present")`
+        - `("group", "key", "description")`
+        - `("group", "key", "restart_required")`
+
+        Raises
+        ------
+        TypeError
+            When the `key` is not a tuple of length 2 or length 3.
+
+        Parameters
+        ----------
+        key : tuple
+            The Key
+        
+        Returns
+        -------
+        Savable
+            The value
+        """
+        if not isinstance(key, tuple) or (len(key) != 2 and len(key) != 3):
+            raise TypeError("Only tuples of the form 'group, key' or " + 
+                            "'group, key, type' are supported.")
+        
+        if len(key) == 2 or (len(key) == 3 and key[2] == "value"):
+            return self.getValue(key[0], key[1], False)
+        elif len(key) == 3:
+            if key[2] == "datatype":
+                return self.getDatatype(key[0], key[1])
+            elif key[2] == "default_value":
+                return self.getDefault(key[0], key[1])
+            elif key[2] == "ask_if_not_present":
+                return self.getAskIfNotPresent(key[0], key[1])
+            elif key[2] == "description":
+                return self.getDescription(key[0], key[1])
+            elif key[2] == "restart_required":
+                return self.getRestartRequired(key[0], key[1])
+            else:
+                raise KeyError("The key '{}' does not exist.".format(key[2]))
+    
+    def __setitem__(self, key: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str]], value: typing.Any) -> Savable:
+        """Set the item.
+
+        The `key` can either be `("group", "key")` or one of the following:
+        - `("group", "key", "value")`
+        - `("group", "key", "datatype")`
+        - `("group", "key", "default_value")`
+        - `("group", "key", "ask_if_not_present")`
+        - `("group", "key", "description")`
+        - `("group", "key", "restart_required")`
+
+        Raises
+        ------
+        TypeError
+            When the `key` is not a tuple of length 2 or length 3.
+
+        Parameters
+        ----------
+        key : tuple
+            The Key
+        
+        Returns
+        -------
+        Savable
+            The value
+        """
+        if not isinstance(key, tuple) or (len(key) != 2 and len(key) != 3):
+            raise TypeError("Only tuples of the form 'group, key' or " + 
+                            "'group, key, type' are supported.")
+        
+        if len(key) == 2 or (len(key) == 3 and key[2] == "value"):
+            return self.setValue(key[0], key[1], value)
+        elif len(key) == 3:
+            args = {key[2]: value}
+            self.addConfigurationOption(key[0], key[1], **args)
+    
+    def __delitem__(self, key: typing.Tuple[str, str]) -> Savable:
+        """Set the item.
+
+        The `key` must be `("group", "key")`.
+
+        Raises
+        ------
+        TypeError
+            When the `key` is not a tuple of length 2.
+
+        Parameters
+        ----------
+        key : tuple
+            The Key
+        """
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise TypeError("Only tuples of the form 'group, key' are supported.")
+        
+        self.removeElement(key[0], key[1])
+    
+    def __iter__(self) -> typing.Iterator[typing.Tuple[str, str]]:
+        """Iterate over the groups and keys."""
+        for group in self.configuration:
+            for key in self.configuration[group]:
+                yield group, key
+    
+    def __contains__(self, key: typing.Tuple[str, str]) -> bool:
+        """Whether the configuration contains the group and key defined at 
+        index 0 and 1 in the `key`.
+        """
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise TypeError("Only tuples of the form 'group, key' are supported.")
+        
+        return self._keyExists(key[0], key[1])
+        
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 

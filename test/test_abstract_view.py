@@ -10,6 +10,9 @@ import pytest
 
 import pylo
 
+# setting configuration for controller
+pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
+
 @pytest.fixture()
 def view():
     return pylo.AbstractView()
@@ -33,14 +36,14 @@ class TestAbstractView:
         """Test if all the functions raise NotImplementedErrors"""
         
         with pytest.raises(NotImplementedError):
-            view.showCreateMeasurement()
+            view.showCreateMeasurement(pylo.Controller())
     
     @pytest.mark.usefixtures("view")
     def test_show_settings_raise_not_implemented(self, view):
         """Test if all the functions raise NotImplementedErrors"""
         
         with pytest.raises(NotImplementedError):
-            view.showSettings()
+            view.showSettings(pylo.Controller())
     
     @pytest.mark.usefixtures("view")
     def test_show_hint_raise_not_implemented(self, view):
@@ -62,13 +65,6 @@ class TestAbstractView:
         
         with pytest.raises(NotImplementedError):
             view.print("Text", "to", "print")
-    
-    @pytest.mark.usefixtures("view")
-    def test_show_running_not_implemented(self, view):
-        """Test if all the functions raise NotImplementedErrors"""
-        
-        with pytest.raises(NotImplementedError):
-            view.showRunning()
     
     @pytest.mark.usefixtures("view")
     def test_ask_for_not_implemented(self, view):

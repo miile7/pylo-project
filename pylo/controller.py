@@ -377,7 +377,7 @@ class Controller:
                 security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
                 
-                measurement_layout = self.view.showCreateMeasurement()
+                measurement_layout = self.view.showCreateMeasurement(self)
                 
                 if(not isinstance(measurement_layout, typing.Collection) or 
                 len(measurement_layout) <= 1):
@@ -425,7 +425,7 @@ class Controller:
             return
         except Exception as e:
             try:
-                self.view.showError("An exception occurred: {}".format(e))
+                self.view.showError(e)
             except StopProgram:
                 self.stopProgramLoop()
                 return
