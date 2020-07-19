@@ -332,6 +332,25 @@ class AbstractConfiguration:
         except KeyError:
             datatype = None
         
+        if datatype == bool:
+            if isinstance(value, str):
+                value = value.lower()
+            
+            if value in ("yes", "y", "true", "t", "on"):
+                value = True
+            elif value in ("no", "n", "false", "f", "off"):
+                value = False
+            else:
+                try:
+                    value = int(value)
+
+                    if value == 0:
+                        value = False
+                    elif value == 1:
+                        value = True
+                except ValueError:
+                    pass
+        
         if callable(datatype):
             return datatype(value)
         else:
@@ -627,6 +646,34 @@ class AbstractConfiguration:
             if len(self.configuration[group]):
                 # group is empty, delete it too
                 del self.configuration[group]
+    
+    def getGroups(self) -> typing.Tuple[str]:
+        """Get all groups that exist.
+
+        Returns
+        -------
+        tuple of str
+            All group names as strings
+        """
+        return tuple(self.configuration.keys())
+    
+    def getKeys(self, group: str) -> typing.Tuple[str]:
+        """Get all keys for a group that exist.
+
+        Raises
+        ------
+        KeyError
+            When the `group` does not exist.
+
+        Returns
+        -------
+        tuple of str
+            All key names as strings
+        """
+        if not group in self.configuration:
+            raise KeyError("The group '{}' does not exist.".format(group))
+        
+        return tuple(self.configuration[group].keys())
     
     def items(self) -> typing.Iterator[typing.Tuple[str, str, Savable, type, Savable, bool, str, bool]]:
         """Get the items to iterate over.

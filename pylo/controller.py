@@ -366,6 +366,9 @@ class Controller:
             
             self.measurement = None
 
+            # save the config
+            self.configuration.saveConfiguration()
+
             # fire init_ready event
             init_ready()
 

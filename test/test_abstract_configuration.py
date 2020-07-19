@@ -540,4 +540,24 @@ class TestConfiguration:
         # check if all values are visited
         assert set(visited_groups) == set(groups)
         assert set(visited_keys) == set(keys)
+    
+    def test_get_groups(self):
+        """Test if the getGroups() function is correct."""
+
+        # all values plus overwrite groups
+        groups = [x[0] for x in complete_test_configuration] + ["overwrite-group"]
+
+        assert set(groups) == set(self.configuration.getGroups())
+    
+    def test_get_keys(self):
+        """Test if the getKeys() function is correct."""
+
+        # all values plus overwrite groups
+        keys = [x[1] for x in complete_test_configuration] + ["value1", "value2"]
+
+        all_keys = []
+        for group in self.configuration.getGroups():
+            all_keys += self.configuration.getKeys(group)
+
+        assert set(keys) == set(all_keys)
         
