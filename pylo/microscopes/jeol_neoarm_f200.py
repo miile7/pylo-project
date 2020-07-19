@@ -1,7 +1,10 @@
 import threading
 import time
 
-import PyJEM.offline.TEM3 as TEM3
+try:
+    import PyJEM.TEM3 as TEM3
+except:
+    import PyJEM.offline.TEM3 as TEM3
 
 from .microscope_interface import MicroscopeInterface
 from ..measurement_variable import MeasurementVariable
