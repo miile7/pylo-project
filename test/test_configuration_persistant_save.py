@@ -34,8 +34,13 @@ import pylo
 # def create_abstract_configuration() -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
 #     return plyo.AbstractConfiguration(), None, None
 
+def create_ini_configuration() -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
+    save_path = os.path.join(os.path.dirname(__file__), "tmp_test_files", "configuration.ini")
+    return pylo.IniConfiguration(save_path), None, None
+
 configurations = (
-    # create_abstract_configuration
+    # create_abstract_configuration,
+    create_ini_configuration, 
 )
 
 ######################## general test code starts here ########################
@@ -48,7 +53,7 @@ example_data = (
      "ask_if_not_present": True}),
     ("group-1", "key-4", False, {"datatype": bool, "default_value": None}),
     ("group-5", "key-1", 1.1, {"datatype": float}),
-    ("group-5", "key-2", -1.1, {}),
+    ("group-5", "key-2", "-1.1", {}),
 )
 
 @pytest.mark.skipif(len(configurations) == 0, reason="There is no configuration, the 'configurations' tuple is empty.")
@@ -59,22 +64,68 @@ class TestConfigurationPersistantSave:
         then loaded again, are the same."""
 
         global example_data
+        # create the configuration
         configuration, load_args, save_args = create_configuration()
 
+        # set the values
         for group, key, value, args in example_data:
             configuration.setValue(group, key, value, **args)
         
+        # save the values
         if isinstance(save_args, (list, tuple)):
             configuration.saveConfiguration(*save_args)
         else:
             configuration.saveConfiguration()
         
-        configuration.configuration = {}
+        # create a new empty configuration
+        configuration, load_args, save_args = create_configuration()
+
+        # define the types without values
+        for group, key, value, args in example_data:
+            configuration.addConfigurationOption(group, key, **args)
         
+        # load the configuration
         if isinstance(load_args, (list, tuple)):
             configuration.loadConfiguration(*load_args)
         else:
             configuration.loadConfiguration()
+            
+        # check the values
+        for group, key, value, args in example_data:
+            assert configuration.getValue(group, key) == value
         
+    @pytest.mark.parametrize("create_configuration", configurations)
+    def test_save_and_define_after_load(self, create_configuration):
+        """Test if values that are set, then the configuration is saved and 
+        then loaded again, are the same."""
+
+        global example_data
+        # create the configuration
+        configuration, load_args, save_args = create_configuration()
+
+        # set the values
+        for group, key, value, args in example_data:
+            configuration.setValue(group, key, value, **args)
+        
+        # save the values
+        if isinstance(save_args, (list, tuple)):
+            configuration.saveConfiguration(*save_args)
+        else:
+            configuration.saveConfiguration()
+        
+        # create a new empty configuration
+        configuration, load_args, save_args = create_configuration()
+        
+        # load the configuration
+        if isinstance(load_args, (list, tuple)):
+            configuration.loadConfiguration(*load_args)
+        else:
+            configuration.loadConfiguration()
+
+        # define the types without values after the load
+        for group, key, value, args in example_data:
+            configuration.addConfigurationOption(group, key, **args)
+
+        # check the values
         for group, key, value, args in example_data:
             assert configuration.getValue(group, key) == value
