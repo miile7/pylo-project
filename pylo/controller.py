@@ -300,8 +300,7 @@ class Controller:
                     self.microscope = None
                     # remove the saved value, this either does not exist or is
                     # wrong, in both cases the user will be asked in the next run
-                    if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
-                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
             
             # show an error that the max loop count is reached and stop the
             # execution
@@ -350,8 +349,7 @@ class Controller:
                     self.camera = None
                     # remove the saved value, this either does not exist or is
                     # wrong, in both cases the user will be asked in the next run
-                    if self.configuration.keyExists(CONFIG_SETUP_GROUP, key):
-                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
 
             # show an error that the max loop count is reached and stop the
             # execution
