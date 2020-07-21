@@ -23,10 +23,15 @@ class PyJEMCamera(CameraInterface):
     """
 
     def __init__(self, controller: "Controller") -> None:
-        """Create a new camera interface object."""
-        self.tags = {}
+        """Create a new camera interface object.
+        
+        Parameters
+        ----------
+        controller : Controller
+            The controller
+        """
 
-        self.controller = controller
+        super().__init__(controller)
 
         self._detector_name = self.controller.configuration.getValue(
             CONFIG_PYJEM_CAMERA_GROUP, "detector-name"
@@ -35,8 +40,6 @@ class PyJEMCamera(CameraInterface):
             CONFIG_PYJEM_CAMERA_GROUP, "image-size"
         )
         self._detector = Detector(self._detector_name)
-
-        super().__init__()
     
     def recordImage(self) -> "Image":
         """Get the image of the current camera.
