@@ -8,20 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import mini_cli
 import pylo
+import pylo.config
 import pylo.microscopes
-
-controller = pylo.Controller()
-
-###############################################################################
-###                                                                         ###
-###         Change only this for testing a different microscope             ###
-###                                                                         ###
-###############################################################################
-
-microscope_class = pylo.microscopes.PyJEMMicroscope
-microscope_args = (controller,)
-
-######################## general test code starts here ########################
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
@@ -36,15 +24,12 @@ class DummyConfiguration(pylo.AbstractConfiguration):
 
         return super().getValue(group, key, fallback_default)
     
-    def addConfigurationOption(self, group, key, datatype=None, default_value=None, 
-                                    ask_if_not_present=None, description=None,
-                                    restart_required=None):
+    def addConfigurationOption(self, group, key, **kwargs):
         if self.logging:
             self.define_log.append((key, group))
 
         return super().addConfigurationOption(
-            group, key, datatype, default_value, ask_if_not_present, 
-            description, restart_required
+            group, key, **kwargs
         )
     
     def loadConfiguration(self):
@@ -61,6 +46,22 @@ class DummyView(pylo.AbstractView):
             ret.append(input("View::askFor({}):".format(inp)))
     
         return ret
+
+pylo.config.CONFIGURATION = DummyConfiguration()
+pylo.config.VIEW = DummyView()
+
+controller = pylo.Controller()
+
+###############################################################################
+###                                                                         ###
+###         Change only this for testing a different microscope             ###
+###                                                                         ###
+###############################################################################
+
+microscope_class = pylo.microscopes.PyJEMMicroscope
+microscope_args = (controller,)
+
+######################## general test code starts here ########################
 
 mini_cli.maxlen = 79
 tabc = 4
@@ -165,34 +166,50 @@ if __name__ == "__main__":
     s = mini_cli.input_yn("Please confirm: Is the microscope in lorenz mode?", 
                           lines_before=0, inset=0, add_inset=tabc)
     test_log.append(("Switch to lorenz mode", s))
+    
+    select = None
 
-    # test measurement variables
-    for var in microscope.supported_measurement_variables:
-        mini_cli.prnt("")
-        mini_cli.prnt(("Now testing {}. Please remember to be carefully with the " + 
-               "values on the first test run!").format(var.name))
-        value = mini_cli.input_int(("Please type in a value for the {} ({}) " + 
-                            "in {}-units. Remember the limits {} <= {} <= {}. " + 
-                            "Also make sure nothing can be damaged. Use " + 
-                            "'s' for [S]kip.").format(
-                                var.name, var.unique_id, var.unit, 
-                                var.min_value, var.unique_id, var.max_value), 
-                            "{} [{}]".format(var.name, var.unit), 
-                            lines_before=0, inset=0, add_inset=tabc, 
-                            add_choices={"s": None})
+    while True:
+        select = mini_cli.input_int(
+            ("Select what you want to test:\n" + 
+            "\n".join(["[{}] for {}".format(i, var.name) 
+                        for i, var in enumerate(microscope.supported_measurement_variables)]) + "\n\n" + 
+            "Type [q] for Quit"),
+            short_text="Number or [q]",
+            min_value=0,
+            max_value=len(microscope.supported_measurement_variables) - 1,
+            add_choices={"q": "q"}
+        )
 
-        if value is not None:
-            mini_cli.prnt("Setting to {} to {}{}...".format(var.name, value, var.unit), end=" ")
-            t = time.time()
-            microscope.setMeasurementVariableValue(var.unique_id, value)
-            mini_cli.prnt("Done. (took {:.3f}s)".format(time.time() - t))
+        if isinstance(select, str) and select.lower().strip() == "q":
+            break
+        elif isinstance(select, int):
+            var = microscope.supported_measurement_variables[select]
+            mini_cli.prnt("")
+            mini_cli.prnt(("Now testing {}. Please remember to be carefully with the " + 
+                "values on the first test run!").format(var.name))
+            value = mini_cli.input_int(("Please type in a value for the {} ({}) " + 
+                                "in {}-units. Remember the limits {} <= {} <= {}. " + 
+                                "Also make sure nothing can be damaged. Use " + 
+                                "'s' for [S]kip.").format(
+                                    var.name, var.unique_id, var.unit, 
+                                    var.min_value, var.unique_id, var.max_value), 
+                                "{} [{}]".format(var.name, var.unit), 
+                                lines_before=0, inset=0, add_inset=tabc, 
+                                add_choices={"s": None})
 
-            s = mini_cli.input_yn(("Please confirm: Is the microscopes {} now " + 
-                                "{}{}?").format(var.name, value, var.unit), 
-                                lines_before=0, inset=0, add_inset=tabc)
-        else:
-            mini_cli.prnt("Skipping test.", inset=tabs)
-            s = None
-        
-        test_log.append(("Setting {} ({})".format(var.name, var.unique_id), s, 
-                         value))
+            if value is not None:
+                mini_cli.prnt("Setting to {} to {}{}...".format(var.name, value, var.unit), end=" ")
+                t = time.time()
+                microscope.setMeasurementVariableValue(var.unique_id, value)
+                mini_cli.prnt("Done. (took {:.3f}s)".format(time.time() - t))
+
+                s = mini_cli.input_yn(("Please confirm: Is the microscopes {} now " + 
+                                    "{}{}?").format(var.name, value, var.unit), 
+                                    lines_before=0, inset=0, add_inset=tabc)
+            else:
+                mini_cli.prnt("Skipping test.", inset=tabs)
+                s = None
+            
+            test_log.append(("Setting {} ({})".format(var.name, var.unique_id), s, 
+                            value))
