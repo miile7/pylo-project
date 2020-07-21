@@ -68,8 +68,8 @@ class PyJEMCamera(CameraInterface):
         configuration.addConfigurationOption(
             CONFIG_PYJEM_CAMERA_GROUP, 
             "detector-name",
-            # get_attached_detector(),
-            str,
+            # datatype=get_attached_detector(),
+            datatype=str,
             ask_if_not_present=True,
             description=("The detector to use to acquire the image."), 
             restart_required=True
@@ -78,7 +78,7 @@ class PyJEMCamera(CameraInterface):
         configuration.addConfigurationOption(
             CONFIG_PYJEM_CAMERA_GROUP, 
             "image-size",
-            int,
+            datatype=int,
             ask_if_not_present=True,
             description=("The size (width has to be equal to height) of the " + 
                          "image the detector makes in px."), 
