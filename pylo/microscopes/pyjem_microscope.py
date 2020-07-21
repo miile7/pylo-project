@@ -11,7 +11,7 @@ from ..measurement_variable import MeasurementVariable
 
 # the group name in the configuration for settings that are related to this
 # microscope
-CONFIG_JEOLNEOARMF200_GROUP = "JEOLNeoARMF200"
+CONFIG_PYJEM_MICROSCOPE_GROUP = "pyjem-microscope"
 
 # the function modes for TEM mode
 FUNCTION_MODE_TEM_MAG = 0
@@ -74,7 +74,7 @@ FL_RATIO_LENSE_ID = 21
 # reserved = 24
 # reserved = 25
 
-class JEOLNeoARMF200(MicroscopeInterface):
+class PyJEMMicroscope(MicroscopeInterface):
     """This class is the interface for communicating with the JEOL NeoARM F200
     TEM.
 
@@ -132,7 +132,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
         try:
             self.magnetic_field_calibration_factor = (
                 self.controller.configuration.getValue(
-                    CONFIG_JEOLNEOARMF200_GROUP, 
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
                     "objective-lense-magnetic-field-calibration"))
         except KeyError:
             self.magnetic_field_calibration_factor = None
@@ -159,13 +159,13 @@ class JEOLNeoARMF200(MicroscopeInterface):
         """Get the magnetic field for the given objective lense current.
 
         This only works if the 
-        `JEOLNeoARMF200::magnetic_field_calibration_factor` is given which is 
+        `PyJEMMicroscope::magnetic_field_calibration_factor` is given which is 
         not always the case. In this case an `AttributeError` is raised.
 
         Raises
         ------
         AttributeError
-            When the `JEOLNeoARMF200::magnetic_field_calibration_factor` is not
+            When the `PyJEMMicroscope::magnetic_field_calibration_factor` is not
             given
         
         Parameters
@@ -192,13 +192,13 @@ class JEOLNeoARMF200(MicroscopeInterface):
         """Get the objective lense current for the given magnetic field.
 
         This only works if the 
-        `JEOLNeoARMF200::magnetic_field_calibration_factor` is given which is 
+        `PyJEMMicroscope::magnetic_field_calibration_factor` is given which is 
         not always the case. In this case an `AttributeError` is raised.
 
         Raises
         ------
         AttributeError
-            When the `JEOLNeoARMF200::magnetic_field_calibration_factor` is not
+            When the `PyJEMMicroscope::magnetic_field_calibration_factor` is not
             given
         
         Parameters
@@ -376,7 +376,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
 
         The value corresponds to I/O output value without carry.
 
-        This function blocks the `JEOLNeoARMF200::_action_lock`
+        This function blocks the `PyJEMMicroscope::_action_lock`
         
         Parameters
         ----------
@@ -401,7 +401,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
     def _setXTilt(self, value : float) -> None:
         """Set the x tilt in degrees.
 
-        This function blocks the `JEOLNeoARMF200::_action_lock`. It will 
+        This function blocks the `PyJEMMicroscope::_action_lock`. It will 
         execute until the x tilt is set correctly.
         
         Parameters
@@ -430,7 +430,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
     def _setYTilt(self, value : float) -> None:
         """Set the y tilt in degrees.
 
-        This function blocks the `JEOLNeoARMF200::_action_lock`. It will 
+        This function blocks the `PyJEMMicroscope::_action_lock`. It will 
         execute until the y tilt is set correctly.
 
         Note that not all probe holders support a y tilt!
@@ -593,7 +593,7 @@ class JEOLNeoARMF200(MicroscopeInterface):
         
         # add the option for the calibration factor
         configuration.addConfigurationOption(
-            CONFIG_JEOLNEOARMF200_GROUP, 
+            CONFIG_PYJEM_MICROSCOPE_GROUP, 
             "objective-lense-magnetic-field-calibration", float, 
             description=("The calibration factor for the objective lense to " + 
             "set the magnetic field at the probe position. The calibration " + 

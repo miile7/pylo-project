@@ -18,7 +18,7 @@ controller = pylo.Controller()
 ###                                                                         ###
 ###############################################################################
 
-microscope_class = pylo.microscopes.JEOLNeoARMF200
+microscope_class = pylo.microscopes.PyJEMMicroscope
 microscope_args = (controller,)
 
 ######################## general test code starts here ########################
