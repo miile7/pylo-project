@@ -89,7 +89,10 @@ class DummyView(pylo.AbstractView):
         print("\tFix: {}".format(how_to_fix))
         
         # display errors, if they are inteded use pytest.raises()
-        raise DummyViewShowsError(error)
+        if isinstance(error, Exception):
+            raise DummyViewShowsError("{}".format(error)).with_traceback(error.__traceback__)
+        else:
+            raise DummyViewShowsError(error)
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
@@ -112,8 +115,8 @@ class DummyImage(pylo.Image):
 
 use_dummy_images = False
 class DummyCamera(pylo.cameras.CameraInterface):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, controller):
+        super().__init__(controller)
         self.clear()
     
     def clear(self):
@@ -134,7 +137,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
 
 measurement_duration_time = -1
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
-    def __init__(self):
+    def __init__(self, controller):
         super().__init__()
         self.clear()
 
@@ -427,7 +430,7 @@ class TestController:
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root(self, controller):
-        """Test whether the _dynamicCreateClass() function works for a file
+        """Test whether the _dynamicGetClasses() function works for a file
         in the pylo root directory."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -435,14 +438,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name")
-        
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
+
+        obj = controller._dynamicCreateClass(obj)
         self.check_dynamic_created_object(obj, class_name)
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_extension(self, controller):
-        """Test whether the _dynamicCreateClass() function works for a file
+        """Test whether the _dynamicGetClasses() function works for a file
         in the pylo root directory."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -450,13 +460,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module + ".py")
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name")
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
         
+        obj = controller._dynamicCreateClass(obj)
+        self.check_dynamic_created_object(obj, class_name)
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_args(self, controller):
-        """Test whether the _dynamicCreateClass() function works with 
+        """Test whether the _dynamicGetClasses() function works with 
         constructor arguments."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -465,15 +483,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
         args = ("A", "B", "C")
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name",
-                                             constructor_args=args)
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
+        obj = controller._dynamicCreateClass(obj, constructor_args=args)
         
         self.check_dynamic_created_object(obj, class_name, args)
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_args_and_class_2(self, controller):
-        """Test whether the _dynamicCreateClass() function works with two 
+        """Test whether the _dynamicGetClasses() function works with two 
         classes loaded form the same source."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -486,20 +510,28 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-class-name2", class_name2)
 
         args1 = ("A", "B", "C")
-        obj1 = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name",
-                                             constructor_args=args1)
         args2 = ("D", "E", "F")
-        obj2 = controller._dynamicCreateClass("dummy-test-module-name2", 
-                                             "dummy-test-class-name2",
-                                             constructor_args=args2)
+        obj = controller._dynamicGetClasses(
+            ("dummy-test-module-name", "dummy-test-class-name"),
+            ("dummy-test-module-name2", "dummy-test-class-name2")
+        )
+
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 2
+
+        obj1, obj2 = obj
+        assert isinstance(obj1, type)
+        assert isinstance(obj2, type)
+
+        obj1 = controller._dynamicCreateClass(obj1, constructor_args=args1)
+        obj2 = controller._dynamicCreateClass(obj2, constructor_args=args2)
         
         self.check_dynamic_created_object(obj1, class_name, args1)
         self.check_dynamic_created_object(obj2, class_name2, args2)
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_submodule(self, controller):
-        """Test whether the _dynamicCreateClass() function works for a file
+        """Test whether the _dynamicGetClasses() function works for a file
         in the micrsocopes subdirectory."""
 
         path = os.path.join(pylo_root, "microscopes")
@@ -508,14 +540,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name")
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+        
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
+        obj = controller._dynamicCreateClass(obj)
         
         self.check_dynamic_created_object(obj, class_name)
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_cwd(self, controller):
-        """Test whether the _dynamicCreateClass() function works for a file
+        """Test whether the _dynamicGetClasses() function works for a file
         in the current working directory."""
 
         # this should be the current working directory
@@ -529,14 +568,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name")
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+        
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
+        obj = controller._dynamicCreateClass(obj)
         
         self.check_dynamic_created_object(obj, class_name)
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_test(self, controller):
-        """Test whether the _dynamicCreateClass() function works for a file
+        """Test whether the _dynamicGetClasses() function works for a file
         in the current working directory."""
 
         # this should be the current working directory
@@ -550,14 +596,21 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        obj = controller._dynamicCreateClass("dummy-test-module-name", 
-                                             "dummy-test-class-name")
+        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
+                                             "dummy-test-class-name"))
+        
+        assert isinstance(obj, (list, tuple))
+        assert len(obj) == 1
+
+        obj = obj[0]
+        assert isinstance(obj, type)
+        obj = controller._dynamicCreateClass(obj)
         
         self.check_dynamic_created_object(obj, class_name)
 
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_module_does_not_exist(self, controller):
-        """Test whether the _dynamicCreateClass() function raises an exception
+        """Test whether the _dynamicGetClasses() function raises an exception
         when the module does not exist."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -566,12 +619,12 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
         with pytest.raises(ModuleNotFoundError):
-            controller._dynamicCreateClass("dummy-test-module-name", 
-                                           "dummy-test-class-name")
+            controller._dynamicGetClasses(("dummy-test-module-name", 
+                                           "dummy-test-class-name"))
         
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_class_does_not_exist(self, controller):
-        """Test whether the _dynamicCreateClass() function raises an exception
+        """Test whether the _dynamicGetClasses() function raises an exception
         when the class does not exist."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -580,12 +633,12 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-class-name", "thisdoesnotexist")
 
         with pytest.raises(AttributeError):
-            controller._dynamicCreateClass("dummy-test-module-name", 
-                                           "dummy-test-class-name")
+            controller._dynamicGetClasses(("dummy-test-module-name", 
+                                           "dummy-test-class-name"))
         
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_class_is_not_a_class(self, controller):
-        """Test whether the _dynamicCreateClass() function raises an exception
+        """Test whether the _dynamicGetClasses() function raises an exception
         when the class is not a class."""
 
         filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
@@ -594,8 +647,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-class-name", "thisisnotaclass")
 
         with pytest.raises((NameError, TypeError)):
-            controller._dynamicCreateClass("dummy-test-module-name", 
-                                           "dummy-test-class-name")
+            controller._dynamicGetClasses(("dummy-test-module-name", 
+                                           "dummy-test-class-name"))
     
     def before_init_handler(self):
         """The event handler for the before_init event."""
@@ -917,7 +970,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module could not be found" in e[0]:
+            if "The microscope or the camera module could not be found" in str(e[0]):
                 found = True
                 break
         
@@ -935,7 +988,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module could be loaded" in e[0]:
+            if "the given class either does not exist or is not a class" in str(e[0]):
                 found = True
                 break
         
@@ -953,7 +1006,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module could not be found" in e[0]:
+            if "The microscope or the camera module could not be found" in str(e[0]):
                 found = True
                 break
         
@@ -971,7 +1024,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module could be loaded" in e[0]:
+            if "the given class either does not exist or is not a class" in str(e[0]):
                 found = True
                 break
         
@@ -989,7 +1042,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The view returned an invalid measurement" in e[0]:
+            if "The view returned an invalid measurement" in str(e[0]):
                 found = True
                 break
         
@@ -1011,7 +1064,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The measurement could not be initialized" in e[0]:
+            if "The measurement could not be initialized" in str(e[0]):
                 found = True
                 break
         
@@ -1033,7 +1086,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The measurement could not be initialized" in e[0]:
+            if "The measurement could not be initialized" in str(e[0]):
                 found = True
                 break
         
@@ -1055,7 +1108,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The measurement could not be initialized" in e[0]:
+            if "The measurement could not be initialized" in str(e[0]):
                 found = True
                 break
         
@@ -1099,7 +1152,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "Test exception" in e[0]:
+            if "Test exception" in str(e[0]):
                 found = True
                 break
         
@@ -1118,8 +1171,7 @@ class TestController:
         equal to the user clicking the cancel button."""
 
         controller.view.ask_for_response.append(
-            ((group, key), 
-             self.raise_stop_program)
+            ((group, key), self.raise_stop_program)
         )
 
         controller.configuration.removeElement(group, key)
@@ -1135,8 +1187,8 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
-                for_camera)
+        # assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
+        #         for_camera)
         assert not isinstance(controller.camera, pylo.cameras.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
