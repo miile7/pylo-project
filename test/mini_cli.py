@@ -291,9 +291,9 @@ def input_int(text, short_text="", min_value=None, max_value=None, **kwargs):
         The value
     """
     short_text = [short_text]
-    num_re = re.compile(r"^\s*[\d]+\s*$")
+    num_re = re.compile(r"^\s*-?\s*([\d]+|0(?:x|X)[\da-fA-F])\s*$")
     is_numeric = lambda x: num_re.match(x) is not None
-    error_msg = "The value must only be digits"
+    error_msg = "The value must only be digits or a hex value with leading '0x'"
 
     if isinstance(min_value, int) and isinstance(max_value, int):
         short_text.append("{} <= value <= {}".format(min_value, max_value))
@@ -319,7 +319,7 @@ def input_int(text, short_text="", min_value=None, max_value=None, **kwargs):
         short_text,
         is_valid, 
         lambda x: error_msg,
-        post_process=int,
+        post_process=lambda x: int(x, base=16) if str(x[0:2]).lower() == "0x" else int(x),
         **kwargs
     )
 
@@ -417,3 +417,6 @@ def input_filesave(text, short_text="", default_filename="", extensions="",
         post_process=os.path.abspath,
         **kwargs
     )
+
+if __name__ == "__main__":
+    print(input_int("Input int"))
