@@ -171,10 +171,9 @@ if __name__ == "__main__":
 
     while True:
         select = mini_cli.input_int(
-            ("Select what you want to test:\n" + 
+            ("Select what you want to test or enter [q] for quit:\n" + 
             "\n".join(["[{}] for {}".format(i, var.name) 
-                        for i, var in enumerate(microscope.supported_measurement_variables)]) + "\n\n" + 
-            "Type [q] for Quit"),
+                        for i, var in enumerate(microscope.supported_measurement_variables)])),
             short_text="Number or [q]",
             min_value=0,
             max_value=len(microscope.supported_measurement_variables) - 1,
