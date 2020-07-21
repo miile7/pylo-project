@@ -243,30 +243,25 @@ class PyJEMMicroscope(MicroscopeInterface):
         # which will mess up things
         self._action_lock.acquire()
 
-        if self._stage.GetHolderStts() == 0:
-            raise IOError("The holder is not inserted.")
+        # if self._stage.GetHolderStts() == 0:
+        #     raise IOError("The holder is not inserted.")
 
         if lorenz_mode:
             # select TEM mode
             self._eos.SelectProbMode(PROBE_MODE_TEM)
-            # select low mag mode
+            # select low mag mode, this is the most important step because this
+            # will re-arrange the lense currents and apply the focus using the 
+            # objective mini lense
             self._eos.SelectFunctionMode(FUNCTION_MODE_TEM_LowMAG)
 
-            # endable free lense control for objective fine and coarse lense
-            self._lense_control.SetFLCSw(OL_FINE_LENSE_ID, 1)
-            self._lense_control.SetFLCSw(OL_COARSE_LENSE_ID, 1)
-
-            # switch off fine and coarse objective lense
+            # switch off fine and coarse objective lense, even though this is 
+            # done by the low mag mode anyway
             self._lense_control.SetOLc(0)
             self._lense_control.SetOLf(0)
 
             # self._lense_control.SetOLSuperFineNeutral()
 
         else:
-            # disable free lense control for objective fine and coarse lense
-            self._lense_control.SetFLCSw(OL_FINE_LENSE_ID, 0)
-            self._lense_control.SetFLCSw(OL_COARSE_LENSE_ID, 0)
-
             # keep tem mode
             self._eos.SelectProbMode(PROBE_MODE_TEM)
             # select normal mag mode
@@ -594,9 +589,11 @@ class PyJEMMicroscope(MicroscopeInterface):
         # add the option for the calibration factor
         configuration.addConfigurationOption(
             CONFIG_PYJEM_MICROSCOPE_GROUP, 
-            "objective-lense-magnetic-field-calibration", float, 
+            "objective-lense-magnetic-field-calibration", 
+            datatype=float, 
             description=("The calibration factor for the objective lense to " + 
             "set the magnetic field at the probe position. The calibration " + 
             "factor is defined as the magnetic field per current. The unit is " + 
-            "then [magnetic field]/[current]."), restart_required=True
+            "then [magnetic field]/[current]."), 
+            restart_required=True
         )
