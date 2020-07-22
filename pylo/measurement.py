@@ -1,5 +1,6 @@
 import datetime
 import typing
+import csv
 import os
 
 import numpy as np
@@ -66,6 +67,7 @@ class Measurement:
         
         self.current_image = None
         self.running = False
+        self.logging = True
 
         # stop the measurement when the emergency event is fired
         emergency.append(self.stop)
@@ -207,6 +209,10 @@ class Measurement:
                 # the asynchronous threads to set the values at the micrsocope
                 measurement_variable_threads = []
 
+                if self.logging:
+                    # add the values to reach to the current log
+                    self.addToLog("Targetting values", step)
+
                 for variable_name in step:
                     # set each measurement variable
                     if not self.running:
@@ -243,6 +249,23 @@ class Measurement:
                 
                 # record measurement
                 self.current_image = self.controller.camera.recordImage()
+                name = self.formatName()
+                
+                if not self.running:
+                    # stop() is called
+                    return
+                
+                if self.logging:
+                    # add the actual values to the current log
+                    variable_values = {
+                        "record-name": name
+                    }
+                    for variable_name in step:
+                        variable_values[variable_name] = (
+                            self.controller.microscope.getMeasurementVariableValue(variable_name)
+                        )
+                    
+                    self.addToLog("Recording image", variable_values)
                 
                 if not self.running:
                     # stop() is called
@@ -255,7 +278,6 @@ class Measurement:
                     # stop() is called, maybe by after_record() event handler
                     return
                 
-                name = self.formatName()
                 # save the image parallel to working on
                 thread = ExceptionThread(
                     target=self.current_image.saveTo,
@@ -322,9 +344,53 @@ class Measurement:
 
         self.running = False
         self._setSafe()
+        self.closeLog()
 
         # fire stop event
         after_stop()
+    
+    def setupLog(self, variable_ids: typing.List[str], 
+                 before_columns: typing.Optional[typing.List[str]]=[], 
+                 after_columns: typing.Optional[typing.List[str]]=[]) -> None:
+        """Define the log format."""
+
+        self._log_path = self.controller.configuration.getValue("measurement", "log-save-path")
+        self._log_file = open(self._log_path, "w+")
+        self._log_writer = csv.writer(
+            self._log_file, delimiter=",", quotechar="\"", quoting=csv.QUOTE_MINIMAL
+        )
+
+        self._log_columns = before_columns + variable_ids + after_columns
+        column_headlines = before_columns
+
+        for id_ in variable_ids:
+            var = self.controller.microscope.getMeasurementVariableById(id_)
+            column_headlines.append(
+                str(var.name) + " " + 
+                str(var.unique_id) + 
+                ((" [" + str(var.unit) + "]") if var.unit is not None else "")
+            )
+
+            if var.has_calibration:
+                column_headlines.append(
+                    str(var.calibrated_name) + " " + 
+                    str(var.unique_id) + 
+                    ((" [" + str(var.calibrated_unit) + "]") 
+                     if var.calibrated_unit is not None else "")
+                )
+
+        column_headlines += after_columns
+        self._addToLog(column_headlines)
+    
+    def addToLog(self, *columns):
+        """Add a line of columns to the log"""
+
+    def _addToLog(self, cells):
+        self._log_writer.writerow(cells)
+    
+    def closeLog(self):
+        """Close the log."""
+        self._log_file.close()
     
     @classmethod
     def fromSeries(class_, controller: "Controller", start_conditions: dict, 
@@ -598,19 +664,25 @@ class Measurement:
         # import as late as possible to allow changes by extensions
         from .config import DEFAULT_SAVE_DIRECTORY
         from .config import DEFAULT_SAVE_FILE_NAME
+        from .config import DEFAULT_LOG_PATH
         
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-directory", datatype=str, 
-            default_value=DEFAULT_SAVE_DIRECTORY, ask_if_not_present=True,
+            "measurement", "save-directory", 
+            datatype=str, 
+            default_value=DEFAULT_SAVE_DIRECTORY, 
+            ask_if_not_present=True,
             description="The directory where to save the camera images to " + 
-            "that are recorded while measuring.")
+            "that are recorded while measuring."
+        )
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-file-format", datatype=str, 
-            default_value=DEFAULT_SAVE_FILE_NAME, ask_if_not_present=True,
+            "measurement", "save-file-format", 
+            datatype=str, 
+            default_value=DEFAULT_SAVE_FILE_NAME, 
+            ask_if_not_present=True,
             description="The name format to use to save the recorded images. " + 
             "Some placeholders can be used. Use {counter} to get the current " + 
             "measurement number, use {tags[your_value]} to get use the " + 
@@ -621,7 +693,16 @@ class Measurement:
             "according to the python `strftime()` format, started with a " + 
             "colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and " + 
             "hour minute and second. Make sure to inculde the file extension " + 
-            "but use supported extensions only.")
+            "but use supported extensions only."
+        )
+        
+        configuration.addConfigurationOption(
+            "measurement", "log-save-path",
+            datatype=str,
+            defaut_value=DEFAULT_LOG_PATH,
+            description=("The file path (including the file name) to save " + 
+            "log to.")
+        )
     
 def cust_range(*args, rtol=1e-05, atol=1e-08, include=[True, False]):
     """
