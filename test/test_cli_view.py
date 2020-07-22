@@ -1016,7 +1016,7 @@ class TestCLIView:
         # check results
         assert len(results) == len(expected)
 
-        for i, r in results:
+        for i, r in enumerate(results):
             assert r == expected[i]
             assert type(r) == type(expected[i])
     

@@ -699,8 +699,8 @@ class CLIView(AbstractView):
         if command == False:
             raise StopProgram
         elif command == True:
-            # return tuple(map(lamda x: x[1], sorted(values.items(), key=lambda x: x[0])))
-            return tuple(sorted(values.items(), key=lambda x: x[0]))
+            return tuple(map(lambda x: x[1], sorted(values.items(), key=lambda x: x[0])))
+            # return tuple(sorted(values.items(), key=lambda x: x[0]))
         else:
             return self._askForLoop(inputs, values, **kwargs)
 
