@@ -55,8 +55,8 @@ class MeasurementVariable:
                  min_value: typing.Optional[float]=None, 
                  max_value: typing.Optional[float]=None, 
                  unit: typing.Optional[str]=None,
-                 calibration: typing.Optional[int, float, callable]=None,
-                 uncalibration: typing.Optional[int, float, callable]=None,
+                 calibration: typing.Optional[typing.Union[int, float, callable]]=None,
+                 uncalibration: typing.Optional[typing.Union[int, float, callable]]=None,
                  uncalibrated_unit: typing.Optional[str]=None,
                  uncalibrated_name: typing.Optional[str]=None,
                  uncalibrated_min: typing.Optional[float]=None,
@@ -111,16 +111,16 @@ class MeasurementVariable:
         self.max_value = max_value
         self.unit = unit
 
-        if (isinstance(calibration, callable) and 
-              isinstance(uncalibration, callable)):
+        if (callable(calibration) and 
+            callable(uncalibration)):
             self._calibration = calibration
             self._uncalibration = uncalibration
             self.has_calibration = True
-        elif isinstance(calibration, callable):
+        elif callable(calibration):
             raise ValueError("The calibration is a callable but the " + 
                              "uncalibration is not. Either both or none " + 
                              "of the values can be a callable.")
-        elif isinstance(uncalibration, callable):
+        elif callable(uncalibration):
             raise ValueError("The uncalibration is a callable but the " + 
                              "calibration is not. Either both or none " + 
                              "of the values can be a callable.")
@@ -152,7 +152,7 @@ class MeasurementVariable:
             
             # fix the max value if necessary
             if isinstance(uncalibrated_max, (int, float)):
-                if isinstance(self.min_value, (int, float)):
+                if isinstance(self.max_value, (int, float)):
                     self.max_value = min(self.max_value, self.convertToCalibrated(
                         uncalibrated_max
                     ))
@@ -182,14 +182,14 @@ class MeasurementVariable:
         """
 
         if self.has_calibration:
-            if isinstance(self._calibration, callable):
+            if callable(self._calibration):
                 return self._calibration(uncalibrated_value)
             elif isinstance(self._calibration, (int, float)):
                 return uncalibrated_value * self._calibration
         
         return uncalibrated_value
         
-    def convertToUnCalibrated(self, calibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
+    def convertToUncalibrated(self, calibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
         """Convert the `calibrated_value` to a uncalibrated value.
 
         If there is no uncalibration given, the same value is returned.
@@ -206,7 +206,7 @@ class MeasurementVariable:
         """
 
         if self.has_calibration:
-            if isinstance(self._uncalibration, callable):
+            if callable(self._uncalibration):
                 return self._uncalibration(calibrated_value)
             elif isinstance(self._uncalibration, (int, float)):
                 return calibrated_value * self._uncalibration
