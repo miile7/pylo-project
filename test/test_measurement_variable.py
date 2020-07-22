@@ -152,3 +152,22 @@ class TestMeasurementVariable:
 
         assert var.min_value == expected_min
         assert var.max_value == expected_max
+    
+    @pytest.mark.parametrize("format", [
+        int, 
+        float, 
+        bool, 
+        lambda x: str(x * 100) + "%",
+        pylo.Datatype(
+            "is-a-type", 
+            lambda x: "is a" if x == "a" else "not a", 
+            lambda x: x == "a"
+        )
+    ])
+    def test_format(self, format):
+        """Test if a format is always converted to a Datatype or a type."""
+        id_, name = self.randomIdAndName()
+
+        var = pylo.MeasurementVariable(id_, name, format=format)
+
+        assert isinstance(var.format, (type, pylo.Datatype))

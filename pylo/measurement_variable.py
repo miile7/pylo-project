@@ -1,5 +1,7 @@
-import typing
 import math
+import typing
+
+from .datatype import Datatype
 
 class MeasurementVariable:
     """A physical variable that can be changed.
@@ -49,6 +51,8 @@ class MeasurementVariable:
         The maximum value that is allowed or None to allow any value
     unit : str or None
         The unit this measurement variable is expressed in, None for no unit
+    format : Datatype or type
+        A Datatype or type to format the input and output
     has_calibration : bool
         Whether there is a calibration factor (or function) that can calculate
         between two systems
@@ -56,18 +60,22 @@ class MeasurementVariable:
         The units of the calibrated system, None for no unit
     calibrated_name : str or None
         The name of the calibrated system if there is one, None for no name
+    calibration_format : Datatype or type
+        A Datatype or type to format the input and output
     """
 
     def __init__(self, unique_id: str, name: str, 
                  min_value: typing.Optional[float]=None, 
                  max_value: typing.Optional[float]=None, 
                  unit: typing.Optional[str]=None,
+                 format : typing.Optional[typing.Union[type, "Datatype", callable]]=float,
                  calibration: typing.Optional[typing.Union[int, float, callable]]=None,
                  uncalibration: typing.Optional[typing.Union[int, float, callable]]=None,
                  calibrated_unit: typing.Optional[str]=None,
                  calibrated_name: typing.Optional[str]=None,
                  calibrated_min: typing.Optional[float]=None,
-                 calibrated_max: typing.Optional[float]=None):
+                 calibrated_max: typing.Optional[float]=None,
+                 calibrated_format : typing.Optional[typing.Union[type, "Datatype", callable]]=float):
         """Create a MeasurementVariable.
 
         Raises
@@ -92,6 +100,11 @@ class MeasurementVariable:
         unit : str, optional
             The unit this measurement variable is expressed in, None for no 
             unit
+        format : Datatype, type or callable, optional
+            A Datatype or a callable that format the output (and in the first 
+            case also the input) format or a type that can be used for the 
+            input and the default python `format` function will be used for the 
+            output formatting, default: float
         calibration, uncalibration : int or float or callable, optional
             A calibration (multiplication) factor or a function to calculate 
             from the uncalibrated value to the calibrated, if one of them is 
@@ -112,12 +125,26 @@ class MeasurementVariable:
             min for `max_value`) of both is saved, note that the `min_value` 
             or the `max_value` do not have to be given, this is intended to 
             set the min and max if the limits are in the uncalibrated space
+        format : Datatype, type or callable, optional
+            A type, Datatype or a callable that formats the output and 
+            optinonally the input for the calibrated value, in the same way as
+            the normal `format` parameter, default: float
         """
         self.unique_id = unique_id
         self.name = name
         self.min_value = min_value
         self.max_value = max_value
         self.unit = unit
+
+        if not isinstance(format, type) and not isinstance(format, Datatype):
+            self.format = Datatype(
+                (self.unit 
+                    if self.unit is not None 
+                    else "{}-type".format(self.unique_id)),
+                format
+            )
+        else:
+            self.format = format
 
         if (callable(calibration) and 
             callable(uncalibration)):
@@ -169,9 +196,21 @@ class MeasurementVariable:
             
             self.calibrated_name = calibrated_name
             self.calibrated_unit = calibrated_unit
+
+            if (not isinstance(calibrated_format, type) and 
+                not isinstance(calibrated_format, Datatype)):
+                self.calibrated_format = Datatype(
+                    (self.calibrated_unit 
+                        if self.calibrated_unit is not None 
+                        else "{}-type".format(self.unique_id)),
+                    calibrated_format
+                )
+            else:
+                self.calibrated_format = calibrated_format
         else:
             self.calibrated_name = None
             self.calibrated_unit = None
+            self.calibrated_format = None
         
     def convertToCalibrated(self, uncalibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
         """Convert the `uncalibrated_value` to a calibrated value.
