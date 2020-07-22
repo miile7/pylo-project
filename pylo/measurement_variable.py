@@ -1,4 +1,5 @@
 import typing
+import math
 
 class MeasurementVariable:
     """A physical variable that can be changed.
@@ -7,26 +8,75 @@ class MeasurementVariable:
     microscope. Typically this is the focus, the magnetic field (via the 
     objective lense), the tilt of the specimen ect.
 
+    This supports calibration factors. The "calibrated value" in the following 
+    is the value that can be used after the calibration is set 
+    (`calibrated_name`, e.g. magnetic field). The "uncalibrated value" is the 
+    original value the microscope uses internally which mostly is a current
+    value or a voltage (`name`, e.g. objective lense current).
+    
+    The calibration (factor) will then calculate from the uncalibrated (lense 
+    current) to the calibrated (magnetic field) value by multiplication. The 
+    uncalibration (factor) is the opposite: Multiplying it with the 
+    uncalibrated value (lense current) will return in the calibrated value 
+    (magnetic field).
+
+    So as a short example:
+    ```
+    <calibrated value> = <uncalibrated value> * calibration
+    <uncalibrated value> = <calibrated value> * uncalibration
+
+    so with <magnetic field> = Calibrated; <lense current> = Uncalibrated
+    
+    <magnetic field> = <lense current> * calibration
+    <lense current> = <magnetic field> * uncalibration
+    ```
+
+    If there is no special name for the calibrated value but just a factor to 
+    correct the value, use `calibration_name=None`. Same goes for the unit
+    (even though it is recommended to somehow state that this is a different 
+    unit now).
+
     Attributes
     ----------
     unique_id : str
         A unique id that defines this measurement variable, use lower ASCII 
         only, use minus (-) instead of spaces, must not start with numbers
     name : str
-        The name to show in the GUI
+        The name of the value the microscope modifies
     min_value : float or None
         The minimum value that is allowed or None to allow any value
     max_value : float or None
         The maximum value that is allowed or None to allow any value
     unit : str or None
         The unit this measurement variable is expressed in, None for no unit
+    has_calibration : bool
+        Whether there is a calibration factor (or function) that can calculate
+        between two systems
+    calibrated_unit : str or None
+        The units of the calibrated system, None for no unit
+    calibrated_name : str or None
+        The name of the calibrated system if there is one, None for no name
     """
 
     def __init__(self, unique_id: str, name: str, 
                  min_value: typing.Optional[float]=None, 
                  max_value: typing.Optional[float]=None, 
-                 unit: typing.Optional[str]=None):
+                 unit: typing.Optional[str]=None,
+                 calibration: typing.Optional[typing.Union[int, float, callable]]=None,
+                 uncalibration: typing.Optional[typing.Union[int, float, callable]]=None,
+                 calibrated_unit: typing.Optional[str]=None,
+                 calibrated_name: typing.Optional[str]=None,
+                 calibrated_min: typing.Optional[float]=None,
+                 calibrated_max: typing.Optional[float]=None):
         """Create a MeasurementVariable.
+
+        Raises
+        ------
+        TypeError, ValueError
+            When the calibration and uncalibration are of an invalid type or 
+            invalid type
+        ZeroDivisionError
+            When the calibration or uncalibration are equal to zero
 
         Parameters
         ----------
@@ -40,10 +90,133 @@ class MeasurementVariable:
         max_value : float, optional
             The maximum value that is allowed or None to allow any value
         unit : str, optional
-            The unit this measurement variable is expressed in, None for no unit
+            The unit this measurement variable is expressed in, None for no 
+            unit
+        calibration, uncalibration : int or float or callable, optional
+            A calibration (multiplication) factor or a function to calculate 
+            from the uncalibrated value to the calibrated, if one of them is 
+            a number, the other one is the reciprocal so it does not have to be 
+            given, if a callable is used, both have to be given, both have to
+            be of the same type, `<calibrated value> = <uncalibrated value> * 
+            calibration` and the other way around
+        calibrated_unit : str, optional
+            The unit the uncalibrated value is measured in, if None no unit 
+            is used, ignored if there is no `calibration` given
+        calibrated_name : str
+            The name of the uncalibrated value if there is a name, ignored if
+            there is no `calibration` given
+        calibrated_min, uncalibrated_max : float, optional
+            The minimum and maximum value of the uncalibrated value, this 
+            should be equal to the `min_value` or the `max_value` but in the 
+            other units, if not the maximum or the minimum (max for `min_value`,
+            min for `max_value`) of both is saved, note that the `min_value` 
+            or the `max_value` do not have to be given, this is intended to 
+            set the min and max if the limits are in the uncalibrated space
         """
         self.unique_id = unique_id
         self.name = name
         self.min_value = min_value
         self.max_value = max_value
         self.unit = unit
+
+        if (callable(calibration) and 
+            callable(uncalibration)):
+            self._calibration = calibration
+            self._uncalibration = uncalibration
+            self.has_calibration = True
+        elif callable(calibration):
+            raise ValueError("The calibration is a callable but the " + 
+                             "uncalibration is not. Either both or none " + 
+                             "of the values can be a callable.")
+        elif callable(uncalibration):
+            raise ValueError("The uncalibration is a callable but the " + 
+                             "calibration is not. Either both or none " + 
+                             "of the values can be a callable.")
+        elif isinstance(calibration, (int, float)):
+            self._calibration = calibration
+            self._uncalibration = 1 / calibration
+            self.has_calibration = True
+        elif isinstance(uncalibration, (int, float)):
+            self._calibration = 1 / uncalibration
+            self._uncalibration = uncalibration
+            self.has_calibration = True
+        elif calibration is not None or uncalibration is not None:
+            raise TypeError("The calibration and the uncalibration have to " + 
+                            "either be both callables or one of them has to " + 
+                            "be a number.")
+        else:
+            # no calibration given
+            self.has_calibration = False
+        
+        if self.has_calibration:
+            # fix the min value if necessary
+            if isinstance(calibrated_min, (int, float)):
+                if isinstance(self.min_value, (int, float)):
+                    self.min_value = max(self.min_value, self.convertToUncalibrated(
+                        calibrated_min
+                    ))
+                else:
+                    self.min_value = self.convertToUncalibrated(calibrated_min)
+            
+            # fix the max value if necessary
+            if isinstance(calibrated_max, (int, float)):
+                if isinstance(self.max_value, (int, float)):
+                    self.max_value = min(self.max_value, self.convertToUncalibrated(
+                        calibrated_max
+                    ))
+                else:
+                    self.max_value = self.convertToUncalibrated(calibrated_max)
+            
+            self.calibrated_name = calibrated_name
+            self.calibrated_unit = calibrated_unit
+        else:
+            self.calibrated_name = None
+            self.calibrated_unit = None
+        
+    def convertToCalibrated(self, uncalibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
+        """Convert the `uncalibrated_value` to a calibrated value.
+
+        If there is no calibration given, the same value is returned.
+
+        Parameters
+        ----------
+        uncalibrated_value : int or float
+            The uncalibrated value
+        
+        Returns
+        -------
+        int or float
+            The calibrated value
+        """
+
+        if self.has_calibration:
+            if callable(self._calibration):
+                return self._calibration(uncalibrated_value)
+            elif isinstance(self._calibration, (int, float)):
+                return uncalibrated_value * self._calibration
+        
+        return uncalibrated_value
+        
+    def convertToUncalibrated(self, calibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
+        """Convert the `calibrated_value` to a uncalibrated value.
+
+        If there is no uncalibration given, the same value is returned.
+
+        Parameters
+        ----------
+        calibrated_value : int or float
+            The calibrated value
+        
+        Returns
+        -------
+        int or float
+            The uncalibrated value
+        """
+
+        if self.has_calibration:
+            if callable(self._uncalibration):
+                return self._uncalibration(calibrated_value)
+            elif isinstance(self._uncalibration, (int, float)):
+                return calibrated_value * self._uncalibration
+        
+        return calibrated_value

@@ -85,12 +85,37 @@ class Controller:
         self.measurement = None
         self._measurement_thread = None
     
-    def _dynamicCreateClass(self, config_key_module: str, config_key_class: str, 
-                              module_options: typing.Optional[typing.Collection]=None, 
-                              class_options: typing.Optional[typing.Collection]=None,
-                              constructor_args: typing.Optional[typing.Collection]=None) -> object:
-        """Dynamically create the an object of the given module and class where
-        the module and class are loaded form the config.
+    def _dynamicCreateClass(self, class_: type, 
+                            constructor_args: typing.Optional[typing.Collection]=None) -> object:
+        """Dynamically create the an object of the `class_`.
+
+        Raises
+        ------
+        NameError, TypeError
+            When the `class_` is not a class
+
+        Parameters
+        ----------
+        class_ : str
+            The class to create
+        constructor_args : tuple, optional
+            The arguments for the construtor
+        
+        Returns
+        -------
+            The object of the class in the module
+        """
+        
+        if isinstance(constructor_args, typing.Collection):
+            return class_(*constructor_args)
+        else:
+            return class_()
+
+    def _dynamicGetClasses(self, *class_config: typing.Union[typing.Tuple[str, str], 
+                                                    typing.Tuple[str, str, typing.Collection], 
+                                                    typing.Tuple[str, str, typing.Collection, typing.Collection]]) -> type:
+        """Dynamically get the class of the given module and class where the 
+        module and class are loaded form the config.
 
         If the config does not contain the keys or there are not the values 
         given, the module and class are asked from the user.
@@ -98,51 +123,69 @@ class Controller:
         Raises
         ------
         ModuleNotFoundError
-            When the `module_name` is not a valid module
+            When the module name saved in `config_key_module` is not a valid 
+            module
         AttributeError
-            When the `class_name` does not exist in the given module
-        NameError, TypeError
-            When the `class_name` exists in the module but is not a class
+            When the class name saved in `class_options` does not exist in the 
+            given module
+        TypeError
+            When the class name saved in `class_options` exists in the module 
+            but is not a class
 
         Parameters
         ----------
-        config_key_module : str
-            The key name in the configuration of the module to load the object 
-            from
-        config_key_class : str
-            The key name in the configuration of the class
-        module_options : Collection, optional
-            The options of the modules to show to the user if the key is not 
-            given
-        class_options : Collection, optional
-            The options of the classes to show to the user if the key is not 
-            given
-        constructor_args : tuple, optional
-            The arguments to pass to the constructor
+        class_config : tuple
+            The load class configuration with the 
+            - index 0: key name in the configuration of the module to load from
+            - index 1: key name in the configuration of the class to load
+            - index 2 (optional): The options of the modules to show to the 
+              user if the key is not given
+            - index 3 (optional): The options of the classes to show to the 
+              user if the key is not given
         
         Returns
         -------
-            The object of the class in the module
+        list
+            The classes of each of the modules
         """
 
-        module_name, class_name = self.getConfigurationValuesOrAsk(
-            (CONFIG_SETUP_GROUP, config_key_module, module_options),
-            (CONFIG_SETUP_GROUP, config_key_class, class_options)
-        )
+        args = []
+        for module_key, class_key, *options in class_config:
+            module_arg = [CONFIG_SETUP_GROUP, module_key]
+            if len(options) > 0 and isinstance(options[0], typing.Collection):
+                module_arg.append(list(options[0]))
+            module_arg = tuple(module_arg)
 
+            class_arg = [CONFIG_SETUP_GROUP, class_key]
+            if len(options) > 1 and isinstance(options[1], typing.Collection):
+                class_arg.append(list(options[1]))
+            class_arg = tuple(class_arg)
+            
+            args.append(module_arg)
+            args.append(class_arg)
+
+        names = self.getConfigurationValuesOrAsk(*args)
+
+        module_names = names[::2]
+        class_names = names[1::2]
+        classes = []
         extensions = (".py", ".py3", ".pyd", ".pyc", ".pyo", ".pyw", ".pyx",
-                      ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
-        for ext in extensions:
-            if module_name.endswith(ext):
-                module_name = module_name[:-1*len(ext)]
+                    ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
+        
+        for module_name, class_name in zip(module_names, class_names):
+            for ext in extensions:
+                if module_name.endswith(ext):
+                    module_name = module_name[:-1*len(ext)]
 
-        module = importlib.import_module(module_name)
-        class_ = getattr(module, class_name)
+            module = importlib.import_module(module_name)
+            class_ = getattr(module, class_name)
 
-        if isinstance(constructor_args, typing.Collection):
-            return class_(*constructor_args)
-        else:
-            return class_()
+            if not isinstance(class_, type):
+                raise TypeError("The class '{}' is not a class.".format(class_))
+                
+            classes.append(class_)
+
+        return classes
     
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
@@ -181,43 +224,26 @@ class Controller:
 
         for i, (group, key, *_) in enumerate(config_lookup):
             try:
-                val = self.configuration.getValue(group, key, fallback_default=fallback_default)
+                val = self.configuration.getValue(
+                    group, key, fallback_default=fallback_default
+                )
             except KeyError:
                 val = None
             
             values.append(val)
 
             if val is None:
-                # set the name to ask for
-                input_param = {"name": "{} ({})".format(key, group)}
-
-                try:
-                    # try to get a description for the user asking
-                    input_param["description"] = self.configuration.getDescription(
-                        group, key
-                    )
-                except KeyError:
-                    pass
-                
-                try:
-                    # try to get the datatype
-                    input_param["datatype"] = self.configuration.getDatatype(
-                        group, key
-                    )
-                except KeyError:
-                    input_param["datatype"] = str
-                
                 if len(_) > 0 and isinstance(_[0], typing.Iterable):
                     # check if there are options for this ask
-                    input_param["options"] = list(_[0])
-                
-                # save the index and the ask parameters
-                input_params[i] = input_param
+                    input_params[i] = (group, key, list(_[0]))
+                else:
+                    # save the index and the ask parameters
+                    input_params[i] = (group, key)
         
         # check if there are values to ask for
         if len(input_params) > 0:
             # save the results of the user
-            results = self.view.askFor(*list(input_params.values()))
+            results = self.askForConfigValues(*list(input_params.values()))
             # check where the results should be saved in
             target_keys = list(input_params.keys())
 
@@ -235,8 +261,90 @@ class Controller:
                         result
                     )
 
-        
         return tuple(values)
+    
+    def askIfNotPresentConfigurationOptions(self, ask_if_default: typing.Optional[bool]=False) -> None:
+        """Ask all configuration options which have `ask_if_not_present=True` 
+        but do not exist.
+
+        If all options are present, this function does nothing.
+
+        Parameters
+        ----------
+        ask_if_default : bool, optional
+            If False all values that have `ask_if_not_present=True` and neither
+            have a value nor a default will be asked, if True all values that 
+            have `ask_if_not_present=True` and do not have a value will be 
+            asked, the default value will not be checked in the second case
+        """
+
+        input_params = []
+
+        for group, key in self.configuration.getGroupsAndKeys():
+            if self.configuration.getAskIfNotPresent(group, key):
+                try:
+                    self.configuration.getValue(
+                        group, key, fallback_default=not ask_if_default
+                    )
+                except KeyError:
+                    input_params.append((group, key))
+        
+        if len(input_params) > 0:
+            input_vals = self.askForConfigValues(*input_params)
+
+            for i, (group, key) in enumerate(input_params):
+                self.configuration.setValue(group, key, input_vals[i])
+        
+    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Collection]]) -> tuple:
+        """Ask for the configuration values.
+
+        Execute the `AbstractView::askFor()` function on each entry of the 
+        `values` list. The `values` list contains the configuration group
+        at index 0 and the key at index 1. This function will try to get 
+        the description and datatype.
+
+        Parameters
+        ----------
+        values : tuple
+            A list of tuples with the configuration group name at index 0 
+            and the configuration key name at index 1 of each tuple, the 
+            optional index 2 can contain a list of options
+        
+        Returns
+        -------
+        tuple
+            A tuple of values which contains the configuration value to use
+            on the corresponding index
+        """
+
+        input_params = []
+        for group, key, *_ in values:
+            # set the name to ask for
+            input_param = {"name": "{} ({})".format(key, group)}
+
+            try:
+                # try to get a description for the user asking
+                input_param["description"] = self.configuration.getDescription(
+                    group, key
+                )
+            except KeyError:
+                pass
+            
+            try:
+                # try to get the datatype
+                input_param["datatype"] = self.configuration.getDatatype(
+                    group, key
+                )
+            except KeyError:
+                input_param["datatype"] = str
+            
+            if len(_) > 0 and isinstance(_[0], typing.Collection):
+                # check if there are options for this ask
+                input_param["options"] = list(_[0])
+            
+            input_params.append(input_param)
+
+        return self.view.askFor(*input_params)
     
     def startProgramLoop(self) -> None:
         """Start the program loop.
@@ -262,94 +370,119 @@ class Controller:
                             os.listdir(default_module_path))
 
             # prevent infinite loop
-            security_counter = 0
-            self.microscope = None
-            while (not isinstance(self.microscope, MicroscopeInterface) and 
-                security_counter < MAX_LOOP_COUNT):
-                security_counter += 1
-                try:
-                    # get the microscope from the config or from the user
-                    self.microscope = self._dynamicCreateClass("microscope-module", 
-                                                            "microscope-class",
-                                                            modules)
-                except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
-                    if isinstance(e, ModuleNotFoundError):
-                        msg = "The microscope module could not be found: {}"
-                        fix = ("Change the 'microscope-module' in the '{}' group " + 
-                            "in the configuration or type in a valid value. " + 
-                            "The value can either be a python file or a python " + 
-                            "module. Place that file in the current directory " + 
-                            "where the script is executed or in the " + 
-                            "'microscopes' directory in the {} directory " + 
-                            "({}).").format(CONFIG_SETUP_GROUP, 
-                                    os.path.basename(os.path.dirname(__file__)),
-                                    os.path.dirname(__file__))
-                        key = "microscope-module"
-                    else:
-                        msg = ("The microscope module could be loaded but the " + 
-                            "given microscope class either does not exist or " + 
-                            "is not a class: {}")
-                        fix = ("Change the 'microscope-class' in the '{}' group " + 
-                            "in the configuration or type in a valid value. " + 
-                            "The value has to be the name of the class that " + 
-                            "defines the microscope class. The microscope " + 
-                            "class has to extend the class " + 
-                            "'pylo.microscopes.MicroscopeInterface'.").format(CONFIG_SETUP_GROUP)
-                        key = "microscope-class"
-                    self.view.showError(msg.format(e), fix)
-                    self.microscope = None
-                    # remove the saved value, this either does not exist or is
-                    # wrong, in both cases the user will be asked in the next run
-                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
-            
-            # show an error that the max loop count is reached and stop the
-            # execution
-            if security_counter + 1 >= MAX_LOOP_COUNT:
-                self.view.showError(("The program is probably trapped in an " + 
-                                    "infinite loop when trying to get the " + 
-                                    "microsocpe. The execution will be stopped now " + 
-                                    "after {} iterations.").format(security_counter),
-                                    "This is a bigger issue. Look in the code " + 
-                                    "and debug the 'pylo/controller.py' file.")
-                return
-
-            # prevent infinite loop
+            camera_class = None
+            microscope_class = None
             security_counter = 0
             self.camera = None
-            while (not isinstance(self.camera, CameraInterface) and 
-                security_counter < MAX_LOOP_COUNT):
+            self.microscope = None
+            while ((not isinstance(self.microscope, MicroscopeInterface) or
+                    not isinstance(self.camera, CameraInterface)) and
+                   security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
                 try:
-                    # get the camera form the config or form the user
-                    self.camera = self._dynamicCreateClass("camera-module", "camera-class")
-                except (ModuleNotFoundError, AttributeError, NameError, TypeError) as e:
+                    # get the microscope and the camera from the config or 
+                    # from the user
+                    microscope_class, camera_class = self._dynamicGetClasses(
+                        ("microscope-module", "microscope-class", modules),
+                        ("camera-module", "camera-class")
+                    )
+                except (ModuleNotFoundError, AttributeError, NameError, 
+                        TypeError) as e:
                     if isinstance(e, ModuleNotFoundError):
-                        msg = "The camera module could not be found: {}"
-                        fix = ("Change the 'camera-module' in the '{}' group " + 
-                            "in the configuration or type in a valid value. " + 
-                            "The value can either be a python file or a python " + 
-                            "module. Place that file in the current directory " + 
-                            "where the script is executed or in in the {} " + 
-                            "directory ({}).").format(CONFIG_SETUP_GROUP, 
+                        msg = ("The microscope or the camera module could " + 
+                                "not be found: {}")
+                        fix = ("Change the 'microscope-module' or the " + 
+                               "'camera-module' in the '{}' group in the " + 
+                               "configuration or type in a valid value. The " + 
+                               "value can either be a python file or a " + 
+                               "python module. In case of a file, place " + 
+                               "that file in the current directory where " + 
+                               "this script is executed or in the " + 
+                               "'microscopes' or 'cameras' directory in the " + 
+                               "{} directory ({}).").format(
+                                   CONFIG_SETUP_GROUP, 
                                     os.path.basename(os.path.dirname(__file__)),
-                                    os.path.dirname(__file__))
-                        key = "camera-module"
+                                    os.path.dirname(__file__)
+                                )
+                        keys = ("microscope-module", "camera-module")
                     else:
-                        msg = ("The camera module could be loaded but the " + 
-                            "given camera class either does not exist or " + 
-                            "is not a class: {}")
-                        fix = ("Change the 'camera-class' in the '{}' group " + 
-                            "in the configuration or type in a valid value. " + 
-                            "The value has to be the name of the class that " + 
-                            "defines the camera class. The camera " + 
-                            "class has to extend the class " + 
-                            "'pylo.camerasCameraInterface'.").format(CONFIG_SETUP_GROUP)
-                        key = "camera-class"
+                        msg = ("The microscope or the camera module could " + 
+                               "be loaded but the given class either does " + 
+                               "not exist or is not a class: {}")
+                        fix = ("Change the 'microscope-class' or the " + 
+                               "'camera-class' in the '{}' group in the " + 
+                               "configuration or type in a valid value. The " + 
+                               "value has to be the name of the class that " +
+                               "defines the microscope or the camera. The " + 
+                               "microscope class has to extend the class " + 
+                               "'pylo.microscopes.MicroscopeInterface', the " + 
+                               "camera the 'pylo.cameras.CameraInterface'.").format(
+                                   CONFIG_SETUP_GROUP
+                                )
+                        keys = ("microscope-class", "camera-class")
                     self.view.showError(msg.format(e), fix)
-                    self.camera = None
+                    microscope_class = None
+                    camera_class = None
                     # remove the saved value, this either does not exist or is
                     # wrong, in both cases the user will be asked in the next run
-                    self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+                    for key in keys:
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+                
+                # define the configuration options if there are some
+                if hasattr(microscope_class, "defineConfigurationOptions"):
+                    config_keys_before = self.configuration.getGroupsAndKeys()
+
+                    microscope_class.defineConfigurationOptions(
+                        self.configuration
+                    )
+
+                    config_keys_after = self.configuration.getGroupsAndKeys()
+                
+                    # taken from https://stackoverflow.com/a/3462202/5934316
+                    s = set(config_keys_before)
+                    microscope_keys = [x for x in config_keys_after if x not in s]
+                else:
+                    microscope_keys = []
+                
+                if hasattr(camera_class, "defineConfigurationOptions"):
+                    config_keys_before = self.configuration.getGroupsAndKeys()
+
+                    camera_class.defineConfigurationOptions(
+                        self.configuration
+                    )
+                    
+                    config_keys_after = self.configuration.getGroupsAndKeys()
+                
+                    # taken from https://stackoverflow.com/a/3462202/5934316
+                    s = set(config_keys_before)
+                    camera_keys = [x for x in config_keys_after if x not in s]
+                else:
+                    camera_keys = []
+
+                # ask all non-existing but required configuration options
+                self.askIfNotPresentConfigurationOptions()
+                
+                try:
+                    self.microscope = self._dynamicCreateClass(
+                        microscope_class, (self, )
+                    )
+                except Exception as e:
+                    self.view.showError(e)
+                    self.microscope = None
+
+                    for group, key in microscope_keys:
+                        self.configuration.removeElement(group, key)
+                
+                try:
+                    self.camera = self._dynamicCreateClass(
+                        camera_class, (self, )
+                    )
+                except Exception as e:
+                    self.view.showError(e)
+                    self.camera = None
+
+                    for group, key in camera_keys:
+                        self.configuration.removeElement(group, key)
 
             # show an error that the max loop count is reached and stop the
             # execution
@@ -361,6 +494,9 @@ class Controller:
                                     "This is a bigger issue. Look in the code " + 
                                     "and debug the 'pylo/controller.py' file.")
                 return
+
+            # ask all non-existing but required configuration options
+            self.askIfNotPresentConfigurationOptions()
             
             self.measurement = None
 
@@ -425,12 +561,10 @@ class Controller:
             self.stopProgramLoop()
             return
         except Exception as e:
-            raise e
             try:
                 self.view.showError(e)
             except StopProgram:
                 self.stopProgramLoop()
-                return
     
     def waitForProgram(self, raise_error_when_not_started: typing.Optional[bool]=False) -> None:
         """Wait until the program has finished.
