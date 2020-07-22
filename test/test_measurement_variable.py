@@ -118,19 +118,19 @@ class TestMeasurementVariable:
                 id_, name, calibration=calibration, uncalibration=uncalibration
             )
 
-    @pytest.mark.parametrize("min_value,max_value,calibration,uncalibration,uncalibrated_min,uncalibrated_max,expected_min,expected_max", [
-        # uncalibrated min/max are more/less than calibrated ones
-        (0, 10, 2, 0.5, 1, 4, 2, 8),
-        # uncalibrated min/max are NOT more/less than calibrated ones
-        (2, 8, 2, 0.5, 0, 5, 2, 8),
+    @pytest.mark.parametrize("min_value,max_value,calibration,uncalibration,calibrated_min,calibrated_max,expected_min,expected_max", [
+        # calibrated min/max are more/less than uncalibrated ones
+        (0, 10, 2, 0.5, 4, 16, 2, 8),
+        # calibrated min/max are NOT more/less than uncalibrated ones
+        (2, 8, 2, 0.5, 2, 18, 2, 8),
         # leave out
-        (3, None, 3, None, None, 2, 3, 6),
-        (None, 6, None, 1/3, 1, None, 3, 6),
+        (3, None, 3, None, None, 18, 3, 6),
+        (None, 6, None, 1/3, 9, None, 3, 6),
         # only uncalibrated
-        (None, None, lambda x: x**2, lambda x: math.sqrt(x), 2, 5, 4, 25)
+        (None, None, lambda x: x**2, lambda x: math.sqrt(x), 4, 25, 2, 5)
     ])
-    def test_uncalibrated_min_max(self, min_value, max_value, calibration, uncalibration, uncalibrated_min, uncalibrated_max, expected_min, expected_max):
-        """Test the uncalibrated_min and uncalibrated_max values."""
+    def test_calibrated_min_max(self, min_value, max_value, calibration, uncalibration, calibrated_min, calibrated_max, expected_min, expected_max):
+        """Test the calibrated_min and calibrated_max values."""
         id_, name = self.randomIdAndName()
 
         args = {
@@ -143,10 +143,10 @@ class TestMeasurementVariable:
         if max_value is not None:
             args["max_value"] = max_value
         
-        if uncalibrated_min is not None:
-            args["uncalibrated_min"] = uncalibrated_min
-        if uncalibrated_max is not None:
-            args["uncalibrated_max"] = uncalibrated_max
+        if calibrated_min is not None:
+            args["calibrated_min"] = calibrated_min
+        if calibrated_max is not None:
+            args["calibrated_max"] = calibrated_max
         
         var = pylo.MeasurementVariable(id_, name, **args)
 

@@ -8,26 +8,33 @@ class MeasurementVariable:
     microscope. Typically this is the focus, the magnetic field (via the 
     objective lense), the tilt of the specimen ect.
 
-    This supports calibration factors. Calibration in the following means the 
-    value this represents (the name, e.g. the magnetic field). The 
-    uncalibration is the underlaying value that is acutally modified (the 
-    uncalibrated name if given, mostly a voltage or current, e.g. the 
-    objective lense current). The calibration (factor) will then calculate from 
-    the uncalibrated (lense current) to the calibrated (magnetic field) value 
-    by multiplication. The uncalibration (factor) is the opposite: Multiplying
-    it with the uncalibrated value (lense current) will return in the 
-    calibrated value (magnetic field).
+    This supports calibration factors. The "calibrated value" in the following 
+    is the value that can be used after the calibration is set 
+    (`calibrated_name`, e.g. magnetic field). The "uncalibrated value" is the 
+    original value the microscope uses internally which mostly is a current
+    value or a voltage (`name`, e.g. objective lense current).
+    
+    The calibration (factor) will then calculate from the uncalibrated (lense 
+    current) to the calibrated (magnetic field) value by multiplication. The 
+    uncalibration (factor) is the opposite: Multiplying it with the 
+    uncalibrated value (lense current) will return in the calibrated value 
+    (magnetic field).
 
     So as a short example:
     ```
-    <magnetic field> = Calibrated; <lense current> = Uncalibrated
+    <calibrated value> = <uncalibrated value> * calibration
+    <uncalibrated value> = <calibrated value> * uncalibration
+
+    so with <magnetic field> = Calibrated; <lense current> = Uncalibrated
     
     <magnetic field> = <lense current> * calibration
     <lense current> = <magnetic field> * uncalibration
     ```
 
-    In most cases there is no `uncalibrated_name` but just a factor. In this 
-    case simply leave the `uncalibrated_name=None`. Same goes for the unit.
+    If there is no special name for the calibrated value but just a factor to 
+    correct the value, use `calibration_name=None`. Same goes for the unit
+    (even though it is recommended to somehow state that this is a different 
+    unit now).
 
     Attributes
     ----------
@@ -35,7 +42,7 @@ class MeasurementVariable:
         A unique id that defines this measurement variable, use lower ASCII 
         only, use minus (-) instead of spaces, must not start with numbers
     name : str
-        The name to show in the GUI
+        The name of the value the microscope modifies
     min_value : float or None
         The minimum value that is allowed or None to allow any value
     max_value : float or None
@@ -45,10 +52,10 @@ class MeasurementVariable:
     has_calibration : bool
         Whether there is a calibration factor (or function) that can calculate
         between two systems
-    uncalibrated_unit : str or None
-        The units of the uncalibrated system, None for no unit
-    uncalibrated_name : str or None
-        The name of the uncalibrated system if there is one, None for no name
+    calibrated_unit : str or None
+        The units of the calibrated system, None for no unit
+    calibrated_name : str or None
+        The name of the calibrated system if there is one, None for no name
     """
 
     def __init__(self, unique_id: str, name: str, 
@@ -57,10 +64,10 @@ class MeasurementVariable:
                  unit: typing.Optional[str]=None,
                  calibration: typing.Optional[typing.Union[int, float, callable]]=None,
                  uncalibration: typing.Optional[typing.Union[int, float, callable]]=None,
-                 uncalibrated_unit: typing.Optional[str]=None,
-                 uncalibrated_name: typing.Optional[str]=None,
-                 uncalibrated_min: typing.Optional[float]=None,
-                 uncalibrated_max: typing.Optional[float]=None):
+                 calibrated_unit: typing.Optional[str]=None,
+                 calibrated_name: typing.Optional[str]=None,
+                 calibrated_min: typing.Optional[float]=None,
+                 calibrated_max: typing.Optional[float]=None):
         """Create a MeasurementVariable.
 
         Raises
@@ -90,14 +97,15 @@ class MeasurementVariable:
             from the uncalibrated value to the calibrated, if one of them is 
             a number, the other one is the reciprocal so it does not have to be 
             given, if a callable is used, both have to be given, both have to
-            be of the same type
-        uncalibrated_unit : str, optional
+            be of the same type, `<calibrated value> = <uncalibrated value> * 
+            calibration` and the other way around
+        calibrated_unit : str, optional
             The unit the uncalibrated value is measured in, if None no unit 
             is used, ignored if there is no `calibration` given
-        uncalibrated_name : str
+        calibrated_name : str
             The name of the uncalibrated value if there is a name, ignored if
             there is no `calibration` given
-        uncalibrated_min, uncalibrated_max : float, optional
+        calibrated_min, uncalibrated_max : float, optional
             The minimum and maximum value of the uncalibrated value, this 
             should be equal to the `min_value` or the `max_value` but in the 
             other units, if not the maximum or the minimum (max for `min_value`,
@@ -142,28 +150,28 @@ class MeasurementVariable:
         
         if self.has_calibration:
             # fix the min value if necessary
-            if isinstance(uncalibrated_min, (int, float)):
+            if isinstance(calibrated_min, (int, float)):
                 if isinstance(self.min_value, (int, float)):
-                    self.min_value = max(self.min_value, self.convertToCalibrated(
-                        uncalibrated_min
+                    self.min_value = max(self.min_value, self.convertToUncalibrated(
+                        calibrated_min
                     ))
                 else:
-                    self.min_value = self.convertToCalibrated(uncalibrated_min)
+                    self.min_value = self.convertToUncalibrated(calibrated_min)
             
             # fix the max value if necessary
-            if isinstance(uncalibrated_max, (int, float)):
+            if isinstance(calibrated_max, (int, float)):
                 if isinstance(self.max_value, (int, float)):
-                    self.max_value = min(self.max_value, self.convertToCalibrated(
-                        uncalibrated_max
+                    self.max_value = min(self.max_value, self.convertToUncalibrated(
+                        calibrated_max
                     ))
                 else:
-                    self.max_value = self.convertToCalibrated(uncalibrated_max)
+                    self.max_value = self.convertToUncalibrated(calibrated_max)
             
-            self.uncalibrated_name = uncalibrated_name
-            self.uncalibrated_unit = uncalibrated_unit
+            self.calibrated_name = calibrated_name
+            self.calibrated_unit = calibrated_unit
         else:
-            self.uncalibrated_name = None
-            self.uncalibrated_unit = None
+            self.calibrated_name = None
+            self.calibrated_unit = None
         
     def convertToCalibrated(self, uncalibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
         """Convert the `uncalibrated_value` to a calibrated value.
