@@ -1,5 +1,6 @@
-import threading
 import time
+import typing
+import threading
 
 try:
     import PyJEM.TEM3 as TEM3
@@ -103,7 +104,7 @@ class PyJEMMicroscope(MicroscopeInterface):
       - FLC: Free lense control, can be on and off for individual leses
     """
     
-    def __init__(self, controller : "Controller"):
+    def __init__(self, controller : "Controller") -> None:
         """Get the microscope instance"""
         super().__init__(controller)
 
@@ -291,7 +292,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             # false
             raise ValueError("The id {} does not exist.".format(id_))
     
-    def _setFocus(self, value : float):
+    def _setFocus(self, value : float) -> None:
         """Set the focus to the given value.
 
         Typical values are between -1 and 50.
@@ -560,17 +561,59 @@ class PyJEMMicroscope(MicroscopeInterface):
             restart_required=True
         )
         
-def format_hex(v, f):
+def format_hex(v: typing.Any, f: typing.Optional[str]="") -> str:
+    """Format the given value for the given format.
+
+    Parameters
+    ----------
+    v : any
+        The value to format
+    f : str
+        The format specification
+    
+    Returns
+    -------
+    str
+        The formatted value
+    """
+
     f = list(Datatype.split_format_spec(f))
     # alternative form, this will make 0x<number>
     f[3] = "#"
     # convert to hex
     f[8] = "x"
+    # remove precision, raises error otherwise
+    f[7] = ""
 
-    return ("{" + "".join(f) + "}").format(v)
+    return Datatype.join_format_spec(f).format(hex_int.parse(v))
+
+def parse_hex(v):
+    """Parse the given value.
+
+    Parameters
+    ----------
+    v : int, float, str, any
+        If int or float are given, the number is returned as an int, if a
+        string is given it is treated as a hex number (values after the decimal
+        separator are ignored), everything else will be tried to convert to a 
+        16 base int
+    
+    Returns
+    -------
+    int
+        The converted int
+    """
+
+    if isinstance(v, (int, float)):
+        return int(v)
+    elif isinstance(v, str):
+        v = v.split(".")
+        return int(v[0], base=16)
+    else:
+        return int(v, base=16)
 
 hex_int = Datatype(
     "hex", 
     format_hex,
-    lambda x: x if isinstance(x, int) else int(str(x), base=16)
+    parse_hex
 )
