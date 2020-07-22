@@ -75,8 +75,8 @@ FL_RATIO_LENSE_ID = 21
 # reserved = 25
 
 class PyJEMMicroscope(MicroscopeInterface):
-    """This class is the interface for communicating with the JEOL NeoARM F200
-    TEM.
+    """This class is the interface for communicating with the JEOL PyJEM 
+    python interface.
 
     Most shortcuts are documented at the JEOL Glossary:
     https://www.jeol.co.jp/en/words/emterms/search_result.html?keyword=
@@ -100,18 +100,6 @@ class PyJEMMicroscope(MicroscopeInterface):
       - PL1 - PL3: Projection Lense
       - DiffFocus: ?
       - FLC: Free lense control, can be on and off for individual leses
-    
-    lens3.SetNtrl((Lens3)arg1, (int)arg2)
-        NTRL within only value range.
-        0:Brightness, 1:OBJ Focus, 2:DIFF Focus, 3:IL Focus, 4:PL Focus, 5:FL Focus
-
-
-    Attributes
-    ----------
-    magnetic_field_calibration_factor : float
-        The calibration factor to calculate the magentic field from the current 
-        by multiplying the current with the `magnetic_field_calibration_factor`, 
-        so this is the magnetic field per current
     """
     
     def __init__(self, controller : "Controller"):
@@ -121,105 +109,49 @@ class PyJEMMicroscope(MicroscopeInterface):
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
 
+        try:
+            magnetic_field_calibration_factor = (
+                self.controller.configuration.getValue(
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    "objective-lense-magnetic-field-calibration"
+                )
+            )
+        except KeyError:
+            magnetic_field_calibration_factor = None
+        
+        try:
+            magnetic_field_unit = (
+                self.controller.configuration.getValue(
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    "magnetic-field-unit"
+                )
+            )
+        except KeyError:
+            magnetic_field_unit = None
+
         self.supported_measurement_variables = [
             # limits taken from 
             # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
             MeasurementVariable("focus", "Focus", -1, 50),
             MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
             MeasurementVariable("y-tilt", "Y Tilt", -10, 10, "deg"),
+            MeasurementVariable(
+                "om-current", 
+                "Objective Mini Lense Current", 
+                unit="hex",
+                min_value = 0,
+                max_value = 1,
+                calibrated_unit=magnetic_field_unit,
+                calibrated_name="Magnetic Field",
+                calibration=magnetic_field_calibration_factor
+            )
         ]
-
-        try:
-            self.magnetic_field_calibration_factor = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "objective-lense-magnetic-field-calibration"))
-        except KeyError:
-            self.magnetic_field_calibration_factor = None
-
-        if isinstance(self.magnetic_field_calibration_factor, (int, float)):
-            self.supported_measurement_variables.append(
-                MeasurementVariable("magnetic-field", "Magnetic field", 
-                    self._getMagneticFieldForObjectiveLenseCurrent(0), 
-                    self._getMagneticFieldForObjectiveLenseCurrent(1)
-                )
-            )
-        else:
-            self.supported_measurement_variables.append(
-                MeasurementVariable("ol-current", "Objective lense current", 0, 1)
-            )
 
         self._lense_control = TEM3.lens3.Lens3()
         self._stage = TEM3.stage3.Stage3()
         # Electron opcical system
         self._eos = TEM3.eos3.EOS3()
         self._action_lock = threading.Lock()
-    
-    def _getMagneticFieldForObjectiveLenseCurrent(self, current: float) -> float:
-        """Get the magnetic field for the given objective lense current.
-
-        This only works if the 
-        `PyJEMMicroscope::magnetic_field_calibration_factor` is given which is 
-        not always the case. In this case an `AttributeError` is raised.
-
-        Raises
-        ------
-        AttributeError
-            When the `PyJEMMicroscope::magnetic_field_calibration_factor` is not
-            given
-        
-        Parameters
-        ----------
-        current : float
-            The current value in the current specific units
-
-        Returns
-        -------
-        float
-            The magnetic field
-        """
-        
-        if not isinstance(self.magnetic_field_calibration_factor, (int, float)):
-            raise AttributeError("The magnetic field is not calibrated. This " + 
-                                 "can be done by either setting the " + 
-                                 "'magnetic_field_calibration_factor' " + 
-                                 "attribute or by setting the facotor in the " + 
-                                 "configuration.")
-        
-        return current * self.magnetic_field_calibration_factor
-    
-    def _getObjectiveLenseCurrentForMagneticField(self, magnetic_field: float) -> float:
-        """Get the objective lense current for the given magnetic field.
-
-        This only works if the 
-        `PyJEMMicroscope::magnetic_field_calibration_factor` is given which is 
-        not always the case. In this case an `AttributeError` is raised.
-
-        Raises
-        ------
-        AttributeError
-            When the `PyJEMMicroscope::magnetic_field_calibration_factor` is not
-            given
-        
-        Parameters
-        ----------
-        magnetic_field : float
-            The magnetic field in the field specific units
-
-        Returns
-        -------
-        float
-            The current value
-        """
-        
-        if not isinstance(self.magnetic_field_calibration_factor, (int, float)):
-            raise AttributeError("The magnetic field is not calibrated. This " + 
-                                 "can be done by either setting the " + 
-                                 "'magnetic_field_calibration_factor' " + 
-                                 "attribute or by setting the facotor in the " + 
-                                 "configuration.")
-        
-        return magnetic_field / self.magnetic_field_calibration_factor
     
     def setInLorenzMode(self, lorenz_mode : bool) -> None:
         """Set the microscope to be in lorenz mode.
@@ -296,14 +228,20 @@ class PyJEMMicroscope(MicroscopeInterface):
         return lorenz_mode
     
     def setMeasurementVariableValue(self, id_: str, value: float) -> None:
-        """Set the measurement variable defined by its id to the given value.
+        """Set the measurement variable defined by its id to the given value in
+        its specific units.
+
+        Note that if a calibration is given, **the `value` is** assumed to be 
+        **the calibrated value**. So it will be re-calculated with the 
+        `MeasurementVariable` given uncalibration function.
 
         The JEOL NeoARM F200 supports the following variables:
         - 'focus': The focus current in ?
-        - 'ol-current' or 'magnetic-field': The objective lense current which 
-          induces a magnetic field, if the calibration factor is given only the 
-          'magnetic-field' can be used, if not only the 'ol-current' can be 
-          used
+        - 'om-current': The objective lense current which induces a magnetic 
+          field or the magnetic field itself, if the calibration factor is 
+          given in the `MeasurementVariable`, the value is treated as the 
+          calibrated magnetic field, if there is no calibration factor the 
+          value is treated as the lense current
         - 'x-tilt': The tilt in x direction in degrees
         - 'y-tilt': The tilt in y direction in degrees, only supported if the 
           correct probe holder is installed
@@ -325,15 +263,16 @@ class PyJEMMicroscope(MicroscopeInterface):
         if not self.isValidMeasurementVariableValue(id_, value):
             raise ValueError(("Either the id {} does not exist or the value " + 
                               "{} is not valid for the measurement " + 
-                             "variable.").format(id_, value))
+                              "variable.").format(id_, value))
+
+        var = self.getMeasurementVariableById(id_)
+        if var.has_calibration:
+            value = var.convertToUncalibrated(value)
+        
         elif id_ == "focus":
             self._setFocus(value)
-        elif id_ == "ol-current":
+        elif id_ == "om-current":
             self._setObjectiveLenseCurrent(value)
-        elif id_ == "magnetic-field":
-            self._setObjectiveLenseCurrent(
-                self._getObjectiveLenseCurrentForMagneticField(value)
-            )
         elif id_ == "x-tilt":
             self._setXTilt(value)
         elif id_ == "y-tilt": 
@@ -379,7 +318,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             The value to set the objective lense current to.
         """
 
-        if not self.isValidMeasurementVariableValue("ol-current", value):
+        if not self.isValidMeasurementVariableValue("om-current", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "objective lense current.").format(value))
         
@@ -456,6 +395,9 @@ class PyJEMMicroscope(MicroscopeInterface):
     def getMeasurementVariableValue(self, id_: str) -> float:
         """Get the value for the given `MeasurementVariable` id.
 
+        If there is a calibration given for the `MeasurementVariable`, the 
+        calibrated value is returend.
+
         Raises
         ------
         ValueError
@@ -463,20 +405,24 @@ class PyJEMMicroscope(MicroscopeInterface):
         """
 
         if id_ == "focus":
-            return self._getFocus()
+            value = self._getFocus()
         elif id_ == "ol-current":
-            return self._getObjectiveLenseCurrent()
+            value = self._getObjectiveLenseCurrent()
         elif id_ == "magnetic-field":
-            return self._getMagneticFieldForObjectiveLenseCurrent(
-                self._getObjectiveLenseCurrent()
-            )
+            value = self._getObjectiveLenseCurrent()
         elif id_ == "x-tilt":
-            self._getXTilt()
+            value = self._getXTilt()
         elif id_ == "y-tilt":
-            self._getYTilt()
+            value = self._getYTilt()
         else:
             raise ValueError(("There is no MeasurementVariable for the " + 
                               "id {}.").format(id_))
+        
+        var = self.getMeasurementVariableById(id_)
+        if var.has_calibration:
+            value = var.convertToCalibrated(value)
+        
+        return value
     
     def _getFocus(self) -> float:
         self._action_lock.acquire()
@@ -595,5 +541,14 @@ class PyJEMMicroscope(MicroscopeInterface):
             "set the magnetic field at the probe position. The calibration " + 
             "factor is defined as the magnetic field per current. The unit is " + 
             "then [magnetic field]/[current]."), 
+            restart_required=True
+        )
+
+        configuration.addConfigurationOption(
+            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            "magnetic-field-unit", 
+            datatype=str, 
+            description=("The unit the magnetic field is measured in if the " + 
+                "calibration factor is given."), 
             restart_required=True
         )
