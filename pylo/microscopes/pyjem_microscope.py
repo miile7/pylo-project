@@ -147,10 +147,15 @@ class PyJEMMicroscope(MicroscopeInterface):
             )
         ]
 
+        # save current focus, there is no get function
+        self._focus = 0
+        # the lenses
         self._lense_control = TEM3.lens3.Lens3()
+        # the stage
         self._stage = TEM3.stage3.Stage3()
         # Electron opcical system
         self._eos = TEM3.eos3.EOS3()
+        # a lock so only one action can be performed at once at the microscope
         self._action_lock = threading.Lock()
     
     def setInLorenzMode(self, lorenz_mode : bool) -> None:
@@ -293,16 +298,15 @@ class PyJEMMicroscope(MicroscopeInterface):
         value : float
             The focus value
         """
-
-        raise Exception("The focus does not properly work at the moment. This " + 
-                        "probably is the wrong focus.")
-
+        
+        diff = value - self._focus
         self._action_lock.acquire()
-        self._eos.SetObjFocus(value)
+        self._eos.SetObjFocus(diff)
         # self._eos.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetILFocus(value)
         # self._lense_control.SetPLFocus(value)
+        self._focus = value
         self._action_lock.release()
 
     def _setObjectiveLenseCurrent(self, value : float) -> None:
@@ -425,15 +429,15 @@ class PyJEMMicroscope(MicroscopeInterface):
         return value
     
     def _getFocus(self) -> float:
-        self._action_lock.acquire()
+        # self._action_lock.acquire()
 
         # GetObjFocus() doesn't exist, no idea how to get the focus value 
         # (except for saving it but that is only the last escape, this makes it
         # impossible to check if the focus really is set correctly)
         # self._eos.GetObjFocus()
 
-        self._action_lock.release()
-        raise Exception("Currently there is no possibility to get the focus.")
+        # self._action_lock.release()
+        return self._focus
     
     def _getObjectiveLenseCurrent(self) -> float:
         """Get the objective lense current in the current units.
