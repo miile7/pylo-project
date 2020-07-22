@@ -6,6 +6,7 @@ try:
 except:
     import PyJEM.offline.TEM3 as TEM3
 
+from ..datatype import Datatype
 from .microscope_interface import MicroscopeInterface
 from ..measurement_variable import MeasurementVariable
 
@@ -139,11 +140,13 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "om-current", 
                 "Objective Mini Lense Current", 
                 unit="hex",
+                format=hex_int,
                 min_value = 0,
                 max_value = 1,
                 calibrated_unit=magnetic_field_unit,
                 calibrated_name="Magnetic Field",
-                calibration=magnetic_field_calibration_factor
+                calibration=magnetic_field_calibration_factor,
+                calibrated_format=float
             )
         ]
 
@@ -556,3 +559,18 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "calibration factor is given."), 
             restart_required=True
         )
+        
+def format_hex(v, f):
+    f = list(Datatype.split_format_spec(f))
+    # alternative form, this will make 0x<number>
+    f[3] = "#"
+    # convert to hex
+    f[8] = "x"
+
+    return ("{" + "".join(f) + "}").format(v)
+
+hex_int = Datatype(
+    "hex", 
+    format_hex,
+    lambda x: x if isinstance(x, int) else int(str(x), base=16)
+)
