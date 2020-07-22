@@ -95,7 +95,8 @@ class DummyView(pylo.AbstractView):
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self):
         self.supported_measurement_variables = [
-            pylo.MeasurementVariable("focus", "Focus", 0, 5),
+            pylo.MeasurementVariable("focus", "Focus", 0, 0xfa,
+                            format=pylo.microscopes.pyjem_microscope.hex_int),
             pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 5),
             pylo.MeasurementVariable("tilt", "Tilt", -5, 5),
         ]
@@ -648,7 +649,7 @@ class TestCLIView:
         ({"variable": "focus"}, 1, False),
         # values are wrong
         ({"variable": "focus", "start": -1}, 1, True),
-        ({"variable": "focus", "end": 6}, 1, True),
+        ({"variable": "focus", "end": 0x100}, 1, True),
         # values are missing in child
         ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
           "on-each-point": {"variable": "magnetic-field"}}, 2, False),
@@ -718,20 +719,22 @@ class TestCLIView:
         (None, None, ("c", ), 
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "focus", "start": 0, "end": 5, "step-width": 0.5}),
+         {"variable": "focus", "start": 0, "end": 250, "step-width": 25}),
         # change start conditions
         (None, None, (
-            "0", 2, # focus to 2
+            "0", "0xf", # focus to 15
             "1", 3, # magnetic field to 3
             "2", 4, # tilt to 4
             "c", 
         ), 
-         {"focus": 2, "magnetic-field": 3, "tilt": 4},
+         {"focus": 15, "magnetic-field": 3, "tilt": 4},
          # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "focus", "start": 0, "end": 5, "step-width": 0.5}),
+         {"variable": "focus", "start": 0, "end": 250, "step-width": 25}),
         # create magnetic field series
         (None, None, (
             "3", "magnetic-field", # variable
+            "5", 0.5, # step width
+            "6", 5, # end
             "c" # continue
          ), 
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
@@ -755,15 +758,15 @@ class TestCLIView:
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          {"variable": "magnetic-field", "start": 1, "end": 2, "step-width": 0.5}),
-        # create focus series from 0 to 5 with 2 stepwidth
+        # create focus series from 0 to 16 with 2 stepwidth
         (None, None, (
-            "4", 0, # start
-            "5", 2, # step width
-            "6", 5, # end
+            "4", "0x0", # start
+            "5", "0x2", # step width
+            "6", "0x10", # end
             "c" # continue
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "focus", "start": 0, "end": 5, "step-width": 2}),
+         {"variable": "focus", "start": 0, "end": 16, "step-width": 2}),
         # create tilt series from -5 to 5 with 1 stepwidth, 
         #   on each point: magnetic field series from 0 to 5, stepwidth 0.5
         #       on each point: focus series from 2 to 4, stepwidth 0.25
@@ -777,16 +780,16 @@ class TestCLIView:
                 "10", 0.5, # step width
                 "11", 5, # end
                 "12", "focus", # on each point
-                    "14", 2, # start
-                    "15", 0.25, # step width
-                    "16", 4, # end
+                    "14", "0x2", # start
+                    "15", "0x1", # step width
+                    "16", "0x4", # end
             "c" # continue
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          {"variable": "tilt", "start": -5, "end": 5, "step-width": 1, "on-each-point":
             {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5, 
              "on-each-point":
-                {"variable": "focus", "start": 2, "end": 4, "step-width": 0.25}
+                {"variable": "focus", "start": 0x2, "end": 0x4, "step-width": 0x1}
             }
          }),
         # # create magnetic field series from -5 to 5 with 1 stepwidth (invalid)
@@ -1013,7 +1016,7 @@ class TestCLIView:
         # check results
         assert len(results) == len(expected)
 
-        for i, r in results:
+        for i, r in enumerate(results):
             assert r == expected[i]
             assert type(r) == type(expected[i])
     

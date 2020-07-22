@@ -138,7 +138,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
 measurement_duration_time = -1
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self, controller):
-        super().__init__()
+        super().__init__(controller)
         self.clear()
 
     def clear(self):

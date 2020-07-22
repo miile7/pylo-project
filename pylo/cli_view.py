@@ -4,6 +4,7 @@ import math
 import typing
 import textwrap
 
+from .datatype import Datatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
@@ -228,7 +229,7 @@ class CLIView(AbstractView):
             measuremnt_vars_inputs.append({
                 "id": v.unique_id,
                 "label": str(v.name) + (" [{}]".format(v.unit) if v.unit is not None else ""),
-                "datatype": float,
+                "datatype": v.format,
                 "min_value": v.min_value,
                 "max_value": v.max_value,
                 "required": True,
@@ -270,11 +271,11 @@ class CLIView(AbstractView):
                         s = s["on-each-point"]
 
                     if match.group(2) == "start":
-                        s["start"] = float(v)
+                        s["start"] = v
                     elif match.group(2) == "step-width":
-                        s["step-width"] = float(v)
+                        s["step-width"] = v
                     elif match.group(2) == "end":
-                        s["end"] = float(v)
+                        s["end"] = v
                     elif (match.group(2) == "variable" and v in variable_ids):
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
@@ -380,7 +381,7 @@ class CLIView(AbstractView):
             {
                 "id": "series-{}-start".format(len(path)),
                 "label": "Start value",
-                "datatype": float,
+                "datatype": var.format,
                 "min_value": var.min_value,
                 "max_value": var.max_value,
                 "required": True,
@@ -390,7 +391,7 @@ class CLIView(AbstractView):
             {
                 "id": "series-{}-step-width".format(len(path)),
                 "label": "Step width",
-                "datatype": float,
+                "datatype": var.format,
                 "min_value": 0,
                 "max_value": var.max_value - var.min_value,
                 "required": True,
@@ -400,7 +401,7 @@ class CLIView(AbstractView):
             {
                 "id": "series-{}-end".format(len(path)),
                 "label": "End value",
-                "datatype": float,
+                "datatype": var.format,
                 "min_value": var.min_value,
                 "max_value": var.max_value,
                 "required": True,
@@ -464,6 +465,7 @@ class CLIView(AbstractView):
         """
         self.printTitle()
         self.print("Error: {}".format(error))
+        self.error = "Error: {}".format(error)
 
         if isinstance(how_to_fix, str) and how_to_fix != "":
             self.print("")
@@ -697,7 +699,8 @@ class CLIView(AbstractView):
         if command == False:
             raise StopProgram
         elif command == True:
-            return tuple(sorted(values.items(), key=lambda x: x[0]))
+            return tuple(map(lambda x: x[1], sorted(values.items(), key=lambda x: x[0])))
+            # return tuple(sorted(values.items(), key=lambda x: x[0]))
         else:
             return self._askForLoop(inputs, values, **kwargs)
 
@@ -724,7 +727,7 @@ class CLIView(AbstractView):
         An input is defined with the following indices:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -785,6 +788,17 @@ class CLIView(AbstractView):
                     conditions = " >= {}".format(line["min_value"])
                 elif "max_value" in line:
                     conditions = " >= {}".format(line["max_value"])
+                
+                text_value = ""
+                if line["value"] is None:
+                    text_value = none_val
+                elif ("datatype" in line and 
+                      hasattr(line["datatype"], "format") and
+                      callable(line["datatype"].format)):
+                    # Datatype class has a format fuction
+                    text_value = line["datatype"].format(line["value"])
+                else:
+                    text_value = "{}".format(line["value"])
 
                 text = text.format(
                     index=index,
@@ -793,7 +807,7 @@ class CLIView(AbstractView):
                         ("*" if "required" in line and line["required"] else "") + 
                         ":"
                     ), 
-                    value=(none_val if line["value"] is None else line["value"]),
+                    value=text_value,
                     conditions=conditions
                 )
 
@@ -880,7 +894,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -998,12 +1012,12 @@ class CLIView(AbstractView):
         except ValueError:
             return self._inputValueLoop(input_definition)
     
-    def _getDatatypeName(self, datatype: type) -> str:
+    def _getDatatypeName(self, datatype: typing.Union[type, Datatype, list, tuple]) -> str:
         """Get the name representation for the `datatype`.
 
         Parameters
         ----------
-        datatype : type, list or tuple
+        datatype : type, Datatype, list or tuple
             The datatype
         
         Returns
@@ -1022,8 +1036,12 @@ class CLIView(AbstractView):
             type_name = "text"
         elif isinstance(datatype, (list, tuple)):
             type_name = "possibility list"
-        else:
+        elif hasattr(datatype, "name") and isinstance(datatype.name, str):
+            type_name = datatype.name
+        elif hasattr(datatype, "__name__") and isinstance(datatype.__name__, str):
             type_name = datatype.__name__
+        else:
+            type_name = str(datatype)
         
         return type_name
     
@@ -1034,7 +1052,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
