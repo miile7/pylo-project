@@ -226,9 +226,18 @@ class CLIView(AbstractView):
                                ))
                 start[v.unique_id] = v.min_value
             
+            if v.has_calibration and v.calibrated_name is not None:
+                label = str(v.calibrated_name)
+                if v.calibrated_unit is not None:
+                    label += " [{}]".format(v.calibrated_unit)
+            else:
+                label = str(v.name)
+                if v.unit is not None:
+                    label += " [{}]".format(v.unit)
+                
             measuremnt_vars_inputs.append({
                 "id": v.unique_id,
-                "label": str(v.name) + (" [{}]".format(v.unit) if v.unit is not None else ""),
+                "label": label,
                 "datatype": v.format,
                 "min_value": v.min_value,
                 "max_value": v.max_value,
