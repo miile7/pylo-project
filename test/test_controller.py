@@ -21,7 +21,7 @@ root = os.path.dirname(os.path.dirname(__file__))
 pylo_root = os.path.join(root, "pylo")
 tmp_path = os.path.join(root, "test", TMP_TEST_DIR_NAME)
 
-os.makedirs(tmp_path)
+os.makedirs(tmp_path, exist_ok=True)
 
 pylo.config.DEFAULT_LOG_PATH = os.path.join(tmp_path, "measurement.log")
 pylo.config.DEFAULT_INI_PATH = os.path.join(tmp_path, "configuration.ini")
