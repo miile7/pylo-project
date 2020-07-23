@@ -45,9 +45,9 @@ DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.
 
 __config_docs__("DEFAULT_LOG_PATH",
 """The default path to save the log to.
-Default: DEFAULT_SAVE_DIRECTORY
+Default: os.path.join(DEFAULT_SAVE_DIRECTORY, "measurement.log")
 """)
-DEFAULT_LOG_PATH = DEFAULT_SAVE_DIRECTORY
+DEFAULT_LOG_PATH = os.path.join(DEFAULT_SAVE_DIRECTORY, "measurement.log")
 
 __config_docs__("DEFAULT_INI_PATH",
 """The path to save the ini configuration to, if used.
