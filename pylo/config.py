@@ -11,6 +11,9 @@ only for creating the help file. It can be ignored completely
 """
 
 import os
+import datetime
+
+__path_time = "{:%Y-%m-%d_%H-%M-%S}".format(datetime.datetime.now())
 
 from . import __Docs
 __config_docs__ = __Docs()
@@ -31,7 +34,7 @@ __config_docs__("DEFAULT_SAVE_DIRECTORY",
 """The path to save the images to if the user does not change it
 Default: os.path.join(os.path.expanduser("~"), "pylo", "measurements")
 """)
-DEFAULT_SAVE_DIRECTORY = os.path.join(os.path.expanduser("~"), "pylo", "measurements")
+DEFAULT_SAVE_DIRECTORY = os.path.join(os.path.expanduser("~"), "pylo", "measurements", __path_time)
 
 __config_docs__("DEFAULT_SAVE_FILE_NAME",
 """The name to use for each file if the user does not change it
@@ -39,6 +42,12 @@ Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4"
     (Needs DM-extension for the file extension, use .tif otherwise)
 """)
 DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4"
+
+__config_docs__("DEFAULT_LOG_PATH",
+"""The default path to save the log to.
+Default: os.path.join(DEFAULT_SAVE_DIRECTORY, "measurement.log")
+""")
+DEFAULT_LOG_PATH = os.path.join(DEFAULT_SAVE_DIRECTORY, "measurement.log")
 
 __config_docs__("DEFAULT_INI_PATH",
 """The path to save the ini configuration to, if used.

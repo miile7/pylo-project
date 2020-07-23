@@ -14,6 +14,7 @@ import copy
 import glob
 import math
 import time
+import csv
 import re
 
 import pylo
@@ -76,12 +77,15 @@ def convertImageSaveToMeasurementVariable(var, value, steps=255):
     return value / steps * (var.max_value - var.min_value) + var.min_value
 
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, controller):
+        super().__init__(controller)
 
         self.supported_measurement_variables = [
             pylo.MeasurementVariable("focus", "Focus", 0, 10, "mA"),
-            pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 3, "T"),
+            pylo.MeasurementVariable("lense-current", "OM Current", 0, 3, 
+                                     format=pylo.microscopes.pyjem_microscope.hex_int,
+                                     calibration=2, calibrated_unit="T",
+                                     calibrated_name="Magnetic Field"),
             pylo.MeasurementVariable("x-tilt", "Tilt (x direction)", -35, 35, "deg")
         ]
 
@@ -116,7 +120,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
 
         if id_ == "focus":
             self.focus = value
-        elif id_ == "magnetic-field":
+        elif id_ == "lense-current":
             self.magnetic_field = value
         elif id_ == "x-tilt":
             self.x_tilt = value
@@ -131,7 +135,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
 
         if id_ == "focus":
             return self.focus
-        elif id_ == "magnetic-field":
+        elif id_ == "lense-current":
             return self.magnetic_field
         elif id_ == "x-tilt":
             return self.x_tilt
@@ -165,9 +169,9 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
 
 dummy_camera_name = "DummyCamera for testing"
 class DummyCamera(pylo.cameras.CameraInterface):
-    def __init__(self, microscope):
-        super().__init__()
-        self.microscope = microscope
+    def __init__(self, controller):
+        super().__init__(controller)
+        self.microscope = controller.microscope
         self.img_count = 0
         self.is_in_safe_state = False
         self.currently_recording_image = False
@@ -196,7 +200,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
                                 f_var, self.microscope.focus)
 
         # save the magnetic field
-        m_var = self.microscope.getMeasurementVariableById("magnetic-field")
+        m_var = self.microscope.getMeasurementVariableById("lense-current")
         image_data[2][0] = convertMeasurementVariableToImageSave(
                                 m_var, self.microscope.magnetic_field)
 
@@ -231,8 +235,8 @@ class DummyConfiguration(pylo.AbstractConfiguration):
 
 class DummyController(pylo.Controller):
     def __init__(self):
-        self.microscope = DummyMicroscope()
-        self.camera = DummyCamera(self.microscope)
+        self.microscope = DummyMicroscope(self)
+        self.camera = DummyCamera(self)
         self.configuration = DummyConfiguration()
         self.view = DummyView()
 
@@ -283,9 +287,11 @@ class PerformedMeasurement:
         for f in foci:
             for m in fields:
                 for t in tilts:
-                    self.measurement_steps.append({"focus": f, 
-                                                   "magnetic-field": m, 
-                                                   "x-tilt": t})
+                    self.measurement_steps.append({
+                        "focus": f, 
+                        "lense-current": m, 
+                        "x-tilt": t
+                    })
 
         self.measurement = pylo.Measurement(self.controller, self.measurement_steps)
         self.measurement.save_dir = self.root
@@ -294,6 +300,8 @@ class PerformedMeasurement:
         self.measurement.tags["test key"] = "Test Value"
         self.measurement.tags["test key 2"] = 2
         self.measurement.tags["test key 3"] = False
+
+        self.measurement._log_path = os.path.join(self.root, "measurement.log")
 
         # add counter for testing
         self.name_test_format = ["{counter}"]
@@ -463,7 +471,7 @@ class TestMeasurement:
 
         f_var = performed_measurement.controller.microscope.getMeasurementVariableById("focus")
         f_prec = (f_var.max_value - f_var.min_value) / 255
-        m_var = performed_measurement.controller.microscope.getMeasurementVariableById("magnetic-field")
+        m_var = performed_measurement.controller.microscope.getMeasurementVariableById("lense-current")
         m_prec = (m_var.max_value - m_var.min_value) / 255
         t_var = performed_measurement.controller.microscope.getMeasurementVariableById("x-tilt")
         t_prec = (t_var.max_value - t_var.min_value) / 255
@@ -485,7 +493,7 @@ class TestMeasurement:
                                 performed_measurement.measurement_steps[i]["focus"], 
                                 abs_tol=f_prec)
             assert math.isclose(magnetic_field, 
-                                performed_measurement.measurement_steps[i]["magnetic-field"], 
+                                performed_measurement.measurement_steps[i]["lense-current"], 
                                 abs_tol=m_prec)
             assert math.isclose(x_tilt, 
                                 performed_measurement.measurement_steps[i]["x-tilt"], 
@@ -674,6 +682,113 @@ class TestMeasurement:
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
+    def test_log_created(self, performed_measurement):
+        """Test if there is a log created."""
+        assert os.path.exists(performed_measurement.measurement._log_path)
+        assert os.path.isfile(performed_measurement.measurement._log_path)
+    
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
+    def test_log_row_count_is_correct(self, performed_measurement):
+        """Test if there is a log has the correct number of rows."""
+        
+        with open(performed_measurement.measurement._log_path) as f:
+            line_num = sum([1 if line != "" else 0 for line in f])
+
+            # for each step one log before and one after, then plus one for the 
+            # header
+            assert (line_num == 
+                    2 * len(performed_measurement.measurement_steps) + 1)
+    
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
+    def test_log_is_correct(self, performed_measurement):
+        """Test if the log is correct."""
+
+        # for row in performed_measurement.measurement._debug_log:
+        #     print(row)
+        # assert False
+        
+        with open(performed_measurement.measurement._log_path) as f:
+            reader = csv.reader(f)
+            
+            column_order = {}
+            for i, row in enumerate(reader):
+                if i == 0:
+                    # header
+                    for v in performed_measurement.controller.microscope.supported_measurement_variables:
+                        found = False
+                        for j, cell in enumerate(row):
+                            if v.name in cell:
+                                found = True
+                                index = cell.index(v.name)
+
+                                column_order[j] = v.unique_id
+
+                                if v.unit is not None:
+                                    # unit has to be after the variable name
+                                    assert v.unit in cell[index:]
+                                
+                                if v.has_calibration:
+                                    # calibrated name is after the uncalibrated
+                                    following_cells = "".join(row[j:])
+                                    assert v.calibrated_name in following_cells
+                                    index = following_cells.index(v.calibrated_name)
+
+                                    if v.calibrated_unit is not None:
+                                        # unit has to be after the variable name
+                                        assert v.calibrated_unit in following_cells[index:]
+                                    
+                                    # column j + 1 contains the calibrated value
+                                    # del column_order[j]
+                                    # column_order[j + 1] = v.unique_id
+
+                                    break
+                        
+                        assert found
+                else:
+                    if i % 2 == 1:
+                        assert "Targetting value" in row[0]
+                    else:
+                        assert "Recording image" in row[0]
+                    
+                    # ignore the header, for each step there are two entries
+                    step = performed_measurement.measurement_steps[(i - 1) // 2]
+
+                    for j, id_ in column_order.items():
+                        v = performed_measurement.controller.microscope.getMeasurementVariableById(id_)
+
+                        # the first value is the uncalibrated value, if there 
+                        # is a calibration chage the value to check
+                        val = step[id_]
+                        if v.has_calibration:
+                            val = v.convertToUncalibrated(val)
+                        
+                        # check the value (this is the calibrated value if 
+                        # there is a calibration value)
+                        if isinstance(v.format, pylo.Datatype):
+                            assert (float(v.format.parse(row[j])) == 
+                                    float(val))
+                            # check if the stored format is correct
+                            assert v.format.format(val) == row[j]
+                        else:
+                            assert float(row[j]) == float(val)
+
+                        if v.has_calibration:
+                            # check the calibrated value
+                            j += 1
+
+                            if isinstance(v.calibrated_format, pylo.Datatype):
+                                assert (float(v.calibrated_format.parse(row[j])) == 
+                                        float(step[id_]))
+                                # check if the stored format is correct
+                                assert (v.calibrated_format.format(step[id_]) == 
+                                        row[j])
+                            else:
+                                assert float(row[j]) == float(step[id_])
+    
+    @pytest.mark.slow()
+    @pytest.mark.usefixtures("performed_measurement")
     def test_microscope_in_safe_state(self, performed_measurement):
         """Test if the microscope is in the safe state after the measurmenet
         has finished."""
@@ -720,7 +835,7 @@ class TestMeasurement:
         # check if no image is recorded
         file_found = False
         for f in os.listdir(performed_measurement.root):
-            if f != "." and f != "..":
+            if f != "." and f != ".." and f != "measurement.log":
                 file_found = True
                 break
         assert not file_found
@@ -745,7 +860,7 @@ class TestMeasurement:
         # check if no image is recorded
         file_found = False
         for f in os.listdir(performed_measurement.root):
-            if f != "." and f != "..":
+            if f != "." and f != ".." and f != "measurement.log":
                 file_found = True
                 break
         assert not file_found
@@ -771,7 +886,7 @@ class TestMeasurement:
         # starts!
         file_found = False
         for f in os.listdir(performed_measurement.root):
-            if f != "." and f != "..":
+            if f != "." and f != ".." and f != "measurement.log":
                 file_found = True
                 break
         assert not file_found
@@ -974,7 +1089,7 @@ class TestMeasurement:
         series."""
 
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
 
         steps = pylo.Measurement._parseSeries(controller, start, series)
@@ -987,7 +1102,7 @@ class TestMeasurement:
                 # step
                 assert measurement_var.unique_id in step
             
-            assert step["magnetic-field"] == 0
+            assert step["lense-current"] == 0
             assert step["x-tilt"] == 0
             
             if i == 0:
@@ -1000,9 +1115,9 @@ class TestMeasurement:
         that contains another series."""
 
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-step": {"variable": "magnetic-field", "start": 0, 
+                  "on-each-step": {"variable": "lense-current", "start": 0, 
                                    "end": 3, "step-width": 0.1}}
 
         steps = pylo.Measurement._parseSeries(controller, start, series)
@@ -1018,11 +1133,11 @@ class TestMeasurement:
             assert step["x-tilt"] == 0
             
             if i % 31 == 0:
-                assert step["magnetic-field"] == 0
+                assert step["lense-current"] == 0
             else:
                 # having problems with float rounding
-                assert math.isclose(step["magnetic-field"], 
-                                    steps[i - 1]["magnetic-field"] + 0.1)
+                assert math.isclose(step["lense-current"], 
+                                    steps[i - 1]["lense-current"] + 0.1)
             
             if i // 31 == 0:
                 assert step["focus"] == 0
@@ -1035,9 +1150,9 @@ class TestMeasurement:
         that contains another series and that contains another series."""
 
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-step": {"variable": "magnetic-field", "start": 0, 
+                  "on-each-step": {"variable": "lense-current", "start": 0, 
                                    "end": 3, "step-width": 0.1, 
                                    "on-each-step": {"variable": "x-tilt", 
                                                      "start": -20, 
@@ -1062,11 +1177,11 @@ class TestMeasurement:
                                     steps[i - 1]["x-tilt"] + 5)
             
             if (i // 9) % 31 == 0:
-                assert step["magnetic-field"] == 0
+                assert step["lense-current"] == 0
             else:
                 # having problems with float rounding
-                assert math.isclose(step["magnetic-field"], 
-                                    steps[(i // 9) * 9 - 1]["magnetic-field"] + 0.1)
+                assert math.isclose(step["lense-current"], 
+                                    steps[(i // 9) * 9 - 1]["lense-current"] + 0.1)
             
             if i // (31 * 9) == 0:
                 assert step["focus"] == 0
@@ -1077,7 +1192,7 @@ class TestMeasurement:
     def test_parse_series_wrong_variable_raises_exception(self):
         """Test if an invalid variable id raises an exception."""
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "non-existing", "start": 0, "end": 10, "step-width": 1}
 
         with pytest.raises(ValueError):
@@ -1086,7 +1201,7 @@ class TestMeasurement:
     def test_parse_series_missing_key_raises_exception(self):
         """Test if missing keys raise an exception."""
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
 
         for key in series:
@@ -1099,7 +1214,7 @@ class TestMeasurement:
     def test_parse_series_missing_key_in_subseries_raises_exception(self):
         """Test if missing keys raise an exception."""
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1,
                   "on-each-step": {"variable": "x-tilt", "start": -5, "end": 5,
                                    "step-width": 5}}
@@ -1116,7 +1231,7 @@ class TestMeasurement:
         """Test if a step with smaller or equal to zero raises an exception."""
 
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": step_width}
 
         with pytest.raises(ValueError):
@@ -1127,7 +1242,7 @@ class TestMeasurement:
         boundaries."""
         
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         
         for var in controller.microscope.supported_measurement_variables:
             wrong_start_series = {"variable": var.unique_id, 
@@ -1152,7 +1267,7 @@ class TestMeasurement:
         (e.g. start=1, end=2, step-width = 0.6)."""
         
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         
         for var in controller.microscope.supported_measurement_variables:
             series = {"variable": var.unique_id, "start": var.min_value,
@@ -1171,7 +1286,7 @@ class TestMeasurement:
         (e.g. start=1, end=2, step-width = 4)."""
         
         controller = DummyController()
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         
         for var in controller.microscope.supported_measurement_variables:
             series = {"variable": var.unique_id, "start": var.min_value,
@@ -1189,8 +1304,8 @@ class TestMeasurement:
         an exception."""
         controller = DummyController()
 
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
-        series = {"variable": "magnetic-field", "start": 0, "end": 3, "step-width": 1}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
+        series = {"variable": "lense-current", "start": 0, "end": 3, "step-width": 1}
 
         for key in start:
             invalid_start = start.copy()
@@ -1214,7 +1329,7 @@ class TestMeasurement:
         controller = DummyController()
 
         # missing focus
-        start = {"focus": 0, "magnetic-field": 0, "x-tilt": 0}
+        start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
 
         for var in controller.microscope.supported_measurement_variables:
