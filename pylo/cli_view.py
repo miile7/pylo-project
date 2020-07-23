@@ -155,10 +155,10 @@ class CLIView(AbstractView):
         dict, dict
             A dict that defines the start conditions of the measurement where 
             each`MeasurementVariable`s ids as a key and the value is the start 
-            value
+            value (value has to be the uncalibrated value)
             Another dict that contains the series with a 'variable', 'start', 
             'end' and 'step-width' key and an optional 'on-each-point' key that 
-            may contain another series
+            may contain another series (value has to be the uncalibrated value)
         """
 
         return self._showCreateMeasurementLoop(controller)
@@ -234,15 +234,15 @@ class CLIView(AbstractView):
                 label = str(v.name)
                 if v.unit is not None:
                     label += " [{}]".format(v.unit)
-                
+
             measuremnt_vars_inputs.append({
                 "id": v.unique_id,
                 "label": label,
-                "datatype": v.format,
-                "min_value": v.min_value,
-                "max_value": v.max_value,
+                "datatype": v.calibrated_format if v.has_calibration else v.format,
+                "min_value": v.ensureCalibratedValue(v.min_value),
+                "max_value": v.ensureCalibratedValue(v.max_value),
                 "required": True,
-                "value": start[v.unique_id]
+                "value": v.ensureCalibratedValue(start[v.unique_id])
             })
         
         if not isinstance(series, dict):
@@ -267,7 +267,7 @@ class CLIView(AbstractView):
         series = {}
         for k, v in values.items():
             if k in variable_ids:
-                start[k] = float(v)
+                start[k] = v
             else:
                 match = series_reg.match(k)
 
@@ -289,6 +289,17 @@ class CLIView(AbstractView):
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
                         s["on-each-point"] = {"variable": v}
+        
+        # recalculate to uncalibrated values, do another validation because the
+        # iteration is there anyway
+        for k in start:
+            var = controller.microscope.getMeasurementVariableById(k)
+
+            start[k] = max(
+                min(var.ensureUncalibratedValue(start[k]), var.max_value),
+                var.min_value
+            )
+        series = self._parseSeries(series)
 
         if command == True:
             return start, series
@@ -390,31 +401,31 @@ class CLIView(AbstractView):
             {
                 "id": "series-{}-start".format(len(path)),
                 "label": "Start value",
-                "datatype": var.format,
-                "min_value": var.min_value,
-                "max_value": var.max_value,
+                "datatype": var.calibrated_format if var.has_calibration else var.format,
+                "min_value": var.ensureCalibratedValue(var.min_value),
+                "max_value": var.ensureCalibratedValue(var.max_value),
                 "required": True,
-                "value": series["start"],
+                "value": var.ensureCalibratedValue(series["start"]),
                 "inset": len(path) * "  "
             },
             {
                 "id": "series-{}-step-width".format(len(path)),
                 "label": "Step width",
-                "datatype": var.format,
-                "min_value": 0,
-                "max_value": var.max_value - var.min_value,
+                "datatype": var.calibrated_format if var.has_calibration else var.format,
+                "min_value": var.ensureCalibratedValue(0),
+                "max_value": var.ensureCalibratedValue(var.max_value - var.min_value),
                 "required": True,
-                "value": series["step-width"],
+                "value": var.ensureCalibratedValue(series["step-width"]),
                 "inset": len(path) * "  "
             },
             {
                 "id": "series-{}-end".format(len(path)),
                 "label": "End value",
-                "datatype": var.format,
-                "min_value": var.min_value,
-                "max_value": var.max_value,
+                "datatype": var.calibrated_format if var.has_calibration else var.format,
+                "min_value": var.ensureCalibratedValue(var.min_value),
+                "max_value": var.ensureCalibratedValue(var.max_value),
                 "required": True,
-                "value": series["end"],
+                "value": var.ensureCalibratedValue(series["end"]),
                 "inset": len(path) * "  "
             },
             {
@@ -440,6 +451,41 @@ class CLIView(AbstractView):
             errors += child_errors
         
         return series_inputs, errors
+    
+    def _parseSeries(self, controller: "Controller", series: dict) -> dict:
+        """Recursively parse the `series`.
+
+        Convert all the values for the series and the child series to 
+        uncalibrated values.
+
+        Parameters
+        ----------
+        controller : Controller
+            The controller
+        series : dict
+            The series dict with the "variable", "start", "step-width", "end" 
+            and optionally the "on-each-point" keys
+        
+        Returns
+        -------
+        dict
+            The `series` with the values as uncalibrated values
+        """
+        
+        var = controller.microscope.getMeasurementVariableById(series["variable"])
+
+        series["start"] = var.ensureUncalibratedValue(series["start"])
+        series["step-width"] = var.ensureUncalibratedValue(series["step-width"])
+        series["end"] = var.ensureUncalibratedValue(series["end"])
+
+        if "on-each-point" in series and isinstance(series["on-each-point"], dict):
+            series["on-each-point"] = self._parseSeries(
+                controller, series["on-each-point"]
+            )
+        else:
+            del series["on-each-point"]
+        
+        return series
 
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
@@ -766,15 +812,28 @@ class CLIView(AbstractView):
 
         none_val = "<empty>"
 
-        # get the label column width, +1 for the colon, +1 for the required 
-        # asterix
-        label_width = max([len(l["label"]) if isinstance(l, dict) else 0 
-                               for l in args]) + 2 
-        value_width = max([len("{}".format(l["value"])) if isinstance(l, dict) else 0 
-                               for l in args] + [len(none_val)])
+        # get the char counts (=width) of each column to make calculate the 
+        # layout
+        label_widths = []
+        value_widths = [len(none_val)]
+        max_index = -1
 
-        max_index = len(list(filter(lambda x: isinstance(x, dict), args))) - 1
-        index_width = math.floor(math.log10(max_index) + 1)
+        for line in args:
+            if isinstance(line, dict):
+                label_widths.append(len(line["label"]))
+                value_widths.append(len(self._formatValue(
+                    line["datatype"], line["value"]
+                )))
+                max_index += 1
+
+        # the label char width, +1 for the colon, +1 for the "required" asterix
+        label_width = max(label_widths) + 2
+        value_width = max(value_widths)
+        
+        if max_index > 0:
+            index_width = math.floor(math.log10(max_index) + 1)
+        else:
+            index_width = 1
         index = 0
         values = {}
 
@@ -791,23 +850,26 @@ class CLIView(AbstractView):
                 
                 conditions = ""
                 if "min_value" in line and "max_value" in line:
-                    conditions = " {} <= val <= {}".format(line["min_value"],
-                                                     line["max_value"])
+                    conditions = " {} <= val <= {}".format(
+                        self._formatValue(line["datatype"], line["min_value"]),
+                        self._formatValue(line["datatype"], line["max_value"])
+                    )
                 elif "min_value" in line:
-                    conditions = " >= {}".format(line["min_value"])
+                    conditions = " >= {}".format(
+                        self._formatValue(line["datatype"], line["min_value"])
+                    )
                 elif "max_value" in line:
-                    conditions = " >= {}".format(line["max_value"])
+                    conditions = " >= {}".format(
+                        self._formatValue(line["datatype"], line["max_value"])
+                    )
                 
                 text_value = ""
                 if line["value"] is None:
                     text_value = none_val
-                elif ("datatype" in line and 
-                      hasattr(line["datatype"], "format") and
-                      callable(line["datatype"].format)):
-                    # Datatype class has a format fuction
-                    text_value = line["datatype"].format(line["value"])
                 else:
-                    text_value = "{}".format(line["value"])
+                    text_value = self._formatValue(
+                        line["datatype"], line["value"]
+                    )
 
                 text = text.format(
                     index=index,
@@ -1020,6 +1082,25 @@ class CLIView(AbstractView):
             return self._parseValue(input_definition, val)
         except ValueError:
             return self._inputValueLoop(input_definition)
+    
+    def _formatValue(self, datatype: typing.Union[type, Datatype, list, tuple], value: typing.Any) -> str:
+        """Get the `value` correctly formatted as a string.
+
+        Parameters
+        ----------
+        datatype : type, Datatype, list or tuple
+            The datatype or a list of allowed values
+        
+        Returns
+        -------
+        str
+            The `value` as a string
+        """
+
+        if isinstance(datatype, Datatype):
+            return datatype.format(value)
+        else:
+            return "{}".format(value)
     
     def _getDatatypeName(self, datatype: typing.Union[type, Datatype, list, tuple]) -> str:
         """Get the name representation for the `datatype`.
