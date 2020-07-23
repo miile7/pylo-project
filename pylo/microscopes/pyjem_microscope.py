@@ -414,9 +414,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         if id_ == "focus":
             value = self._getFocus()
-        elif id_ == "ol-current":
-            value = self._getObjectiveLenseCurrent()
-        elif id_ == "magnetic-field":
+        elif id_ == "om-current":
             value = self._getObjectiveLenseCurrent()
         elif id_ == "x-tilt":
             value = self._getXTilt()
