@@ -13,7 +13,7 @@ only for creating the help file. It can be ignored completely
 import os
 import datetime
 
-__path_time = "{:%Y-%m-%d_%H-%M-%s}".format(datetime.datetime.now())
+__path_time = "{:%Y-%m-%d_%H-%M-%S}".format(datetime.datetime.now())
 
 from . import __Docs
 __config_docs__ = __Docs()
