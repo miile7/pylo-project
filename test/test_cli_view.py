@@ -666,7 +666,7 @@ class TestCLIView:
         """Test if the _parseSeriesInputs() function returns the correct 
         inputs and can deal with easy to correct values."""
         
-        inputs, messages = cliview._parseSeriesInputs(series, controller)
+        inputs, messages = cliview._parseSeriesInputs(controller, series)
         
         expected_keys = ("variable", "start", "end", "step-width", "on-each-point")
 
@@ -1081,3 +1081,18 @@ class TestCLIView:
         for i, r in enumerate(results):
             assert r == expected[i]
             assert type(r) == type(expected[i])
+    
+    @pytest.mark.usefixtures("cliview", "controller")
+    @pytest.mark.parametrize("series,expected_series,add_defaults", [
+        ({"variable": "focus"}, {"variable": "focus", "start": 0, "end": 0xfa, 
+          "step-width": 0xfa / 10}, True),
+        ({"variable": "focus", "on-each-point": {"variable": "magnetic-field"}}, 
+         {"variable": "focus", "start": 0, "end": 0xfa, "step-width": 0xfa / 10,
+          "on-each-point": {"variable": "magnetic-field", "start": 0, "end": 5, 
+          "step-width": 0.5}}, True),
+    ])
+    def test_parse_series(self, cliview, controller, series, expected_series, add_defaults):
+        """Test the parse series function."""
+
+        series, errors = cliview.parseSeries(controller, series, add_defaults)
+        assert series == expected_series
