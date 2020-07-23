@@ -15,7 +15,16 @@ import numpy as np
 import pylo
 import pylo.config
 
-pylo_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pylo")
+TMP_TEST_DIR_NAME = "tmp_test_files"
+
+root = os.path.dirname(os.path.dirname(__file__))
+pylo_root = os.path.join(root, "pylo")
+tmp_path = os.path.join(root, "test", TMP_TEST_DIR_NAME)
+
+os.makedirs(tmp_path)
+
+pylo.config.DEFAULT_LOG_PATH = os.path.join(tmp_path, "measurement.log")
+pylo.config.DEFAULT_INI_PATH = os.path.join(tmp_path, "configuration.ini")
 
 class DummyViewShowsError(AssertionError):
     pass
@@ -160,6 +169,13 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         if measurement_duration_time > 0:
             time.sleep(measurement_duration_time)
     
+    def getMeasurementVariableValue(self, id_):
+        for k, v, t in reversed(self.performed_steps):
+            if id_ == k:
+                return v
+            
+        return None
+    
     def resetToSafeState(self):
         pass
 
@@ -187,7 +203,6 @@ configuration_test_setup = [
         "datatype": bool, "value": True})
 ]
 
-TMP_TEST_DIR_NAME = "tmp_test_files"
 def remove_test_files():
     """Removes the files that are created for testing."""
 
