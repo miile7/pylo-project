@@ -293,6 +293,9 @@ class PerformedMeasurement:
                         "x-tilt": t
                     })
 
+        self.controller.configuration.setValue(
+            "measurement", "log-save-path", os.path.join(self.root, "measurement.log")
+        )
         self.measurement = pylo.Measurement(self.controller, self.measurement_steps)
         self.measurement.save_dir = self.root
         self.measurement.name_format = "{counter}-dummy-measurement.tif"
@@ -300,8 +303,6 @@ class PerformedMeasurement:
         self.measurement.tags["test key"] = "Test Value"
         self.measurement.tags["test key 2"] = 2
         self.measurement.tags["test key 3"] = False
-
-        self.measurement._log_path = os.path.join(self.root, "measurement.log")
 
         # add counter for testing
         self.name_test_format = ["{counter}"]
@@ -758,34 +759,30 @@ class TestMeasurement:
                     for j, id_ in column_order.items():
                         v = performed_measurement.controller.microscope.getMeasurementVariableById(id_)
 
-                        # the first value is the uncalibrated value, if there 
-                        # is a calibration chage the value to check
-                        val = step[id_]
-                        if v.has_calibration:
-                            val = v.convertToUncalibrated(val)
-                        
-                        # check the value (this is the calibrated value if 
+                        # check the value (this is the uncalibrated value if 
                         # there is a calibration value)
                         if isinstance(v.format, pylo.Datatype):
+                            # check if the value is correct
                             assert (float(v.format.parse(row[j])) == 
-                                    float(val))
+                                    float(step[id_]))
                             # check if the stored format is correct
-                            assert v.format.format(val) == row[j]
+                            assert v.format.format(step[id_]) == row[j]
                         else:
-                            assert float(row[j]) == float(val)
+                            assert float(row[j]) == float(step[id_])
 
                         if v.has_calibration:
                             # check the calibrated value
                             j += 1
+                            val = v.convertToCalibrated(step[id_])
 
                             if isinstance(v.calibrated_format, pylo.Datatype):
                                 assert (float(v.calibrated_format.parse(row[j])) == 
-                                        float(step[id_]))
+                                        float(val))
                                 # check if the stored format is correct
-                                assert (v.calibrated_format.format(step[id_]) == 
+                                assert (v.calibrated_format.format(val) == 
                                         row[j])
                             else:
-                                assert float(row[j]) == float(step[id_])
+                                assert float(row[j]) == float(val)
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")

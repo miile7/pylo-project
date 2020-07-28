@@ -68,7 +68,11 @@ class Measurement:
         )
 
         if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir, exist_ok=True)
+            try:
+                os.makedirs(self.save_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The save directory '{}' does not exist and " + 
+                               "cannot be created.").format(self.save_dir)) from e
         
         self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
             ("measurement", "log-save-path"),
@@ -78,7 +82,11 @@ class Measurement:
         log_dir = os.path.dirname(self._log_path)
         
         if not os.path.exists(log_dir):
-            os.makedirs(log_dir, exist_ok=True)
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The log directory '{}' does not exist and " + 
+                               "cannot be created.").format(log_dir)) from e
         
         self.current_image = None
         self.running = False
@@ -463,7 +471,7 @@ class Measurement:
                         cells.append(variables[col])
 
                     if var.has_calibration:
-                        converted = var.convertToUncalibrated(variables[col])
+                        converted = var.convertToCalibrated(variables[col])
                         if isinstance(var.calibrated_format, Datatype):
                             cells.append(var.calibrated_format.format(converted))
                         else:
