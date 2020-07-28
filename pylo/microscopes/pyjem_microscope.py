@@ -126,6 +126,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
 
+        # the factor to multiply the lense current with to get the magnetic
+        # field
         try:
             magnetic_field_calibration_factor = (
                 self.controller.configuration.getValue(
@@ -136,6 +138,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         except KeyError:
             magnetic_field_calibration_factor = None
         
+        # the units of the magnetic field that results when multiplying with 
+        # the magnetic_field_calibration_factor
         try:
             magnetic_field_unit = (
                 self.controller.configuration.getValue(
@@ -150,10 +154,11 @@ class PyJEMMicroscope(MicroscopeInterface):
             # limits taken from 
             # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
             MeasurementVariable("focus", "Focus", -1, 50),
+            # tilt depends on holder
             MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
-            MeasurementVariable("y-tilt", "Y Tilt", -10, 10, "deg"),
+            MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
             MeasurementVariable(
-                "om-current", 
+                "ol-current", 
                 "Objective Mini Lense Current", 
                 unit="hex",
                 format=hex_int,
@@ -206,7 +211,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         - pl3: The PL3 value (projection lense 3 current)
         - olf: The OLf value (objective fine lense current)
         - olc: The OLc value (objective coarse lense current)
-        - om: The OM value (objective mini lense current)
+        - om1: The OM value (objective mini lense current)
+        - om2: The OM2 value (second objective mini lense current)
         - probe-mode: The probe mode as a `PROBE_MODE_*` constant
         - function-mode: The probe mode as a `FUNCTION_MODE_*` constant
 
@@ -216,22 +222,27 @@ class PyJEMMicroscope(MicroscopeInterface):
             The state dict
         """
 
+        get = lambda v: v[1] if isinstance(v, (list, tuple)) else v
+
         state = {
-            "cl1": self._lense_control.GetCL1(),
-            "cl2": self._lense_control.GetCL2(),
-            "cl3": self._lense_control.GetCL3(),
-            "il1": self._lense_control.GetIL1(),
-            "il2": self._lense_control.GetIL2(),
-            "il3": self._lense_control.GetIL3(),
-            "il4": self._lense_control.GetIL4(),
-            "pl1": self._lense_control.GetPL1(),
-            "pl2": self._lense_control.GetPL2(),
-            "pl3": self._lense_control.GetPL3(),
-            "olc": self._lense_control.GetOLc(),
-            "olf": self._lense_control.GetOLf(),
-            "om": self._lense_control.GetOM(),
-            "probe-mode": self._eos.GetProbeMode(),
-            "function-mode": self._eos.GetFunctionMode(),
+            "cl1": get(self._lense_control.GetCL1()),
+            "cl2": get(self._lense_control.GetCL2()),
+            "cl3": get(self._lense_control.GetCL3()),
+            "il1": get(self._lense_control.GetIL1()),
+            "il2": get(self._lense_control.GetIL2()),
+            "il3": get(self._lense_control.GetIL3()),
+            "il4": get(self._lense_control.GetIL4()),
+            "pl1": get(self._lense_control.GetPL1()),
+            "pl2": get(self._lense_control.GetPL2()),
+            "pl3": get(self._lense_control.GetPL3()),
+            "olc": get(self._lense_control.GetOLc()),
+            "olf": get(self._lense_control.GetOLf()),
+            "om1": get(self._lense_control.GetOM()),
+            "om2": get(self._lense_control.GetOM2()),
+            # cannot set this value, there is no setter
+            # "om2f": get(self._lense_control.GetOM2Flag()),
+            "probe-mode": get(self._eos.GetProbeMode()),
+            "function-mode": get(self._eos.GetFunctionMode()),
         }
 
         return state
@@ -293,8 +304,11 @@ class PyJEMMicroscope(MicroscopeInterface):
                 self._lense_control.SetOLf(value)
             elif key == "olc": 
                 self._lense_control.SetOLc(value)
-            elif key == "om": 
-                self._lense_control.SetOM(value)
+            elif key == "om1": 
+                # self._lense_control.SetOM(value)
+                self._lense_control.SetFLCAbs(OM1_LENSE_ID, value)
+            elif key == "om2": 
+                self._lense_control.SetFLCAbs(OM2_LENSE_ID, value)
             elif key == "probe-mode":
                 self._eos.SelectProbMode(value)
             elif key == "function-mode":
@@ -372,10 +386,21 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         # also for getting lock the microscope, just to be sure
         self._action_lock.acquire()
+
+        # get the probe mode, the documentation sais it returns the probe  mode
+        # id as an int but the (offline) code actually returns a tuple, don't 
+        # know about the real microscope communication return value yet
+        probe_mode = self._eos.GetProbeMode()
+        if isinstance(probe_mode, (list, tuple)):
+            probe_mode = probe_mode[0]
+
+        function_mode = self._eos.GetFunctionMode()
+        if isinstance(function_mode, (list, tuple)):
+            function_mode = function_mode[0]
         
         lorenz_mode = (
-            self._eos.GetProbeMode() == PROBE_MODE_TEM and 
-            self._eos.GetFunctionMode() == FUNCTION_MODE_TEM_LowMAG
+            probe_mode == PROBE_MODE_TEM and 
+            function_mode == FUNCTION_MODE_TEM_LowMAG
         )
         
         # let other functions access the microscope
@@ -394,7 +419,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         The JEOL NeoARM F200 supports the following variables:
         - 'focus': The focus current in ?
-        - 'om-current': The objective lense current which induces a magnetic 
+        - 'ol-current': The objective lense current which induces a magnetic 
           field or the magnetic field itself
         - 'x-tilt': The tilt in x direction in degrees
         - 'y-tilt': The tilt in y direction in degrees, only supported if the 
@@ -423,7 +448,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         elif id_ == "focus":
             self._setFocus(value)
-        elif id_ == "om-current":
+        elif id_ == "ol-current":
             self._setObjectiveLenseCurrent(value)
         elif id_ == "x-tilt":
             self._setXTilt(value)
@@ -471,7 +496,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             The value to set the objective lense current to.
         """
 
-        if not self.isValidMeasurementVariableValue("om-current", value):
+        if not self.isValidMeasurementVariableValue("ol-current", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "objective lense current.").format(value))
         
@@ -563,7 +588,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         if id_ == "focus":
             value = self._getFocus()
-        elif id_ == "om-current":
+        elif id_ == "ol-current":
             value = self._getObjectiveLenseCurrent()
         elif id_ == "x-tilt":
             value = self._getXTilt()
@@ -611,10 +636,9 @@ class PyJEMMicroscope(MicroscopeInterface):
         # lock the microscope
         self._action_lock.acquire()
 
-        value = (
-            self._lense_control.GetOLf() + 0
-            # self._lense_control.GetOLf() * self.objective_lense_coarse_solution
-        )
+        value = self._lense_control.GetOLf()
+        if isinstance(value, (list, tuple)):
+            value = value[1]
 
         # allow other functions to use the microscope
         self._action_lock.release()
@@ -681,10 +705,16 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         # self._action_lock.acquire()
 
-        # switch off the beam
+        # switch off the beam valve
+        # documentation sais: "This works for FEG and 3100EF" for 
+        # FEG3::SetBeamValve() and for FEG3::setFEGEmissionOff()
         # self._feg.SetBeamValve(0)
         # self._feg.SetFEGEmissionOff(1)
+
+        # the documentation sais: "This does not work for FEG"
         # self._gun.SetBeamSw(0)
+
+        # beam blanking, should not be used but may be used for emergency mode
         # self._aperture.SetBeamBlank(1)
 
         # self._action_lock.release()
@@ -700,11 +730,14 @@ class PyJEMMicroscope(MicroscopeInterface):
         
         This function blocks the `PyJEMMicroscope::_action_lock`.
         """
-        # lock the microscope
-        self._action_lock.acquire()
 
         # reset the lorenz mode
         self.setInLorenzMode(False)
+
+        # lock the microscope after the lorenz mode, otherwise there is a 
+        # deadlock (this function blocks the lock, 
+        # PyJEMMicroscope::setInLorenzMode() waits for the lock)
+        self._action_lock.acquire()
 
         # set the stage to the original position
         self._stage.SetOrg()
@@ -737,6 +770,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             restart_required=True
         )
 
+        # add the option for the magnetic field unit to display
         configuration.addConfigurationOption(
             CONFIG_PYJEM_MICROSCOPE_GROUP, 
             "magnetic-field-unit", 
