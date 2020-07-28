@@ -2,10 +2,25 @@ import time
 import typing
 import threading
 
-try:
-    import PyJEM.TEM3 as TEM3
-except:
-    import PyJEM.offline.TEM3 as TEM3
+from ..config import OFFLINE_MODE
+error = None
+if OFFLINE_MODE != True:
+    try:
+        from PyJEM.TEM3 import Apt3
+        from PyJEM.TEM3 import EOS3
+        from PyJEM.TEM3 import FEG3
+        from PyJEM.TEM3 import GUN3
+        from PyJEM.TEM3 import Lens3
+        from PyJEM.TEM3 import Stage3
+    except ImportError as e:
+        error = e
+if OFFLINE_MODE == True or error is not None:
+    from PyJEM.offline.TEM3.apt3 import Apt3
+    from PyJEM.offline.TEM3.eos3 import EOS3
+    from PyJEM.offline.TEM3.feg3 import FEG3
+    from PyJEM.offline.TEM3.gun3 import GUN3
+    from PyJEM.offline.TEM3.lens3 import Lens3
+    from PyJEM.offline.TEM3.stage3 import Stage3
 
 from ..datatype import Datatype
 from .microscope_interface import MicroscopeInterface
@@ -154,11 +169,17 @@ class PyJEMMicroscope(MicroscopeInterface):
         # save current focus, there is no get function
         self._focus = 0
         # the lenses
-        self._lense_control = TEM3.lens3.Lens3()
+        self._lense_control = Lens3()
         # the stage
-        self._stage = TEM3.stage3.Stage3()
+        self._stage = Stage3()
         # Electron opcical system
-        self._eos = TEM3.eos3.EOS3()
+        self._eos = EOS3()
+        # ???
+        self._feg = FEG3()
+        # gun
+        self._gun = GUN3()
+        # the aperture
+        self._aperture = Apt3()
         # a lock so only one action can be performed at once at the microscope
         self._action_lock = threading.Lock()
     
@@ -226,10 +247,10 @@ class PyJEMMicroscope(MicroscopeInterface):
         # also for getting lock the microscope, just to be sure
         self._action_lock.acquire()
         
-        lorenz_mode = (self._lense_control.GetFLCInfo(OL_FINE_LENSE_ID) == 1 and
-                       self._lense_control.GetFLCInfo(OL_COARSE_LENSE_ID) == 1 and 
-                       self._lense_control.GetOLc() == 0 and 
-                       self._lense_control.GetOLf() == 0)
+        lorenz_mode = (
+            self._eos.GetProbeMode() == PROBE_MODE_TEM and 
+            self._eos.GetFunctionMode() == FUNCTION_MODE_TEM_LowMAG
+        )
         
         # let other functions access the microscope
         self._action_lock.release()
@@ -423,6 +444,17 @@ class PyJEMMicroscope(MicroscopeInterface):
         return value
     
     def _getFocus(self) -> float:
+        """Get the current focus as an absolute value.
+
+        Note that this is the only value that cannot be received from the 
+        microscope. To get the absolute value, the focus is saved internally 
+        by adding the differences.
+
+        Returns
+        -------
+        float
+            The focus
+        """
         # self._action_lock.acquire()
 
         # GetObjFocus() doesn't exist, no idea how to get the focus value 
@@ -512,6 +544,12 @@ class PyJEMMicroscope(MicroscopeInterface):
         """
         # lock the microscope
         self._action_lock.acquire()
+
+        # switch off the beam
+        # self._feg.SetBeamValve(0)
+        # self._feg.SetFEGEmissionOff(1)
+        # self._gun.SetBeamSw(0)
+        # self._aperture.SetBeamBlank(1)
 
         # reset the lorenz mode
         self.setInLorenzMode(False)

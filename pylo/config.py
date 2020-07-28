@@ -24,6 +24,21 @@ Default: "PyLo"
 """)
 PROGRAM_NAME = "PyLo"
 
+__config_docs__("OFFLINE_MODE",
+"""Use True to ignore cameras and microscopes and use dummy objects instead, 
+use False to force using the provided cameras and microscopes. If there are 
+none, an error is raised. Use None for using the offline mode as fallback if 
+the online mode does not work.
+
+On your microscope computer you should set this to True. For developing you can
+either use None or False. If you are devloping on your microscope computer you 
+may want to use False.
+
+Note that the implementation depends on the microscope class!
+Default: None
+""")
+OFFLINE_MODE = None
+
 __config_docs__("TIFF_IMAGE_TAGS_INDEX",
 """The hexadecimal entry for tiff images where to save the tags as a json to
 Default: 0x010e (The image description)
