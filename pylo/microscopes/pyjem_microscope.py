@@ -204,6 +204,9 @@ class PyJEMMicroscope(MicroscopeInterface):
         - pl1: The PL1 value (projection lense 1 current)
         - pl2: The PL2 value (projection lense 2 current)
         - pl3: The PL3 value (projection lense 3 current)
+        - olf: The OLf value (objective fine lense current)
+        - olc: The OLc value (objective coarse lense current)
+        - om: The OM value (objective mini lense current)
         - probe-mode: The probe mode as a `PROBE_MODE_*` constant
         - function-mode: The probe mode as a `FUNCTION_MODE_*` constant
 
@@ -224,6 +227,9 @@ class PyJEMMicroscope(MicroscopeInterface):
             "pl1": self._lense_control.GetPL1(),
             "pl2": self._lense_control.GetPL2(),
             "pl3": self._lense_control.GetPL3(),
+            "olc": self._lense_control.GetOLc(),
+            "olf": self._lense_control.GetOLf(),
+            "om": self._lense_control.GetOM(),
             "probe-mode": self._eos.GetProbeMode(),
             "function-mode": self._eos.GetFunctionMode(),
         }
@@ -242,6 +248,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         `PyJEMMicroscope::getCurrentState()` function. Note that the `state` 
         does not have to contain all the keys.
 
+        This function blocks the `PyJEMMicroscope::_action_lock`.
+
         Raises
         ------ 
         KeyError
@@ -257,6 +265,8 @@ class PyJEMMicroscope(MicroscopeInterface):
             Whether to raise an error if a key is not known (True) or to ignore
             this key (False), default: False
         """
+
+        self._action_lock.acquire()
 
         for key, value in state.items():
             if key == "cl1": 
@@ -279,18 +289,29 @@ class PyJEMMicroscope(MicroscopeInterface):
                 self._lense_control.SetFLCAbs(PL2_LENSE_ID, value)
             elif key == "pl3": 
                 self._lense_control.SetFLCAbs(PL3_LENSE_ID, value)
+            elif key == "olf": 
+                self._lense_control.SetOLf(value)
+            elif key == "olc": 
+                self._lense_control.SetOLc(value)
+            elif key == "om": 
+                self._lense_control.SetOM(value)
             elif key == "probe-mode":
                 self._eos.SelectProbMode(value)
             elif key == "function-mode":
                 self._eos.SelectFunctionMode(value)
             elif not ignore_invalid_keys:
+                self._action_lock.release()
                 raise KeyError("The key '{}' is invalid.".format(key))
+        
+        self._action_lock.release()
     
     def setInLorenzMode(self, lorenz_mode : bool) -> None:
         """Set the microscope to be in lorenz mode.
 
         This sets the probe mode to *TEM* and the function mode to *LowMAG*. It
         disables the objective lense (OL fine and coarse) and sets them to 0.
+
+        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Raises
         ------
@@ -345,6 +366,8 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         This will return true if the objective fine and coarse lenses are 
         switched to free lense control and their current is 0.
+
+        This function blocks the `PyJEMMicroscope::_action_lock`.
         """
 
         # also for getting lock the microscope, just to be sure
@@ -376,6 +399,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         - 'x-tilt': The tilt in x direction in degrees
         - 'y-tilt': The tilt in y direction in degrees, only supported if the 
           correct probe holder is installed
+
+        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Raises
         ------
@@ -415,6 +440,8 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         Typical values are between -1 and 50.
 
+        This function blocks the `PyJEMMicroscope::_action_lock`.
+
         Parameters
         ----------
         value : float
@@ -436,7 +463,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         The value corresponds to I/O output value without carry.
 
-        This function blocks the `PyJEMMicroscope::_action_lock`
+        This function blocks the `PyJEMMicroscope::_action_lock`.
         
         Parameters
         ----------
@@ -526,6 +553,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         **the return value is the uncalibrated value**. It will NOT be 
         re-calculated!
 
+        This function blocks the `PyJEMMicroscope::_action_lock`.
+
         Raises
         ------
         ValueError
@@ -571,6 +600,8 @@ class PyJEMMicroscope(MicroscopeInterface):
     def _getObjectiveLenseCurrent(self) -> float:
         """Get the objective lense current in the current units.
 
+        This function blocks the `PyJEMMicroscope::_action_lock`.
+
         Returns
         -------
         float
@@ -592,6 +623,8 @@ class PyJEMMicroscope(MicroscopeInterface):
     
     def _getXTilt(self) -> float:
         """Get the x tilt in degrees.
+        
+        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Returns
         -------
@@ -616,6 +649,8 @@ class PyJEMMicroscope(MicroscopeInterface):
     
     def _getYTilt(self) -> float:
         """Get the y tilt in degrees.
+        
+        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Returns
         -------
@@ -637,16 +672,14 @@ class PyJEMMicroscope(MicroscopeInterface):
         self._action_lock.release()
 
         return pos[STAGE_INDEX_Y_TILT]
-
-    def resetToSafeState(self) -> None:
-        """Set the microscope into its safe state.
-
-        The safe state will set the microscope not to be in lorenz mode anymore.
-        In addition the stage is driven to its origin, with resolving the tilt 
-        in all axes.
+    
+    def resetToEmergencyState(self) -> None:
+        """Reset the machine to an emergency state.
+        
+        This function blocks the `PyJEMMicroscope::_action_lock`.
         """
-        # lock the microscope
-        self._action_lock.acquire()
+
+        # self._action_lock.acquire()
 
         # switch off the beam
         # self._feg.SetBeamValve(0)
@@ -654,12 +687,33 @@ class PyJEMMicroscope(MicroscopeInterface):
         # self._gun.SetBeamSw(0)
         # self._aperture.SetBeamBlank(1)
 
+        # self._action_lock.release()
+
+        super().resetToEmergencyState()
+
+    def resetToSafeState(self) -> None:
+        """Set the microscope into its safe state.
+
+        The safe state will set the microscope not to be in lorenz mode anymore.
+        In addition the stage is driven to its origin, with resolving the tilt 
+        in all axes.
+        
+        This function blocks the `PyJEMMicroscope::_action_lock`.
+        """
+        # lock the microscope
+        self._action_lock.acquire()
+
         # reset the lorenz mode
         self.setInLorenzMode(False)
 
         # set the stage to the original position
         self._stage.SetOrg()
+
+        # release the lock, the setCurrentState() needs the lock again
         self._action_lock.release()
+
+        # restore the starting state
+        self.setCurrentState(self._init_state)
     
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration"):
