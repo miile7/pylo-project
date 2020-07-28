@@ -59,9 +59,11 @@ def wrap(text, inset=""):
     global maxlen
 
     if isinstance(maxlen, int):
-        lines = textwrap.wrap(inset + text, maxlen, drop_whitespace=False, 
-                              replace_whitespace=False)
-        text = ("\n" + inset).join(lines)
+        text = "\n".join([textwrap.fill(p) for p in text.splitlines()])
+        # lines = textwrap.wrap(inset + text, maxlen, drop_whitespace=False, 
+        #                       replace_whitespace=False)
+        # text = ("\n" + inset).join(lines)
+        text = textwrap.indent(text, inset)
     else:
         text = inset + text
     
