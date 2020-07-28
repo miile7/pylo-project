@@ -325,6 +325,69 @@ def input_int(text, short_text="", min_value=None, max_value=None, **kwargs):
         **kwargs
     )
 
+def input_float(text, short_text="", min_value=None, max_value=None, **kwargs):
+    """Ask the user for a float value.
+
+    Parameters
+    ----------
+    text : str
+        The text to show to the user
+    short_text : str, optional
+        A short text that will be shown in front of the input line
+    min_value : int, optional
+        A minimum value, if not given there is no lower limit
+    max_value : int, optional
+        A maximum value, if not given there is no upper limit
+
+    Returns
+    -------
+    int
+        The value
+    """
+
+    def is_numeric(x):
+        x = str(x).split(".")
+        
+        return (
+            (len(x) == 1 and x[0].isnumeric()) or 
+            (len(x) == 2 and (
+                (x[0] == "" and x[1].isnumeric()) or 
+                (x[0].isnumeric() and x[1] == "") or 
+                (x[0].isnumeric() and x[1].isnumeric())
+            ))
+        )
+
+    short_text = [short_text]
+    error_msg = "The value must only be digits with max one dot as decimal separator"
+
+    if isinstance(min_value, (int, float)) and isinstance(max_value, (int, float)):
+        short_text.append("{} <= value <= {}".format(min_value, max_value))
+        is_valid = lambda x: (is_numeric(x) and min_value <= float(x) and 
+                              float(x) <= max_value)
+        error_msg += " and {} <= value <= {}".format(min_value, max_value)
+    elif isinstance(min_value, (int, float)):
+        short_text.append("value >= {}".format(min_value))
+        is_valid = lambda x: (is_numeric(x) and min_value <= float(x))
+        error_msg += " and value >= {}".format(min_value)
+    elif isinstance(max_value, (int, float)):
+        short_text.append("value <= {}".format(max_value))
+        is_valid = lambda x: (is_numeric(x) and float(x) <= max_value)
+        error_msg += " and value <= {}".format(max_value)
+    else:
+        is_valid = is_numeric
+    
+    short_text = " ".join(short_text)
+    error_msg += "."
+
+    return _input_value(
+        text, 
+        short_text,
+        is_valid, 
+        lambda x: error_msg,
+        post_process=lambda x: float(x),
+        **kwargs
+    )
+
 def input_text(text, short_text="", allow_empty_string=False, **kwargs):
     """Ask the user for a text value.
 
@@ -354,6 +417,44 @@ def input_text(text, short_text="", allow_empty_string=False, **kwargs):
         short_text,
         is_valid, 
         lambda x: error_msg,
+        **kwargs
+    )
+
+def input_datatype(text, datatype, short_text="", **kwargs):
+    """Ask the user to input a value which is formatted and parsed by a 
+    `pylo.Datatype`-like object.
+
+    Parameters
+    ----------
+    text : str
+        The text to show to the user
+    datatype : Datatype-like
+        The datatype as a `pylo.Datatype` or any object that have the 
+        `format()` and `parse()` functions
+    short_text : str, optional
+        A short text that will be shown in front of the input line
+
+    Returns
+    -------
+    any
+        The value parsed by the datatype
+    """
+
+    def is_valid(val):
+        try:
+            datatype.parse(datatype.format(val)) == val
+            return True
+        except:
+            return False
+
+    error_msg = "Could not parse the value for the datatype '{}'.".format(datatype.name)
+    
+    return _input_value(
+        text, 
+        short_text,
+        is_valid, 
+        lambda x: error_msg,
+        post_process=datatype.parse,
         **kwargs
     )
 
