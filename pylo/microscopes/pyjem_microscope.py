@@ -159,7 +159,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
             MeasurementVariable(
                 "ol-current", 
-                "Objective Mini Lense Current", 
+                "Objective Lense Current", 
                 unit="hex",
                 format=hex_int,
                 min_value = 0x0,
