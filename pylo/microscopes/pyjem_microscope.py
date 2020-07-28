@@ -1,3 +1,6 @@
+
+print("pyjem_microscope:", __package__)
+
 import time
 import typing
 import threading
