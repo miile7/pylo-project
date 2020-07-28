@@ -1,8 +1,10 @@
 import os
 import re
+import sys
 import math
 import typing
 import textwrap
+import linecache
 
 from .datatype import Datatype
 from .stop_program import StopProgram
@@ -47,7 +49,7 @@ class CLIView(AbstractView):
             # for custom implementations of the stdout, especially in the test
             sys.stdout.clear()
             sys.stdout.cls()
-        except (NameError, TypeError):
+        except (NameError, TypeError, AttributeError):
             pass
         
         os.system('cls' if os.name=='nt' else 'clear')
@@ -214,7 +216,7 @@ class CLIView(AbstractView):
         series_inputs, series_errors = self._parseSeriesInputs(controller, series)
         errors += series_errors
 
-        self.errors = "\n".join(errors)
+        self.error = "\n".join(errors)
 
         values, command = self._printSelect(
             "Define the start conditions",
@@ -400,8 +402,24 @@ class CLIView(AbstractView):
             default: None
         """
         self.printTitle()
-        self.print("Error: {}".format(error))
-        self.error = "Error: {}".format(error)
+        
+        if isinstance(error, Exception):
+            raise error
+            exc_type, exc_obj, tb = sys.exc_info()
+            lineno = tb.tb_lineno
+            frame = tb.tb_frame
+            filename = frame.f_code.co_filename
+            linecache.checkcache(filename)
+            line = linecache.getline(filename, lineno, frame.f_globals)
+
+            error_msg = "{} (#{} in {})".format(
+                error, line, os.path.basename(filename)
+            )
+        else:
+            error_msg = "{}".format(error)
+
+        self.print("Error: {}".format(error_msg))
+        self.error = "Error: {}".format(error_msg)
 
         if isinstance(how_to_fix, str) and how_to_fix != "":
             self.print("")
