@@ -1,12 +1,17 @@
-try:
-    from PyJEM.detector import Detector
-    from PyJEM.detector.function import get_attached_detector
-except Exception:
-    from PyJEM.offline.detector import Detector
-    from PyJEM.offline.detector.function import get_attached_detector
-
 from PIL import Image as PILImage
 import numpy as np
+
+from ..config import OFFLINE_MODE
+error = None
+if OFFLINE_MODE != True:
+    try:
+        from PyJEM.detector import Detector
+        from PyJEM.detector.function import get_attached_detector
+    except ImportError as e:
+        error = e
+if OFFLINE_MODE == True or error is not None:
+    from PyJEM.offline.detector import Detector
+    from PyJEM.offline.detector.function import get_attached_detector
 
 from .camera_interface import CameraInterface
 from ..image import Image
