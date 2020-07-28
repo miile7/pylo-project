@@ -142,8 +142,8 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "Objective Mini Lense Current", 
                 unit="hex",
                 format=hex_int,
-                min_value = 0,
-                max_value = 1,
+                min_value = 0x0,
+                max_value = 0x1,
                 calibrated_unit=magnetic_field_unit,
                 calibrated_name="Magnetic Field",
                 calibration=magnetic_field_calibration_factor,
@@ -240,17 +240,15 @@ class PyJEMMicroscope(MicroscopeInterface):
         """Set the measurement variable defined by its id to the given value in
         its specific units.
 
-        Note that if a calibration is given, **the `value` is** assumed to be 
-        **the calibrated value**. So it will be re-calculated with the 
-        `MeasurementVariable` given uncalibration function.
+        Note it does not matter if a calibration is given or not. The 
+        calibration is for visuals (in the GUI and the saved values) only. So
+        **the `value` is the uncalibrated value**. It will NOT be 
+        re-calculated!
 
         The JEOL NeoARM F200 supports the following variables:
         - 'focus': The focus current in ?
         - 'om-current': The objective lense current which induces a magnetic 
-          field or the magnetic field itself, if the calibration factor is 
-          given in the `MeasurementVariable`, the value is treated as the 
-          calibrated magnetic field, if there is no calibration factor the 
-          value is treated as the lense current
+          field or the magnetic field itself
         - 'x-tilt': The tilt in x direction in degrees
         - 'y-tilt': The tilt in y direction in degrees, only supported if the 
           correct probe holder is installed
@@ -274,10 +272,6 @@ class PyJEMMicroscope(MicroscopeInterface):
                               "{} is not valid for the measurement " + 
                               "variable.").format(id_, value))
 
-        var = self.getMeasurementVariableById(id_)
-        if var.has_calibration:
-            value = var.convertToUncalibrated(value)
-        
         elif id_ == "focus":
             self._setFocus(value)
         elif id_ == "om-current":
@@ -403,8 +397,10 @@ class PyJEMMicroscope(MicroscopeInterface):
     def getMeasurementVariableValue(self, id_: str) -> float:
         """Get the value for the given `MeasurementVariable` id.
 
-        If there is a calibration given for the `MeasurementVariable`, the 
-        calibrated value is returend.
+        Note it does not matter if a calibration is given or not. The 
+        calibration is for visuals (in the GUI and the saved values) only. So
+        **the return value is the uncalibrated value**. It will NOT be 
+        re-calculated!
 
         Raises
         ------
@@ -423,10 +419,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         else:
             raise ValueError(("There is no MeasurementVariable for the " + 
                               "id {}.").format(id_))
-        
-        var = self.getMeasurementVariableById(id_)
-        if var.has_calibration:
-            value = var.convertToCalibrated(value)
         
         return value
     

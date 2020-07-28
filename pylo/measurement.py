@@ -1,7 +1,8 @@
-import datetime
-import typing
-import csv
+import io
 import os
+import csv
+import typing
+import datetime
 
 import numpy as np
 
@@ -63,13 +64,29 @@ class Measurement:
         self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
             ("measurement", "save-directory"),
             ("measurement", "save-file-format"),
-            fallback_default=False
+            fallback_default=True
         )
+
+        if not os.path.exists(self.save_dir):
+            try:
+                os.makedirs(self.save_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The save directory '{}' does not exist and " + 
+                               "cannot be created.").format(self.save_dir)) from e
         
         self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
             ("measurement", "log-save-path"),
             fallback_default=True
         )
+
+        log_dir = os.path.dirname(self._log_path)
+        
+        if not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The log directory '{}' does not exist and " + 
+                               "cannot be created.").format(log_dir)) from e
         
         self.current_image = None
         self.running = False
@@ -454,7 +471,7 @@ class Measurement:
                         cells.append(variables[col])
 
                     if var.has_calibration:
-                        converted = var.convertToUncalibrated(variables[col])
+                        converted = var.convertToCalibrated(variables[col])
                         if isinstance(var.calibrated_format, Datatype):
                             cells.append(var.calibrated_format.format(converted))
                         else:
@@ -485,7 +502,8 @@ class Measurement:
     
     def closeLog(self):
         """Close the log."""
-        self._log_file.close()
+        if isinstance(self._log_file, io.IOBase):
+            self._log_file.close()
     
     @classmethod
     def fromSeries(class_, controller: "Controller", start_conditions: dict, 
@@ -794,7 +812,7 @@ class Measurement:
         configuration.addConfigurationOption(
             "measurement", "log-save-path",
             datatype=str,
-            defaut_value=DEFAULT_LOG_PATH,
+            default_value=DEFAULT_LOG_PATH,
             description=("The file path (including the file name) to save " + 
             "log to.")
         )
