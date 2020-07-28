@@ -373,8 +373,8 @@ class Controller:
             camera_class = None
             microscope_class = None
             security_counter = 0
-            self.camera = None
-            self.microscope = None
+            # self.camera = None
+            # self.microscope = None
             while ((not isinstance(self.microscope, MicroscopeInterface) or
                     not isinstance(self.camera, CameraInterface)) and
                    security_counter < MAX_LOOP_COUNT):
