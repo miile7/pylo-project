@@ -166,8 +166,6 @@ class PyJEMMicroscope(MicroscopeInterface):
             )
         ]
 
-        # save current focus, there is no get function
-        self._focus = 0
         # the lenses
         self._lense_control = Lens3()
         # the stage
@@ -182,6 +180,111 @@ class PyJEMMicroscope(MicroscopeInterface):
         self._aperture = Apt3()
         # a lock so only one action can be performed at once at the microscope
         self._action_lock = threading.Lock()
+
+        # save current focus, there is no get function
+        self._focus = 0
+        # save the initial state to reset the microscope to this state in the 
+        # end
+        self._init_state = self.getCurrentState()
+    
+    def getCurrentState(self) -> dict:
+        """Get the current state saved as a dict.
+
+        This creates a dict that contains the values of some internal devices 
+        to save the current microscope state.
+
+        Currently this saves:
+        - cl1: The CL1 value (condensor lense 1 current)
+        - cl2: The CL2 value (condensor lense 2 current)
+        - cl3: The CL3 value (condensor lense 3 current)
+        - il1: The IL1 value (intermediate lense 1 current)
+        - il2: The IL2 value (intermediate lense 2 current)
+        - il3: The IL3 value (intermediate lense 3 current)
+        - il4: The IL4 value (intermediate lense 4 current)
+        - pl1: The PL1 value (projection lense 1 current)
+        - pl2: The PL2 value (projection lense 2 current)
+        - pl3: The PL3 value (projection lense 3 current)
+        - probe-mode: The probe mode as a `PROBE_MODE_*` constant
+        - function-mode: The probe mode as a `FUNCTION_MODE_*` constant
+
+        Returns
+        -------
+        dict
+            The state dict
+        """
+
+        state = {
+            "cl1": self._lense_control.GetCL1(),
+            "cl2": self._lense_control.GetCL2(),
+            "cl3": self._lense_control.GetCL3(),
+            "il1": self._lense_control.GetIL1(),
+            "il2": self._lense_control.GetIL2(),
+            "il3": self._lense_control.GetIL3(),
+            "il4": self._lense_control.GetIL4(),
+            "pl1": self._lense_control.GetPL1(),
+            "pl2": self._lense_control.GetPL2(),
+            "pl3": self._lense_control.GetPL3(),
+            "probe-mode": self._eos.GetProbeMode(),
+            "function-mode": self._eos.GetFunctionMode(),
+        }
+
+        return state
+    
+    def setCurrentState(self, state: dict, ignore_invalid_keys: typing.Optional[bool]=False) -> None:
+        """Sets the `state`.
+
+        The `state` is a dict that contains the value of an internal instrument
+        with the corresponding key. Note that the values are NOT CHECKED! This 
+        means they have to be valid and in the pyhsical bondaries of the 
+        microscope!
+
+        The `state` dict is described in the 
+        `PyJEMMicroscope::getCurrentState()` function. Note that the `state` 
+        does not have to contain all the keys.
+
+        Raises
+        ------ 
+        KeyError
+            When a key in the `state` is not known and `ignore_invalid_keys`
+            is False
+
+        Parameters
+        ----------
+        state : dict
+            The state dict as returned by `PyJEMMicroscope::getCurrentState()`, 
+            not all keys have to be given
+        ignore_invalid_keys : bool, optional
+            Whether to raise an error if a key is not known (True) or to ignore
+            this key (False), default: False
+        """
+
+        for key, value in state.items():
+            if key == "cl1": 
+                self._lense_control.SetFLCAbs(CL1_LENSE_ID, value)
+            elif key == "cl2": 
+                self._lense_control.SetFLCAbs(CL2_LENSE_ID, value)
+            elif key == "cl3": 
+                self._lense_control.SetCL3(value)
+            elif key == "il1": 
+                self._lense_control.SetFLCAbs(IL1_LENSE_ID, value)
+            elif key == "il2": 
+                self._lense_control.SetFLCAbs(IL2_LENSE_ID, value)
+            elif key == "il3": 
+                self._lense_control.SetFLCAbs(IL3_LENSE_ID, value)
+            elif key == "il4": 
+                self._lense_control.SetFLCAbs(IL4_LENSE_ID, value)
+            elif key == "pl1": 
+                self._lense_control.SetFLCAbs(PL1_LENSE_ID, value)
+            elif key == "pl2": 
+                self._lense_control.SetFLCAbs(PL2_LENSE_ID, value)
+            elif key == "pl3": 
+                self._lense_control.SetFLCAbs(PL3_LENSE_ID, value)
+            elif key == "probe-mode":
+                self._eos.SelectProbMode(value)
+            elif key == "function-mode":
+                self._eos.SelectFunctionMode(value)
+            elif not ignore_invalid_keys:
+                raise KeyError("The key '{}' is invalid.".format(key))
     
     def setInLorenzMode(self, lorenz_mode : bool) -> None:
         """Set the microscope to be in lorenz mode.
