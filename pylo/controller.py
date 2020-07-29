@@ -373,21 +373,36 @@ class Controller:
             camera_class = None
             microscope_class = None
             security_counter = 0
-            loaded_dynamically = False
+            load_microscope = False
+            load_camera = False
             # self.camera = None
             # self.microscope = None
             while ((not isinstance(self.microscope, MicroscopeInterface) or
                     not isinstance(self.camera, CameraInterface)) and
                    security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
-                loaded_dynamically = True
                 try:
+                    args = []
+
+                    if not isinstance(self.microscope, MicroscopeInterface):
+                        args.append(("microscope-module", "microscope-class", modules))
+                        load_microscope = True
+                    if not isinstance(self.camera, CameraInterface):
+                        args.append(("camera-module", "camera-class"))
+                        load_camera = True
+
                     # get the microscope and the camera from the config or 
                     # from the user
-                    microscope_class, camera_class = self._dynamicGetClasses(
-                        ("microscope-module", "microscope-class", modules),
-                        ("camera-module", "camera-class")
-                    )
+                    classes = self._dynamicGetClasses(*args)
+
+                    if load_microscope and load_camera:
+                        microscope_class = classes[0]
+                        camera_class = classes[1]
+                    elif load_microscope:
+                        microscope_class = classes[0]
+                    elif load_camera:
+                        camera_class = classes[0]
+                    
                 except (ModuleNotFoundError, AttributeError, NameError, 
                         TypeError) as e:
                     if isinstance(e, ModuleNotFoundError):
@@ -431,7 +446,8 @@ class Controller:
                         self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
                 
                 # define the configuration options if there are some
-                if hasattr(microscope_class, "defineConfigurationOptions"):
+                if (microscope_class is not None and 
+                    hasattr(microscope_class, "defineConfigurationOptions")):
                     config_keys_before = self.configuration.getGroupsAndKeys()
 
                     microscope_class.defineConfigurationOptions(
@@ -446,7 +462,8 @@ class Controller:
                 else:
                     microscope_keys = []
                 
-                if hasattr(camera_class, "defineConfigurationOptions"):
+                if (camera_class is not None and
+                    hasattr(camera_class, "defineConfigurationOptions")):
                     config_keys_before = self.configuration.getGroupsAndKeys()
 
                     camera_class.defineConfigurationOptions(
@@ -464,27 +481,29 @@ class Controller:
                 # ask all non-existing but required configuration options
                 self.askIfNotPresentConfigurationOptions()
                 
-                try:
-                    self.microscope = self._dynamicCreateClass(
-                        microscope_class, (self, )
-                    )
-                except Exception as e:
-                    self.view.showError(e)
-                    self.microscope = None
+                if microscope_class is not None:
+                    try:
+                        self.microscope = self._dynamicCreateClass(
+                            microscope_class, (self, )
+                        )
+                    except Exception as e:
+                        self.view.showError(e)
+                        self.microscope = None
 
-                    for group, key in microscope_keys:
-                        self.configuration.removeElement(group, key)
+                        for group, key in microscope_keys:
+                            self.configuration.removeElement(group, key)
                 
-                try:
-                    self.camera = self._dynamicCreateClass(
-                        camera_class, (self, )
-                    )
-                except Exception as e:
-                    self.view.showError(e)
-                    self.camera = None
+                if camera_class is not None:
+                    try:
+                        self.camera = self._dynamicCreateClass(
+                            camera_class, (self, )
+                        )
+                    except Exception as e:
+                        self.view.showError(e)
+                        self.camera = None
 
-                    for group, key in camera_keys:
-                        self.configuration.removeElement(group, key)
+                        for group, key in camera_keys:
+                            self.configuration.removeElement(group, key)
 
             # show an error that the max loop count is reached and stop the
             # execution
@@ -497,14 +516,14 @@ class Controller:
                                     "and debug the 'pylo/controller.py' file.")
                 return
 
-            if not loaded_dynamically:
-                # microscope and camera are set from outside, make sure to 
-                # initialize their configuration options
-
+            if not load_microscope:
+                # microscope is set from outside, load configuration options
                 if (hasattr(self.microscope, "defineConfigurationOptions") and 
                     callable(self.microscope.defineConfigurationOptions)):
                     self.microscope.defineConfigurationOptions(self.configuration)
 
+            if not load_camera:
+                # camera is set from outside, load configuration options
                 if (hasattr(self.camera, "defineConfigurationOptions") and 
                     callable(self.camera.defineConfigurationOptions)):
                     self.camera.defineConfigurationOptions(self.configuration)
