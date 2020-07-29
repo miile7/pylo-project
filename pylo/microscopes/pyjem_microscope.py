@@ -1,6 +1,3 @@
-
-print("pyjem_microscope:", __package__)
-
 import time
 import typing
 import threading
@@ -156,7 +153,16 @@ class PyJEMMicroscope(MicroscopeInterface):
         self.supported_measurement_variables = [
             # limits taken from 
             # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
-            MeasurementVariable("focus", "Focus", -1, 50),
+            MeasurementVariable(
+                "focus", 
+                "Focus (absolut)", 
+                min_value=-1, 
+                max_value=50, 
+                unit="\u03BCm" # micrometer
+                format=int,
+                # step by one increases the focus (in LOWMag-Mode) by 3 microns
+                calibration=3
+            ),
             # tilt depends on holder
             MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
             MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
@@ -165,8 +171,8 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "Objective Lense Current", 
                 unit="hex",
                 format=hex_int,
-                min_value = 0x0,
-                max_value = 0x1,
+                min_value=0x0,
+                max_value=0xFFFF,
                 calibrated_unit=magnetic_field_unit,
                 calibrated_name="Magnetic Field",
                 calibration=magnetic_field_calibration_factor,
@@ -225,27 +231,27 @@ class PyJEMMicroscope(MicroscopeInterface):
             The state dict
         """
 
-        get = lambda v: v[1] if isinstance(v, (list, tuple)) else v
+        get = lambda v, i: v[i] if isinstance(v, (list, tuple)) else v
 
         state = {
-            "cl1": get(self._lense_control.GetCL1()),
-            "cl2": get(self._lense_control.GetCL2()),
-            "cl3": get(self._lense_control.GetCL3()),
-            "il1": get(self._lense_control.GetIL1()),
-            "il2": get(self._lense_control.GetIL2()),
-            "il3": get(self._lense_control.GetIL3()),
-            "il4": get(self._lense_control.GetIL4()),
-            "pl1": get(self._lense_control.GetPL1()),
-            "pl2": get(self._lense_control.GetPL2()),
-            "pl3": get(self._lense_control.GetPL3()),
-            "olc": get(self._lense_control.GetOLc()),
-            "olf": get(self._lense_control.GetOLf()),
-            "om1": get(self._lense_control.GetOM()),
-            "om2": get(self._lense_control.GetOM2()),
+            "cl1": get(self._lense_control.GetCL1(), 1),
+            "cl2": get(self._lense_control.GetCL2(), 1),
+            "cl3": get(self._lense_control.GetCL3(), 1),
+            "il1": get(self._lense_control.GetIL1(), 1),
+            "il2": get(self._lense_control.GetIL2(), 1),
+            "il3": get(self._lense_control.GetIL3(), 1),
+            "il4": get(self._lense_control.GetIL4(), 1),
+            "pl1": get(self._lense_control.GetPL1(), 1),
+            "pl2": get(self._lense_control.GetPL2(), 1),
+            "pl3": get(self._lense_control.GetPL3(), 1),
+            "olc": get(self._lense_control.GetOLc(), 1),
+            "olf": get(self._lense_control.GetOLf(), 1),
+            "om1": get(self._lense_control.GetOM(), 1),
+            "om2": get(self._lense_control.GetOM2(), 1),
             # cannot set this value, there is no setter
-            # "om2f": get(self._lense_control.GetOM2Flag()),
-            "probe-mode": get(self._eos.GetProbeMode()),
-            "function-mode": get(self._eos.GetFunctionMode()),
+            # "om2f": get(self._lense_control.GetOM2Flag(), 1),
+            "probe-mode": get(self._eos.GetProbeMode(), 0),
+            "function-mode": get(self._eos.GetFunctionMode(), 0),
         }
 
         return state
@@ -463,7 +469,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             # false
             raise ValueError("The id {} does not exist.".format(id_))
     
-    def _setFocus(self, value : float) -> None:
+    def _setFocus(self, value : int) -> None:
         """Set the focus to the given value.
 
         Typical values are between -1 and 50.
@@ -472,13 +478,13 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         Parameters
         ----------
-        value : float
+        value : int
             The focus value
         """
         
         diff = value - self._focus
         self._action_lock.acquire()
-        self._eos.SetObjFocus(diff)
+        self._eos.SetObjFocus(int(diff))
         # self._eos.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetILFocus(value)
@@ -672,7 +678,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # allow other functions to use the microscope
         self._action_lock.release()
 
-        return pos[STAGE_INDEX_X_TILT]
+        return round(pos[STAGE_INDEX_X_TILT], 2)
     
     def _getYTilt(self) -> float:
         """Get the y tilt in degrees.
@@ -698,7 +704,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # allow other functions to use the microscope
         self._action_lock.release()
 
-        return pos[STAGE_INDEX_Y_TILT]
+        return round(pos[STAGE_INDEX_Y_TILT], 2)
     
     def resetToEmergencyState(self) -> None:
         """Reset the machine to an emergency state.
@@ -711,10 +717,15 @@ class PyJEMMicroscope(MicroscopeInterface):
         # switch off the beam valve
         # documentation sais: "This works for FEG and 3100EF" for 
         # FEG3::SetBeamValve() and for FEG3::setFEGEmissionOff()
-        # self._feg.SetBeamValve(0)
+        self._feg.SetBeamValve(0)
+
+        # Do not change emission, if there are bad values and it is 
+        # switched on, this may have bad effects
         # self._feg.SetFEGEmissionOff(1)
 
         # the documentation sais: "This does not work for FEG"
+        # same for the gun, do not touch the gun, this may have bad
+        # side effects
         # self._gun.SetBeamSw(0)
 
         # beam blanking, should not be used but may be used for emergency mode
