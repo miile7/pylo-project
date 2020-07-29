@@ -81,3 +81,17 @@ __config_docs__("VIEW",
 Default: DMView (Needs Digital Micrograph extension)
 """)
 VIEW = None
+
+__config_docs__("DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT",
+"""Whether to set the microscope to the safe state after the measurement has 
+finished or not.
+Default: False
+""")
+DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT = False
+
+__config_docs__("DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT",
+"""Whether to set the camera to the safe state after the measurement has 
+finished or not.
+Default: False
+""")
+DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT = False
