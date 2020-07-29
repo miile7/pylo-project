@@ -15,7 +15,11 @@ contains Events on image recording to add plugins that change the measuring beha
 
 ## Dependencies
 
-PyLo is written with python 3.2.
+PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
+
+- PyJEM by JEOL (for only for `PyJEMMicroscope` and `PyJEMCamera` needs httplib2, cv2=OpenCV and matplolib)
+- [NumPy](https://numpy.org/)
+- [PIL=Pillow](https://python-pillow.org/)
 
 ### General
 
