@@ -1,13 +1,67 @@
 import typing
 
+from .datatype import Datatype
+
 if hasattr(typing, "TypedDict"):
-    class AskInput(typing.TypedDict, total=False):
-        datatype: type
-        description: str
-        options: typing.Union[None, typing.Collection]
-        allow_custom: bool
+    AskInput = typing.TypedDict("AskInput", {
+                                "datatype": type,
+                                "description": str,
+                                "options": typing.Union[None, typing.Sequence],
+                                "allow_custom": bool
+                                }, total=False)
 else:
     AskInput = typing.Dict
+
+def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'", 
+                      separator: typing.Optional[str]=", ", 
+                      word: typing.Optional[str]="or"):
+    """Concatenate the list x with `separator` and the last time with the 
+    `word`.
+
+    Example:
+    ```python
+    >>> human_concat_list(["a", "b", "c"])
+    "'a', 'b' or 'c'"
+    >>> human_concat_list(["a", "b"])
+    "'a' or 'b'"
+    >>> human_concat_list(["a", "b", "c"], surround="*", separator=";", 
+    ... word="and")
+    "*a*;*b* and *c*"
+    ```
+
+    Parameters
+    ----------
+    x : Sequence
+        The sequence to concat
+    surround : str, optional
+        The characters to surround the list items with
+    separator : str, optional
+        The text to print between two list items (except the last two), 
+        default: ", "
+    word : str, optional
+        The word to use between the last two items
+    
+    Returns
+    -------
+    str
+        The concatenated list
+    """
+    if surround != "":
+        x = map(lambda y: "{s}{y}{s}".format(s=surround, y=y), x)
+    if word != "":
+        word = " {} ".format(word)
+    x = list(x)
+
+    if len(x) > 2:
+        return separator.join(x[:-1]) + word + x[-1]
+    elif len(x) > 1:
+        return word.join(x)
+    elif len(x) == 1:
+        return x[0]
+    elif surround != "":
+        return ""
+    else:
+        return surround * 2
 
 class AbstractView:
     """This class defines the methods for the view.
@@ -64,10 +118,10 @@ class AbstractView:
         dict, dict
             A dict that defines the start conditions of the measurement where 
             each`MeasurementVariable`s ids as a key and the value is the start 
-            value
+            value (value has to be the uncalibrated value)
             Another dict that contains the series with a 'variable', 'start', 
             'end' and 'step-width' key and an optional 'on-each-point' key that 
-            may contain another series
+            may contain another series (value has to be the uncalibrated value)
         """
         raise NotImplementedError()
 
@@ -91,7 +145,7 @@ class AbstractView:
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
@@ -254,3 +308,250 @@ class AbstractView:
             input_dict["allow_custom"] = not ("options" in input_dict)
         
         return input_dict
+    
+    def formatValue(self, datatype: typing.Union[type, Datatype, list, tuple], value: typing.Any) -> str:
+        """Get the `value` correctly formatted as a string.
+
+        Parameters
+        ----------
+        datatype : type, Datatype, list or tuple
+            The datatype or a list of allowed values
+        
+        Returns
+        -------
+        str
+            The `value` as a string
+        """
+
+        if isinstance(datatype, Datatype):
+            return datatype.format(value)
+        else:
+            return "{}".format(value)
+    
+    def getDatatypeName(self, datatype: typing.Union[type, Datatype, list, tuple]) -> str:
+        """Get the name representation for the `datatype`.
+
+        Parameters
+        ----------
+        datatype : type, Datatype, list or tuple
+            The datatype
+        
+        Returns
+        -------
+        str
+            A string that is human readable for the `datatype`
+        """
+
+        if datatype == int:
+            type_name = "integer number"
+        elif datatype == float:
+            type_name = "decimal number"
+        elif datatype == bool:
+            type_name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
+        elif datatype == str:
+            type_name = "text"
+        elif isinstance(datatype, (list, tuple)):
+            type_name = "possibility list"
+        elif hasattr(datatype, "name") and isinstance(datatype.name, str):
+            type_name = datatype.name
+        elif hasattr(datatype, "__name__") and isinstance(datatype.__name__, str):
+            type_name = datatype.__name__
+        else:
+            type_name = str(datatype)
+        
+        return type_name
+    
+    def parseStart(self, controller: "Controller", 
+                   start: typing.Union[dict, None], 
+                   add_defaults: typing.Optional[bool]=True) -> typing.Tuple[typing.Union[dict, None], list]:
+        """Parse the `start`.
+
+        Convert all the values for the start setup to uncalibrated values. If 
+        `add_defaults` is True, default values will be added for each missing
+        key. If `add_defaults` is False, None is returned if an error occurres.
+
+        Parameters
+        ----------
+        controller : Controller
+            The controller
+        series : dict
+            The series dict with the "variable", "start", "step-width", "end" 
+            and optionally the "on-each-point" keys
+        add_defaults : bool, optional
+            Whether to try adding default values until the series is valid 
+            (True) or to return None when the series is invalid (False)
+        
+        Returns
+        -------
+        dict or None, list
+            The valid start or None if `add_defaults` is False and an error 
+            occurred and the list of errors
+        """
+
+        errors = []
+        for v in controller.microscope.supported_measurement_variables:
+            if not isinstance(start, dict):
+                if not add_defaults:
+                    return None, errors
+                else:
+                    start = {}
+            if not v.unique_id in start:
+                if not add_defaults:
+                    return None, errors
+                else:
+                    start[v.unique_id] = min(max(0, v.min_value), v.max_value)
+            elif start[v.unique_id] > v.max_value:
+                errors.append(("The start value '{}' for '{}' is gerater " + 
+                               "than the maximum value {}.").format(
+                                   v.unique_id, start[v.unique_id], v.max_value
+                               ))
+                start[v.unique_id] = v.max_value
+            elif start[v.unique_id] < v.min_value:
+                errors.append(("The start value '{}' for '{}' is less " + 
+                               "than the minimum value {}.").format(
+                                   v.unique_id, start[v.unique_id], v.min_value
+                               ))
+                start[v.unique_id] = v.min_value
+        
+        return start, errors
+    
+    def parseSeries(self, controller: "Controller", 
+                    series: typing.Union[dict, None], 
+                    add_defaults: typing.Optional[bool]=True, 
+                    path: typing.Optional[list]=[]) -> typing.Tuple[typing.Union[dict, None], typing.List[str]]:
+        """Recursively parse the `series`.
+
+        Convert all the values for the series and the child series to 
+        uncalibrated values. If `add_defaults` is True and there is a 
+        "variable" index, the defaults will be added, `add_defaults` is False
+        and a key is missing, the whole series will be deleted.
+
+        Parameters
+        ----------
+        controller : Controller
+            The controller
+        series : dict
+            The series dict with the "variable", "start", "step-width", "end" 
+            and optionally the "on-each-point" keys
+        add_defaults : bool, optional
+            Whether to try adding default values until the series is valid 
+            (True) or to return None when the series is invalid (False)
+        path : list, optional
+            The parent 'variable' ids if the `series` is the series in the 
+            'on-each-point' index of the parent
+        
+        Returns
+        -------
+        dict or None, list
+            The `series` filled with all values and the values as uncalibrated 
+            values or None if `add_defaults` is False and the series could not 
+            be parsed or if there is a not solvable error
+            The list of error messages
+        """
+
+        if isinstance(path, (list, tuple)):
+            path_str = "".join([" in 'on-each-step' of {}".format(p) 
+                                for p in path])
+        else:
+            path = []
+            path_str = ""
+        
+        errors = []
+
+        if not isinstance(series, dict):
+            series = {}
+        
+        if not "variable" in series or series["variable"] in path:
+            ids = [v.unique_id for v in 
+                   controller.microscope.supported_measurement_variables]
+            ids = list(filter(lambda i: i not in path, ids))
+
+            if len(ids) == 0:
+                errors.append(("There is no variable left to make a series " + 
+                               "on each point."))
+                return None, errors
+            elif "variable" in series and series["variable"] in path:
+                errors.append(("The series{} over '{}' is invalid, one of " + 
+                               "the parent series is a series over '{}' " + 
+                               "already. Use {}.").format(
+                                path_str, series["variable"], 
+                                series["variable"], 
+                                human_concat_list(ids)
+                            ))
+                if not add_defaults:
+                    return None, errors
+            else:
+                series["variable"] = ids[0]
+        
+        var = controller.microscope.getMeasurementVariableById(
+            series["variable"]
+        )
+
+        keys = {
+            "start": var.min_value,
+            "end": var.max_value,
+            "step-width": (var.max_value - var.min_value) / 10
+        }
+
+        for k, d in keys.items():
+            if not k in series or not isinstance(series[k], (int, float)):
+                if not add_defaults:
+                    return None
+                
+                series[k] = d
+                # errors.append(("The series{} '{}' key is not " + 
+                #                "defined.").format(path_str, k))
+            elif (k == "start" or k == "end") and series[k] < var.min_value:
+                series[k] = var.min_value
+                errors.append(("The series{} '{}' key is less than the " + 
+                               "minimum value of {}.").format(
+                                   path_str, k, var.min_value
+                             ))
+            elif (k == "start" or k == "end") and series[k] > var.max_value:
+                series[k] = var.max_value
+                errors.append(("The series{} '{}' key is greater than the " + 
+                               "maximum value of {}.").format(
+                                   path_str, k, var.max_value
+                             ))
+
+        if "on-each-point" in series:
+            if not isinstance(series["on-each-point"], dict):
+                errors.append(("The '{}' of the series{} has the wrong " + 
+                               "type. It has to be of type 'dict' but it " + 
+                               "is '{}'.").format("on-each-point", path_str,
+                               type(series["on-each-point"])))
+                series["on-each-point"] = None
+            elif "variable" not in series["on-each-point"]:
+                errors.append(("The '{}' of the 'on-each-point' series in " + 
+                               "the series{} is missing.").format("variable", 
+                               path_str
+                             ))
+                series["on-each-point"] = None
+            elif (series["on-each-point"]["variable"] in 
+                  path + [series["variable"]]):
+                errors.append(("The variable '{}' of the 'on-each-point' " + 
+                               "series in the series{} is used on another " + 
+                               "series already.").format(
+                                   series["on-each-point"]["variable"], 
+                                    path_str
+                             ))
+                series["on-each-point"] = None
+            else:
+                # note that this can return None too, if add_defaults=False and
+                # the series["on-each-point"] is invalid
+                on_each_point_series, on_each_point_errors = self.parseSeries(
+                    controller, series["on-each-point"], add_defaults, 
+                    path + [series["variable"]]
+                )
+                series["on-each-point"] = on_each_point_series
+                errors += on_each_point_errors
+            
+            if series["on-each-point"] is None:
+                del series["on-each-point"]
+
+        # convert to uncalibrated values
+        series["start"] = var.ensureUncalibratedValue(series["start"])
+        series["step-width"] = var.ensureUncalibratedValue(series["step-width"])
+        series["end"] = var.ensureUncalibratedValue(series["end"])
+        
+        return series, errors

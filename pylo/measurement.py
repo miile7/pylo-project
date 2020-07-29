@@ -1,6 +1,9 @@
-import datetime
-import typing
+import io
 import os
+import csv
+import time
+import typing
+import datetime
 
 import numpy as np
 
@@ -14,6 +17,7 @@ from .events import after_record
 from .events import measurement_ready
 
 from .image import Image
+from .datatype import Datatype
 from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
 from .measurement_variable import MeasurementVariable
@@ -21,6 +25,8 @@ from .blocked_function_error import BlockedFunctionError
 
 # from .config import DEFAULT_SAVE_DIRECTORY
 # from .config import DEFAULT_SAVE_FILE_NAME
+
+CONFIG_MEASUREMENT_GROUP = "measurement"
 
 class Measurement:
     """This class represents one measurement.
@@ -37,6 +43,15 @@ class Measurement:
         The controller
     save_dir : str
         The absolute path of the directory where to save this measurement to
+    microscope_safe_after : bool
+        Whether to set the microscope in its safe mode if the measurememt is 
+        finished
+    camera_safe_after : bool
+        Whether to set the camera in its safe mode if the measurememt is 
+        finished
+    relaxation_time : float
+        The relaxation time in seconds to wait after the microscope has been 
+        set to lorenz mode
     name_format : str
         The file name how to save the images (including the extension, 
         supported are all the extensions provided by the `CameraInterface`),
@@ -58,14 +73,75 @@ class Measurement:
         self.tags = {}
         self.steps = steps
 
+        # prepare the save directory and the file format
         self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
-            ("measurement", "save-directory"),
-            ("measurement", "save-file-format"),
+            (CONFIG_MEASUREMENT_GROUP, "save-directory"),
+            (CONFIG_MEASUREMENT_GROUP, "save-file-format"),
             fallback_default=True
         )
+
+        # make sure the directory exists
+        if not os.path.exists(self.save_dir):
+            try:
+                os.makedirs(self.save_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The save directory '{}' does not exist and " + 
+                               "cannot be created.").format(self.save_dir)) from e
         
+        # get the log path
+        self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
+            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
+            fallback_default=True
+        )
+
+        # make sure the parent directory exists
+        log_dir = os.path.dirname(self._log_path)
+        if not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except OSError as e:
+                raise OSError(("The log directory '{}' does not exist and " + 
+                               "cannot be created.").format(log_dir)) from e
+        
+        # prepare whether to go in safe mode after the measurement has finished
+        try:
+            self.microscope_safe_after = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "microscope-to-safe-state-after-measurement"
+            )
+        except KeyError:
+            self.microscope_safe_after = None
+
+        self.microscope_safe_after = (self.microscope_safe_after == True)
+
+        # prepare whether to go in safe mode after the measurement has finished
+        try:
+            self.camera_safe_after = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "camera-to-safe-state-after-measurement"
+            )
+        except KeyError:
+            self.camera_safe_after = None
+        
+        self.camera_safe_after = (self.camera_safe_after == True)
+
+        # prepare the relaxation time to wait before continuing after the 
+        # measurement is set to the lorenz mode
+        try:
+            self.relaxation_time = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "relaxation-time-lorenz-mode"
+            )
+        except KeyError:
+            self.relaxation_time = None
+        
+        if (not isinstance(self.relaxation_time, (int, float)) or 
+            self.relaxation_time < 0):
+            self.relaxation_time = 0
+
         self.current_image = None
         self.running = False
+        self.logging = True
 
         # stop the measurement when the emergency event is fired
         emergency.append(self.stop)
@@ -184,9 +260,28 @@ class Measurement:
         self.running = True
         self._image_save_threads = []
 
+        if self.logging:
+            self.setupLog(
+                [v.unique_id for v in self.controller.microscope.supported_measurement_variables],
+                ["Action"],
+                ["Image path", "Time"]
+            )
+
         try:
             # set to lorenz mode
             self.controller.microscope.setInLorenzMode(True)
+        
+            if (isinstance(self.relaxation_time, (int, float)) and 
+                self.relaxation_time > 0):
+                start_time = time.time()
+
+                while time.time() - start_time < self.relaxation_time:
+                    # allow calling stop() function while waiting
+                    time.sleep(0.01)
+
+                    if not self.running:
+                        # stop() is called
+                        return
 
             if not self.running:
                 # stop() is called
@@ -204,8 +299,17 @@ class Measurement:
                 # fire event before recording
                 before_record()
 
+                if not self.running:
+                    # stop() is called
+                    return
+
                 # the asynchronous threads to set the values at the micrsocope
                 measurement_variable_threads = []
+
+                if self.logging:
+                    # add the values to reach to the current log
+                    self.addToLog(step, "Targetting values", "", 
+                                  datetime.datetime.now().isoformat())
 
                 for variable_name in step:
                     # set each measurement variable
@@ -243,6 +347,22 @@ class Measurement:
                 
                 # record measurement
                 self.current_image = self.controller.camera.recordImage()
+                name = self.formatName()
+                
+                if not self.running:
+                    # stop() is called
+                    return
+                
+                if self.logging:
+                    # add the actual values to the current log
+                    variable_values = {}
+                    for variable_name in step:
+                        variable_values[variable_name] = (
+                            self.controller.microscope.getMeasurementVariableValue(variable_name)
+                        )
+                    
+                    self.addToLog(variable_values, "Recording image", name, 
+                                  datetime.datetime.now().isoformat())
                 
                 if not self.running:
                     # stop() is called
@@ -255,7 +375,6 @@ class Measurement:
                     # stop() is called, maybe by after_record() event handler
                     return
                 
-                name = self.formatName()
                 # save the image parallel to working on
                 thread = ExceptionThread(
                     target=self.current_image.saveTo,
@@ -268,13 +387,18 @@ class Measurement:
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly, do this while waiting
             # for the save threads to finish
-            thread = ExceptionThread(target=self.controller.microscope.resetToSafeState)
-            thread.start()
-            reset_threads.append(thread)
-            
-            thread = ExceptionThread(target=self.controller.camera.resetToSafeState)
-            thread.start()
-            reset_threads.append(thread)
+            if self.microscope_safe_after:
+                thread = ExceptionThread(
+                    target=self.controller.microscope.resetToSafeState
+                )
+                thread.start()
+                reset_threads.append(thread)
+            if self.camera_safe_after:
+                thread = ExceptionThread(
+                    target=self.controller.camera.resetToSafeState
+                )
+                thread.start()
+                reset_threads.append(thread)
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
@@ -288,6 +412,7 @@ class Measurement:
                         raise error
 
             # reset everything to the state before measuring
+            self.closeLog()
             self.running = False
             self._step_index = -1
             measurement_ready()
@@ -322,9 +447,131 @@ class Measurement:
 
         self.running = False
         self._setSafe()
+        self.closeLog()
 
         # fire stop event
         after_stop()
+    
+    def setupLog(self, variable_ids: typing.List[str], 
+                 before_columns: typing.Optional[typing.List[str]]=[], 
+                 after_columns: typing.Optional[typing.List[str]]=[]) -> None:
+        """Define the log format.
+
+        The `variable_ids` name and unit will be added to the log. If there is 
+        a calibration, the uncalibrated value is automatically appended as a 
+        column before the calibrated value.
+
+        Raises
+        ------
+        OSError, IOError
+            When the log file cannot be opened
+        
+        Parameters
+        ----------
+        variable_ids : list
+            A list of all the `MeasurementVariable` ids that can occurre.
+        before_columns : list
+            A list that contains the header names of the columns that should be
+            printed before the variables
+        after_columns : list
+            A list that contains the header names of the columns that should be
+            printed after the variables
+        """
+
+        self._log_file = open(self._log_path, "w+", newline="")
+        self._log_writer = csv.writer(
+            self._log_file, delimiter=",", quotechar="\"", quoting=csv.QUOTE_MINIMAL
+        )
+
+        self._log_columns = before_columns + variable_ids + after_columns
+        column_headlines = before_columns
+
+        for id_ in variable_ids:
+            var = self.controller.microscope.getMeasurementVariableById(id_)
+            column_headlines.append(
+                str(var.name) + " " + 
+                str(var.unique_id) + 
+                ((" [" + str(var.unit) + "]") if var.unit is not None else "")
+            )
+
+            if var.has_calibration:
+                column_headlines.append(
+                    str(var.calibrated_name) + " " + 
+                    str(var.unique_id) + 
+                    ((" [" + str(var.calibrated_unit) + "]") 
+                     if var.calibrated_unit is not None else "")
+                )
+
+        column_headlines += after_columns
+        self._addToLog(column_headlines)
+    
+    def addToLog(self, variables: dict, *columns: str) -> None:
+        """Add a line of columns to the log.
+
+        If a `MeasurementVariable` has a calibration, the uncalibrated value is 
+        automatically calculated and appended to the column before the variable
+        itself.
+        
+        Parameters
+        ----------
+        variables : dict
+            The measurement variables to log, the key is the id and the value
+            is the measurement variable value in its own units, if there is a
+            calibration given, the calibrated unit is assumed
+        columns : str
+            Additional columns, they will be added before and/or after the 
+            variables, depending on the column layout defined in the 
+            `Measurement::setupLog()` function
+        """
+        cells = []
+        variable_ids = [v.unique_id for v in 
+                        self.controller.microscope.supported_measurement_variables]
+        
+        i = 0
+        for col in self._log_columns:
+            if col in variable_ids:
+                if col in variables:
+                    var = self.controller.microscope.getMeasurementVariableById(col)
+                    
+                    if isinstance(var.format, Datatype):
+                        cells.append(var.format.format(variables[col]))
+                    else:
+                        cells.append(variables[col])
+
+                    if var.has_calibration:
+                        converted = var.convertToCalibrated(variables[col])
+                        if isinstance(var.calibrated_format, Datatype):
+                            cells.append(var.calibrated_format.format(converted))
+                        else:
+                            cells.append(converted)
+
+                else:
+                    cells.append("")
+            elif i < len(columns):
+                cells.append(columns[i])
+                i += 1
+            else:
+                cells.append("")
+        
+        self._addToLog(cells)
+
+    def _addToLog(self, cells):
+        """Add the cells to the log.
+
+        Parameters
+        ----------
+        cells : list
+            The list of cells to add to the current row of the log
+        """
+        # if not hasattr(self, "_debug_log"):
+        #     self._debug_log = []
+        # self._debug_log.append(cells)
+        self._log_writer.writerow(cells)
+    
+    def closeLog(self):
+        """Close the log."""
+        if isinstance(self._log_file, io.IOBase):
+            self._log_file.close()
     
     @classmethod
     def fromSeries(class_, controller: "Controller", start_conditions: dict, 
@@ -596,21 +843,61 @@ class Measurement:
         """
 
         # import as late as possible to allow changes by extensions
+        from .config import DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT
+        from .config import DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT
+        from .config import DEFAULT_RELAXATION_TIME
         from .config import DEFAULT_SAVE_DIRECTORY
         from .config import DEFAULT_SAVE_FILE_NAME
+        from .config import DEFAULT_LOG_PATH
         
+        # add whether a relaxation time after the lornez mode is activated
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "relaxation-time-lorenz-mode", 
+            datatype=float, 
+            default_value=DEFAULT_RELAXATION_TIME, 
+            description="The relaxation time in seconds to wait after the " + 
+            "microscope is switched to lorenz mode. Use 0 or negative values " + 
+            "to ignore."
+        )
+        
+        # add whether to set the microscope to the safe state after the 
+        # measurement has finished or not
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "microscope-to-safe-state-after-measurement", 
+            datatype=bool, 
+            default_value=DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT, 
+            description="Whether to set the microscope in the safe sate " + 
+            "after the measurement is finished."
+        )
+        
+        # add whether to set the camera to the safe state after the 
+        # measurement has finished or not
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "camera-to-safe-state-after-measurement", 
+            datatype=bool, 
+            default_value=DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT, 
+            description="Whether to set the camera in the safe sate " + 
+            "after the measurement is finished."
+        )
+
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-directory", datatype=str, 
-            default_value=DEFAULT_SAVE_DIRECTORY, ask_if_not_present=True,
+            CONFIG_MEASUREMENT_GROUP, "save-directory", 
+            datatype=str, 
+            default_value=DEFAULT_SAVE_DIRECTORY, 
+            ask_if_not_present=True,
             description="The directory where to save the camera images to " + 
-            "that are recorded while measuring.")
+            "that are recorded while measuring."
+        )
+
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-file-format", datatype=str, 
-            default_value=DEFAULT_SAVE_FILE_NAME, ask_if_not_present=True,
+            CONFIG_MEASUREMENT_GROUP, "save-file-format", 
+            datatype=str, 
+            default_value=DEFAULT_SAVE_FILE_NAME, 
+            ask_if_not_present=True,
             description="The name format to use to save the recorded images. " + 
             "Some placeholders can be used. Use {counter} to get the current " + 
             "measurement number, use {tags[your_value]} to get use the " + 
@@ -621,7 +908,17 @@ class Measurement:
             "according to the python `strftime()` format, started with a " + 
             "colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and " + 
             "hour minute and second. Make sure to inculde the file extension " + 
-            "but use supported extensions only.")
+            "but use supported extensions only."
+        )
+        
+        # add the save path for the log
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "log-save-path",
+            datatype=str,
+            default_value=DEFAULT_LOG_PATH,
+            description=("The file path (including the file name) to save " + 
+            "log to.")
+        )
     
 def cust_range(*args, rtol=1e-05, atol=1e-08, include=[True, False]):
     """

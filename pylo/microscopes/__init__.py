@@ -1,2 +1,2 @@
-from .jeol_neoarm_f200 import JEOLNeoARMF200
+from .pyjem_microscope import PyJEMMicroscope
 from .microscope_interface import MicroscopeInterface

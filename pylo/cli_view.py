@@ -1,30 +1,16 @@
 import os
 import re
+import sys
 import math
 import typing
 import textwrap
+import linecache
 
+from .datatype import Datatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
-
-def human_concat_list(x, surround="'", word="or"):
-    if surround != "":
-        x = map(lambda y: "{s}{y}{s}".format(s=surround, y=y), x)
-    if word != "":
-        word = " {} ".format(word)
-    x = list(x)
-
-    if len(x) > 2:
-        return ", ".join(x[:-1]) + word + x[-1]
-    elif len(x) > 1:
-        return word.join(x)
-    elif len(x) == 1:
-        return x[0]
-    elif surround != "":
-        return ""
-    else:
-        return surround * 2
+from .abstract_view import human_concat_list
 
 class CLIView(AbstractView):
     """This class represents a very basic CLI view. It uses `print()` and 
@@ -63,7 +49,7 @@ class CLIView(AbstractView):
             # for custom implementations of the stdout, especially in the test
             sys.stdout.clear()
             sys.stdout.cls()
-        except (NameError, TypeError):
+        except (NameError, TypeError, AttributeError):
             pass
         
         os.system('cls' if os.name=='nt' else 'clear')
@@ -154,10 +140,10 @@ class CLIView(AbstractView):
         dict, dict
             A dict that defines the start conditions of the measurement where 
             each`MeasurementVariable`s ids as a key and the value is the start 
-            value
+            value (value has to be the uncalibrated value)
             Another dict that contains the series with a 'variable', 'start', 
             'end' and 'step-width' key and an optional 'on-each-point' key that 
-            may contain another series
+            may contain another series (value has to be the uncalibrated value)
         """
 
         return self._showCreateMeasurementLoop(controller)
@@ -197,52 +183,40 @@ class CLIView(AbstractView):
             function.
         """
 
-        default_var = None
         measuremnt_vars_inputs = []
-        variable_ids = []
         errors = []
 
-        for v in controller.microscope.supported_measurement_variables:
-            variable_ids.append(v.unique_id)
+        start, start_errors = self.parseStart(controller, start, True)
+        for id_ in start:
+            v = controller.microscope.getMeasurementVariableById(id_)
+            
+            if v.has_calibration and v.calibrated_name is not None:
+                label = str(v.calibrated_name)
+                if v.calibrated_unit is not None:
+                    label += " [{}]".format(v.calibrated_unit)
+            else:
+                label = str(v.name)
+                if v.unit is not None:
+                    label += " [{}]".format(v.unit)
 
-            if default_var is None:
-                default_var = v
-            
-            if not isinstance(start, dict):
-                start = {}
-            if not v.unique_id in start:
-                start[v.unique_id] = min(max(0, v.min_value), v.max_value)
-            elif start[v.unique_id] > v.max_value:
-                errors.append(("The start value '{}' for '{}' is gerater " + 
-                               "than the maximum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.max_value
-                               ))
-                start[v.unique_id] = v.max_value
-            elif start[v.unique_id] < v.min_value:
-                errors.append(("The start value '{}' for '{}' is less " + 
-                               "than the minimum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.min_value
-                               ))
-                start[v.unique_id] = v.min_value
-            
             measuremnt_vars_inputs.append({
                 "id": v.unique_id,
-                "label": str(v.name) + (" [{}]".format(v.unit) if v.unit is not None else ""),
-                "datatype": float,
-                "min_value": v.min_value,
-                "max_value": v.max_value,
+                "label": label,
+                "datatype": v.calibrated_format if v.has_calibration else v.format,
+                "min_value": v.ensureCalibratedValue(v.min_value),
+                "max_value": v.ensureCalibratedValue(v.max_value),
                 "required": True,
-                "value": start[v.unique_id]
+                "value": v.ensureCalibratedValue(start[v.unique_id])
             })
         
+        errors += start_errors
         if not isinstance(series, dict):
             series = {}
-        if not "variable" in series:
-            series["variable"] = default_var.unique_id
-        series_inputs, series_errors = self._parseSeriesInputs(series, controller)
+        
+        series_inputs, series_errors = self._parseSeriesInputs(controller, series)
         errors += series_errors
 
-        self.errors = "\n".join(errors)
+        self.error = "\n".join(errors)
 
         values, command = self._printSelect(
             "Define the start conditions",
@@ -253,11 +227,14 @@ class CLIView(AbstractView):
         )
 
         series_reg = re.compile(r"series-([\d]+)-([\w\-]+)")
+        
         start = {}
         series = {}
+        variable_ids = [v.unique_id for v in 
+                        controller.microscope.supported_measurement_variables]
         for k, v in values.items():
             if k in variable_ids:
-                start[k] = float(v)
+                start[k] = v
             else:
                 match = series_reg.match(k)
 
@@ -270,15 +247,20 @@ class CLIView(AbstractView):
                         s = s["on-each-point"]
 
                     if match.group(2) == "start":
-                        s["start"] = float(v)
+                        s["start"] = v
                     elif match.group(2) == "step-width":
-                        s["step-width"] = float(v)
+                        s["step-width"] = v
                     elif match.group(2) == "end":
-                        s["end"] = float(v)
+                        s["end"] = v
                     elif (match.group(2) == "variable" and v in variable_ids):
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
                         s["on-each-point"] = {"variable": v}
+        
+        # recalculate to uncalibrated values, do another validation because the
+        # iteration is there anyway
+        start, _ = self.parseStart(controller, start, True)
+        series, _ = self.parseSeries(controller, series, True)
 
         if command == True:
             return start, series
@@ -288,8 +270,7 @@ class CLIView(AbstractView):
             # restart loop
             return self._showCreateMeasurementLoop(controller, start, series)
     
-    def _parseSeriesInputs(self, series: dict, controller: "Controller", 
-                           path: typing.Optional[list]=[]) -> typing.Tuple[list, list]:
+    def _parseSeriesInputs(self, controller: "Controller", series: dict) -> typing.Tuple[list, list]:
         """Parse the given `series` recursively and return the inputs and the 
         errors if there are some.
 
@@ -299,135 +280,93 @@ class CLIView(AbstractView):
 
         Parameters
         ----------
+        controller : Controller
+            The controller to use
         series : dict
             The series dict with at least the 'variable' index that contains a
             valid `MeasurementVariable` id, optional with the 'start', 'end',
             'step-width' and 'on-each-point' keys
-        controller : Controller
-            The controller to use
-        path : list, optional
-            The parent 'variable' ids if the `series` is the series in the 
-            'on-each-point' index of the parent
         
         Returns
         -------
         list, list
             The input list at index 0, the error message list at index 1
         """
-
-        var = controller.microscope.getMeasurementVariableById(series["variable"])
-        errors = []
-        if isinstance(path, (list, tuple)):
-            path_str = "".join([" in 'on-each-step' of {}".format(p) 
-                                  for p in path])
-        else:
-            path_str = ""
-
-        keys = {
-            "start": var.min_value,
-            "end": var.max_value,
-            "step-width": (var.max_value - var.min_value) / 10
-        }
-
-        for k, d in keys.items():
-            if not k in series or not isinstance(series[k], (int, float)):
-                series[k] = d
-                # errors.append(("The series{} '{}' key is not " + 
-                #                "defined.").format(path_str, k))
-            elif (k == "start" or k == "end") and series[k] < var.min_value:
-                series[k] = var.min_value
-                errors.append(("The series{} '{}' key is less than the " + 
-                               "minimum value of {}.").format(path_str, k, 
-                                                              var.min_value))
-            elif (k == "start" or k == "end") and series[k] > var.max_value:
-                series[k] = var.max_value
-                errors.append(("The series{} '{}' key is greater than the " + 
-                               "maximum value of {}.").format(path_str, k, 
-                                                              var.max_value))
-
-        variable_names = [v.unique_id for v in 
-                          controller.microscope.supported_measurement_variables]
-        variable_names = list(filter(lambda x: x not in path, variable_names))
-        # do not allow to make a series of the current variable on each point 
-        # of the current series
-        on_each_point_names = variable_names.copy()
-        try:
-            on_each_point_names.remove(series["variable"])
-        except ValueError:
-            # this is a invalid value, the on-each-point series is the same
-            # series as one of the parents, but this error is dealt with in the 
-            # following code
-            pass
-            
-        if "on-each-point" in series:
-            if (not isinstance(series["on-each-point"], dict) or 
-                not "variable" in series["on-each-point"] or
-                not series["on-each-point"]["variable"] in on_each_point_names):
-                del series["on-each-point"]
-                errors.append(("The series{} '{}' key is invalid. Use " + 
-                               "'{}'.").format(path_str, "on-each-point",
-                               human_concat_list(on_each_point_names)))
-
-        series_inputs = [
-            {
-                "id": "series-{}-variable".format(len(path)),
-                "label": "Series variable",
-                "datatype": variable_names,
-                "required": True,
-                "value": series["variable"],
-                "inset": len(path) * "  "
-            },
-            {
-                "id": "series-{}-start".format(len(path)),
-                "label": "Start value",
-                "datatype": float,
-                "min_value": var.min_value,
-                "max_value": var.max_value,
-                "required": True,
-                "value": series["start"],
-                "inset": len(path) * "  "
-            },
-            {
-                "id": "series-{}-step-width".format(len(path)),
-                "label": "Step width",
-                "datatype": float,
-                "min_value": 0,
-                "max_value": var.max_value - var.min_value,
-                "required": True,
-                "value": series["step-width"],
-                "inset": len(path) * "  "
-            },
-            {
-                "id": "series-{}-end".format(len(path)),
-                "label": "End value",
-                "datatype": float,
-                "min_value": var.min_value,
-                "max_value": var.max_value,
-                "required": True,
-                "value": series["end"],
-                "inset": len(path) * "  "
-            },
-            {
-                "id": "series-{}-on-each-point".format(len(path)),
-                "label": "Series on each point",
-                "datatype": on_each_point_names,
-                "required": False,
-                "value": series["on-each-point"]["variable"] if "on-each-point" in series else None,
-                "inset": len(path) * "  "
-            }
-        ]
         
-        if ("on-each-point" in series and 
-            isinstance(series["on-each-point"], dict) and
-            "variable" in series["on-each-point"]):
-            child_inputs, child_errors = self._parseSeriesInputs(
-                series["on-each-point"],
-                controller,
-                path + [series["variable"]]
-            )
+        series_inputs = []
+        series, errors = self.parseSeries(controller, series, True)
+        if series is None:
+            return series_inputs, errors
+        
+        variable_ids = [v.unique_id for v in
+                        controller.microscope.supported_measurement_variables]
 
-            series_inputs += child_inputs
-            errors += child_errors
+        depth = 0
+        s = series
+        while s is not None:
+            var = controller.microscope.getMeasurementVariableById(s["variable"])
+
+            on_each_point_ids = variable_ids.copy()
+            if s["variable"] in on_each_point_ids:
+                on_each_point_ids.remove(s["variable"])
+
+            series_inputs += [
+                {
+                    "id": "series-{}-variable".format(depth),
+                    "label": "Series variable",
+                    "datatype": variable_ids.copy(),
+                    "required": True,
+                    "value": s["variable"],
+                    "inset": depth * "  "
+                },
+                {
+                    "id": "series-{}-start".format(depth),
+                    "label": "Start value",
+                    "datatype": var.calibrated_format if var.has_calibration else var.format,
+                    "min_value": var.ensureCalibratedValue(var.min_value),
+                    "max_value": var.ensureCalibratedValue(var.max_value),
+                    "required": True,
+                    "value": var.ensureCalibratedValue(s["start"]),
+                    "inset": depth * "  "
+                },
+                {
+                    "id": "series-{}-step-width".format(depth),
+                    "label": "Step width",
+                    "datatype": var.calibrated_format if var.has_calibration else var.format,
+                    "min_value": var.ensureCalibratedValue(0),
+                    "max_value": var.ensureCalibratedValue(var.max_value - var.min_value),
+                    "required": True,
+                    "value": var.ensureCalibratedValue(s["step-width"]),
+                    "inset": depth * "  "
+                },
+                {
+                    "id": "series-{}-end".format(depth),
+                    "label": "End value",
+                    "datatype": var.calibrated_format if var.has_calibration else var.format,
+                    "min_value": var.ensureCalibratedValue(var.min_value),
+                    "max_value": var.ensureCalibratedValue(var.max_value),
+                    "required": True,
+                    "value": var.ensureCalibratedValue(s["end"]),
+                    "inset": depth * "  "
+                },
+                {
+                    "id": "series-{}-on-each-point".format(depth),
+                    "label": "Series on each point",
+                    "datatype": on_each_point_ids,
+                    "required": False,
+                    "value": s["on-each-point"]["variable"] if "on-each-point" in s else None,
+                    "inset": depth * "  "
+                }
+            ]
+
+            if ("on-each-point" in s and 
+                isinstance(s["on-each-point"], dict)):
+                if s["variable"] in variable_ids:
+                    variable_ids.remove(s["variable"])
+                s = s["on-each-point"]
+                depth += 1
+            else:
+                break
         
         return series_inputs, errors
 
@@ -463,7 +402,24 @@ class CLIView(AbstractView):
             default: None
         """
         self.printTitle()
-        self.print("Error: {}".format(error))
+        
+        if isinstance(error, Exception):
+            raise error
+            exc_type, exc_obj, tb = sys.exc_info()
+            lineno = tb.tb_lineno
+            frame = tb.tb_frame
+            filename = frame.f_code.co_filename
+            linecache.checkcache(filename)
+            line = linecache.getline(filename, lineno, frame.f_globals)
+
+            error_msg = "{} (#{} in {})".format(
+                error, line, os.path.basename(filename)
+            )
+        else:
+            error_msg = "{}".format(error)
+
+        self.print("Error: {}".format(error_msg))
+        self.error = "Error: {}".format(error_msg)
 
         if isinstance(how_to_fix, str) and how_to_fix != "":
             self.print("")
@@ -512,7 +468,7 @@ class CLIView(AbstractView):
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
@@ -548,7 +504,7 @@ class CLIView(AbstractView):
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
@@ -654,8 +610,44 @@ class CLIView(AbstractView):
 
         return self._askForLoop(inputs, None, **kwargs)
 
-    def _askForLoop(self, inputs: typing.Collection[AskInput], 
+    def _askForLoop(self, inputs: typing.Sequence[AskInput], 
                     ask_dict: typing.Optional[dict]=None, **kwargs):
+        """Show the ask for loop.
+        
+        The following indices are supported for the `inputs`:
+        - 'name' : str, required - The name of the input to show
+        - 'datatype' : type - The datatype to allow
+        - 'description' : str - A description what this value is about
+        - 'options' : list or tuple - A list of options to show to the user to 
+          select from
+        - 'allow_custom' : bool - Whether the user may only use the 'options' 
+          (True) or is is allowed to type in custom values too (False), this 
+          value is ignored if there are no 'options' given, default: False
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        inputs : sequence of dicts
+            Dicts with the 'name' key that defines the name to show. Optional
+            additional keys are 'datatype', 'description', 'options' and 
+            'allow_custom'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, default:
+            "Please enter the following values."
+        
+        Returns
+        -------
+        tuple
+            A tuple of values where the value on index 0 is the value for the 
+            `inputs[0]` and so on
+        """
         if not isinstance(ask_dict, dict):
             ask_dict = {}
 
@@ -697,7 +689,8 @@ class CLIView(AbstractView):
         if command == False:
             raise StopProgram
         elif command == True:
-            return tuple(sorted(values.items(), key=lambda x: x[0]))
+            return tuple(map(lambda x: x[1], sorted(values.items(), key=lambda x: x[0])))
+            # return tuple(sorted(values.items(), key=lambda x: x[0]))
         else:
             return self._askForLoop(inputs, values, **kwargs)
 
@@ -724,7 +717,7 @@ class CLIView(AbstractView):
         An input is defined with the following indices:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -754,15 +747,28 @@ class CLIView(AbstractView):
 
         none_val = "<empty>"
 
-        # get the label column width, +1 for the colon, +1 for the required 
-        # asterix
-        label_width = max([len(l["label"]) if isinstance(l, dict) else 0 
-                               for l in args]) + 2 
-        value_width = max([len("{}".format(l["value"])) if isinstance(l, dict) else 0 
-                               for l in args] + [len(none_val)])
+        # get the char counts (=width) of each column to make calculate the 
+        # layout
+        label_widths = []
+        value_widths = [len(none_val)]
+        max_index = -1
 
-        max_index = len(list(filter(lambda x: isinstance(x, dict), args))) - 1
-        index_width = math.floor(math.log10(max_index) + 1)
+        for line in args:
+            if isinstance(line, dict):
+                label_widths.append(len(line["label"]))
+                value_widths.append(len(self.formatValue(
+                    line["datatype"], line["value"]
+                )))
+                max_index += 1
+
+        # the label char width, +1 for the colon, +1 for the "required" asterix
+        label_width = max(label_widths) + 2
+        value_width = max(value_widths)
+        
+        if max_index > 0:
+            index_width = math.floor(math.log10(max_index) + 1)
+        else:
+            index_width = 1
         index = 0
         values = {}
 
@@ -779,12 +785,26 @@ class CLIView(AbstractView):
                 
                 conditions = ""
                 if "min_value" in line and "max_value" in line:
-                    conditions = " {} <= val <= {}".format(line["min_value"],
-                                                     line["max_value"])
+                    conditions = " {} <= val <= {}".format(
+                        self.formatValue(line["datatype"], line["min_value"]),
+                        self.formatValue(line["datatype"], line["max_value"])
+                    )
                 elif "min_value" in line:
-                    conditions = " >= {}".format(line["min_value"])
+                    conditions = " >= {}".format(
+                        self.formatValue(line["datatype"], line["min_value"])
+                    )
                 elif "max_value" in line:
-                    conditions = " >= {}".format(line["max_value"])
+                    conditions = " >= {}".format(
+                        self.formatValue(line["datatype"], line["max_value"])
+                    )
+                
+                text_value = ""
+                if line["value"] is None:
+                    text_value = none_val
+                else:
+                    text_value = self.formatValue(
+                        line["datatype"], line["value"]
+                    )
 
                 text = text.format(
                     index=index,
@@ -793,7 +813,7 @@ class CLIView(AbstractView):
                         ("*" if "required" in line and line["required"] else "") + 
                         ":"
                     ), 
-                    value=(none_val if line["value"] is None else line["value"]),
+                    value=text_value,
                     conditions=conditions
                 )
 
@@ -815,14 +835,19 @@ class CLIView(AbstractView):
         elif user_input == "c":
             errors = []
 
+            counter = 0
             for line in args:
                 # check if all arguments are the correct type and set if 
                 # required
                 if isinstance(line, dict):
                     try:
+                        self.print(line)
                         self._parseValue(line, values[line["id"]])
                     except ValueError as e:
-                        errors.append((line["label"], e))
+                        errors.append(
+                            ("{} (#{})".format(line["label"], counter), e)
+                        )
+                    counter += 1
             
             if len(errors) > 0:
                 self.error = "The values for {} are invalid.".format(
@@ -880,7 +905,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -949,7 +974,7 @@ class CLIView(AbstractView):
                             abort_command != empty_command):
                             break
         
-        name = self._getDatatypeName(input_definition["datatype"])
+        name = self.getDatatypeName(input_definition["datatype"])
 
         if name == "text":
             abort_command = "!abort"
@@ -957,12 +982,21 @@ class CLIView(AbstractView):
 
         if "min_value" in input_definition and "max_value" in input_definition:
             name += " with {} <= value <= {}".format(
-                input_definition["min_value"], input_definition["max_value"]
+                self.formatValue(
+                    input_definition["datatype"], input_definition["min_value"]
+                ), 
+                self.formatValue(
+                    input_definition["datatype"], input_definition["max_value"]
+                )
             )
         elif "min_value" in input_definition:
-            name += " with value >= {}".format(input_definition["min_value"])
+            name += " with value >= {}".format(self.formatValue(
+                input_definition["datatype"], input_definition["min_value"]
+            ))
         elif "max_value" in input_definition:
-            name += " with value <= {}".format(input_definition["max_value"])
+            name += " with value <= {}".format(self.formatValue(
+                input_definition["datatype"], input_definition["max_value"]
+            ))
         
         text += " a {}.".format(name)
         
@@ -998,35 +1032,6 @@ class CLIView(AbstractView):
         except ValueError:
             return self._inputValueLoop(input_definition)
     
-    def _getDatatypeName(self, datatype: type) -> str:
-        """Get the name representation for the `datatype`.
-
-        Parameters
-        ----------
-        datatype : type, list or tuple
-            The datatype
-        
-        Returns
-        -------
-        str
-            A string that is human readable for the `datatype`
-        """
-
-        if datatype == int:
-            type_name = "integer number"
-        elif datatype == float:
-            type_name = "decimal number"
-        elif datatype == bool:
-            type_name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
-        elif datatype == str:
-            type_name = "text"
-        elif isinstance(datatype, (list, tuple)):
-            type_name = "possibility list"
-        else:
-            type_name = datatype.__name__
-        
-        return type_name
-    
     def _parseValue(self, input_definition: dict, val: typing.Any) -> typing.Any:
         """Parse the `val` defined by the `input_definition` so it matches the
         defined criteria.
@@ -1034,7 +1039,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or list (required), the type, currently 
+        - "datatype": type, Datatype or list (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -1089,8 +1094,8 @@ class CLIView(AbstractView):
                 if (not isinstance(val, str) or 
                     (case_insensitive and val.lower() not in options_ci) or 
                     (not case_insensitive and val not in options)):
-                    raise ValueError(("The value be one of the following: " + 
-                                    "'{}'").format(human_concat_list(options)))
+                    raise ValueError(("The value has to be one of the " + 
+                                      "following: {}").format(human_concat_list(options)))
                 elif case_insensitive:
                     index = options_ci.index(val.lower())
                     val = options[index]
@@ -1116,7 +1121,7 @@ class CLIView(AbstractView):
                                       "converted to a '{}'. Please type in " + 
                                       "a correct value.").format(
                                         val, 
-                                        self._getDatatypeName(
+                                        self.getDatatypeName(
                                             input_definition["datatype"]
                                         )
                                     ))

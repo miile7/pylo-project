@@ -86,7 +86,7 @@ class Controller:
         self._measurement_thread = None
     
     def _dynamicCreateClass(self, class_: type, 
-                            constructor_args: typing.Optional[typing.Collection]=None) -> object:
+                            constructor_args: typing.Optional[typing.Sequence]=None) -> object:
         """Dynamically create the an object of the `class_`.
 
         Raises
@@ -106,14 +106,14 @@ class Controller:
             The object of the class in the module
         """
         
-        if isinstance(constructor_args, typing.Collection):
+        if isinstance(constructor_args, typing.Sequence):
             return class_(*constructor_args)
         else:
             return class_()
 
     def _dynamicGetClasses(self, *class_config: typing.Union[typing.Tuple[str, str], 
-                                                    typing.Tuple[str, str, typing.Collection], 
-                                                    typing.Tuple[str, str, typing.Collection, typing.Collection]]) -> type:
+                                                    typing.Tuple[str, str, typing.Sequence], 
+                                                    typing.Tuple[str, str, typing.Sequence, typing.Sequence]]) -> type:
         """Dynamically get the class of the given module and class where the 
         module and class are loaded form the config.
 
@@ -152,12 +152,12 @@ class Controller:
         args = []
         for module_key, class_key, *options in class_config:
             module_arg = [CONFIG_SETUP_GROUP, module_key]
-            if len(options) > 0 and isinstance(options[0], typing.Collection):
+            if len(options) > 0 and isinstance(options[0], typing.Sequence):
                 module_arg.append(list(options[0]))
             module_arg = tuple(module_arg)
 
             class_arg = [CONFIG_SETUP_GROUP, class_key]
-            if len(options) > 1 and isinstance(options[1], typing.Collection):
+            if len(options) > 1 and isinstance(options[1], typing.Sequence):
                 class_arg.append(list(options[1]))
             class_arg = tuple(class_arg)
             
@@ -295,7 +295,7 @@ class Controller:
             for i, (group, key) in enumerate(input_params):
                 self.configuration.setValue(group, key, input_vals[i])
         
-    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Collection]]) -> tuple:
+    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Sequence]]) -> tuple:
         """Ask for the configuration values.
 
         Execute the `AbstractView::askFor()` function on each entry of the 
@@ -338,7 +338,7 @@ class Controller:
             except KeyError:
                 input_param["datatype"] = str
             
-            if len(_) > 0 and isinstance(_[0], typing.Collection):
+            if len(_) > 0 and isinstance(_[0], typing.Sequence):
                 # check if there are options for this ask
                 input_param["options"] = list(_[0])
             
@@ -373,19 +373,36 @@ class Controller:
             camera_class = None
             microscope_class = None
             security_counter = 0
-            self.camera = None
-            self.microscope = None
+            load_microscope = False
+            load_camera = False
+            # self.camera = None
+            # self.microscope = None
             while ((not isinstance(self.microscope, MicroscopeInterface) or
                     not isinstance(self.camera, CameraInterface)) and
                    security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
                 try:
+                    args = []
+
+                    if not isinstance(self.microscope, MicroscopeInterface):
+                        args.append(("microscope-module", "microscope-class", modules))
+                        load_microscope = True
+                    if not isinstance(self.camera, CameraInterface):
+                        args.append(("camera-module", "camera-class"))
+                        load_camera = True
+
                     # get the microscope and the camera from the config or 
                     # from the user
-                    microscope_class, camera_class = self._dynamicGetClasses(
-                        ("microscope-module", "microscope-class", modules),
-                        ("camera-module", "camera-class")
-                    )
+                    classes = self._dynamicGetClasses(*args)
+
+                    if load_microscope and load_camera:
+                        microscope_class = classes[0]
+                        camera_class = classes[1]
+                    elif load_microscope:
+                        microscope_class = classes[0]
+                    elif load_camera:
+                        camera_class = classes[0]
+                    
                 except (ModuleNotFoundError, AttributeError, NameError, 
                         TypeError) as e:
                     if isinstance(e, ModuleNotFoundError):
@@ -429,7 +446,8 @@ class Controller:
                         self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
                 
                 # define the configuration options if there are some
-                if hasattr(microscope_class, "defineConfigurationOptions"):
+                if (microscope_class is not None and 
+                    hasattr(microscope_class, "defineConfigurationOptions")):
                     config_keys_before = self.configuration.getGroupsAndKeys()
 
                     microscope_class.defineConfigurationOptions(
@@ -444,7 +462,8 @@ class Controller:
                 else:
                     microscope_keys = []
                 
-                if hasattr(camera_class, "defineConfigurationOptions"):
+                if (camera_class is not None and
+                    hasattr(camera_class, "defineConfigurationOptions")):
                     config_keys_before = self.configuration.getGroupsAndKeys()
 
                     camera_class.defineConfigurationOptions(
@@ -462,27 +481,29 @@ class Controller:
                 # ask all non-existing but required configuration options
                 self.askIfNotPresentConfigurationOptions()
                 
-                try:
-                    self.microscope = self._dynamicCreateClass(
-                        microscope_class, (self, )
-                    )
-                except Exception as e:
-                    self.view.showError(e)
-                    self.microscope = None
+                if microscope_class is not None:
+                    try:
+                        self.microscope = self._dynamicCreateClass(
+                            microscope_class, (self, )
+                        )
+                    except Exception as e:
+                        self.view.showError(e)
+                        self.microscope = None
 
-                    for group, key in microscope_keys:
-                        self.configuration.removeElement(group, key)
+                        for group, key in microscope_keys:
+                            self.configuration.removeElement(group, key)
                 
-                try:
-                    self.camera = self._dynamicCreateClass(
-                        camera_class, (self, )
-                    )
-                except Exception as e:
-                    self.view.showError(e)
-                    self.camera = None
+                if camera_class is not None:
+                    try:
+                        self.camera = self._dynamicCreateClass(
+                            camera_class, (self, )
+                        )
+                    except Exception as e:
+                        self.view.showError(e)
+                        self.camera = None
 
-                    for group, key in camera_keys:
-                        self.configuration.removeElement(group, key)
+                        for group, key in camera_keys:
+                            self.configuration.removeElement(group, key)
 
             # show an error that the max loop count is reached and stop the
             # execution
@@ -494,6 +515,18 @@ class Controller:
                                     "This is a bigger issue. Look in the code " + 
                                     "and debug the 'pylo/controller.py' file.")
                 return
+
+            if not load_microscope:
+                # microscope is set from outside, load configuration options
+                if (hasattr(self.microscope, "defineConfigurationOptions") and 
+                    callable(self.microscope.defineConfigurationOptions)):
+                    self.microscope.defineConfigurationOptions(self.configuration)
+
+            if not load_camera:
+                # camera is set from outside, load configuration options
+                if (hasattr(self.camera, "defineConfigurationOptions") and 
+                    callable(self.camera.defineConfigurationOptions)):
+                    self.camera.defineConfigurationOptions(self.configuration)
 
             # ask all non-existing but required configuration options
             self.askIfNotPresentConfigurationOptions()
@@ -516,7 +549,7 @@ class Controller:
                 
                 measurement_layout = self.view.showCreateMeasurement(self)
                 
-                if(not isinstance(measurement_layout, typing.Collection) or 
+                if(not isinstance(measurement_layout, typing.Sequence) or 
                 len(measurement_layout) <= 1):
                     self.view.showError("The view returned an invalid measurement.",
                                         "Try to input your measurement again, if " + 
