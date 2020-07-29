@@ -95,3 +95,10 @@ finished or not.
 Default: False
 """)
 DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT = False
+
+__config_docs__("DEFAULT_RELAXATION_TIME",
+"""The time in seconds to wait after the microscope has been set to the 
+lorenz mode and before starting the measurement.
+Default: 10
+""")
+DEFAULT_RELAXATION_TIME = 0
