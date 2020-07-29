@@ -15,6 +15,14 @@ import numpy as np
 import pylo
 import pylo.config
 
+try:
+    test_error = ModuleNotFoundError()
+except NameError:
+    # for python <3.6, ModuleNotFound error does not exist
+    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
+    class ModuleNotFoundError(ImportError):
+        pass
+
 TMP_TEST_DIR_NAME = "tmp_test_files"
 
 root = os.path.dirname(os.path.dirname(__file__))

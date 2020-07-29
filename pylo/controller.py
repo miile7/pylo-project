@@ -86,7 +86,7 @@ class Controller:
         self._measurement_thread = None
     
     def _dynamicCreateClass(self, class_: type, 
-                            constructor_args: typing.Optional[typing.Collection]=None) -> object:
+                            constructor_args: typing.Optional[typing.Sequence]=None) -> object:
         """Dynamically create the an object of the `class_`.
 
         Raises
@@ -106,14 +106,14 @@ class Controller:
             The object of the class in the module
         """
         
-        if isinstance(constructor_args, typing.Collection):
+        if isinstance(constructor_args, typing.Sequence):
             return class_(*constructor_args)
         else:
             return class_()
 
     def _dynamicGetClasses(self, *class_config: typing.Union[typing.Tuple[str, str], 
-                                                    typing.Tuple[str, str, typing.Collection], 
-                                                    typing.Tuple[str, str, typing.Collection, typing.Collection]]) -> type:
+                                                    typing.Tuple[str, str, typing.Sequence], 
+                                                    typing.Tuple[str, str, typing.Sequence, typing.Sequence]]) -> type:
         """Dynamically get the class of the given module and class where the 
         module and class are loaded form the config.
 
@@ -152,12 +152,12 @@ class Controller:
         args = []
         for module_key, class_key, *options in class_config:
             module_arg = [CONFIG_SETUP_GROUP, module_key]
-            if len(options) > 0 and isinstance(options[0], typing.Collection):
+            if len(options) > 0 and isinstance(options[0], typing.Sequence):
                 module_arg.append(list(options[0]))
             module_arg = tuple(module_arg)
 
             class_arg = [CONFIG_SETUP_GROUP, class_key]
-            if len(options) > 1 and isinstance(options[1], typing.Collection):
+            if len(options) > 1 and isinstance(options[1], typing.Sequence):
                 class_arg.append(list(options[1]))
             class_arg = tuple(class_arg)
             
@@ -295,7 +295,7 @@ class Controller:
             for i, (group, key) in enumerate(input_params):
                 self.configuration.setValue(group, key, input_vals[i])
         
-    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Collection]]) -> tuple:
+    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Sequence]]) -> tuple:
         """Ask for the configuration values.
 
         Execute the `AbstractView::askFor()` function on each entry of the 
@@ -338,7 +338,7 @@ class Controller:
             except KeyError:
                 input_param["datatype"] = str
             
-            if len(_) > 0 and isinstance(_[0], typing.Collection):
+            if len(_) > 0 and isinstance(_[0], typing.Sequence):
                 # check if there are options for this ask
                 input_param["options"] = list(_[0])
             
@@ -516,7 +516,7 @@ class Controller:
                 
                 measurement_layout = self.view.showCreateMeasurement(self)
                 
-                if(not isinstance(measurement_layout, typing.Collection) or 
+                if(not isinstance(measurement_layout, typing.Sequence) or 
                 len(measurement_layout) <= 1):
                     self.view.showError("The view returned an invalid measurement.",
                                         "Try to input your measurement again, if " + 

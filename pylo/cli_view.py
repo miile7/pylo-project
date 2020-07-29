@@ -468,7 +468,7 @@ class CLIView(AbstractView):
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
@@ -504,7 +504,7 @@ class CLIView(AbstractView):
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
@@ -610,8 +610,44 @@ class CLIView(AbstractView):
 
         return self._askForLoop(inputs, None, **kwargs)
 
-    def _askForLoop(self, inputs: typing.Collection[AskInput], 
+    def _askForLoop(self, inputs: typing.Sequence[AskInput], 
                     ask_dict: typing.Optional[dict]=None, **kwargs):
+        """Show the ask for loop.
+        
+        The following indices are supported for the `inputs`:
+        - 'name' : str, required - The name of the input to show
+        - 'datatype' : type - The datatype to allow
+        - 'description' : str - A description what this value is about
+        - 'options' : list or tuple - A list of options to show to the user to 
+          select from
+        - 'allow_custom' : bool - Whether the user may only use the 'options' 
+          (True) or is is allowed to type in custom values too (False), this 
+          value is ignored if there are no 'options' given, default: False
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        inputs : sequence of dicts
+            Dicts with the 'name' key that defines the name to show. Optional
+            additional keys are 'datatype', 'description', 'options' and 
+            'allow_custom'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, default:
+            "Please enter the following values."
+        
+        Returns
+        -------
+        tuple
+            A tuple of values where the value on index 0 is the value for the 
+            `inputs[0]` and so on
+        """
         if not isinstance(ask_dict, dict):
             ask_dict = {}
 

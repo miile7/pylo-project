@@ -3,15 +3,16 @@ import typing
 from .datatype import Datatype
 
 if hasattr(typing, "TypedDict"):
-    class AskInput(typing.TypedDict, total=False):
-        datatype: type
-        description: str
-        options: typing.Union[None, typing.Collection]
-        allow_custom: bool
+    AskInput = typing.TypedDict("AskInput", {
+                                "datatype": type,
+                                "description": str,
+                                "options": typing.Union[None, typing.Sequence],
+                                "allow_custom": bool
+                                }, total=False)
 else:
     AskInput = typing.Dict
 
-def human_concat_list(x: typing.Collection, surround: typing.Optional[str]="'", 
+def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'", 
                       separator: typing.Optional[str]=", ", 
                       word: typing.Optional[str]="or"):
     """Concatenate the list x with `separator` and the last time with the 
@@ -30,8 +31,8 @@ def human_concat_list(x: typing.Collection, surround: typing.Optional[str]="'",
 
     Parameters
     ----------
-    x : collection
-        The collection to concat
+    x : Sequence
+        The sequence to concat
     surround : str, optional
         The characters to surround the list items with
     separator : str, optional
@@ -144,7 +145,7 @@ class AbstractView:
         
         Parameters
         ----------
-        keys : collection of tuples, optional
+        keys : Sequence of tuples, optional
             A list of tuples where index 0 contains the group and index 1
             contains the key name of the settings to show. The definitions are 
             loaded from the configuration, if not given all keys are shown
