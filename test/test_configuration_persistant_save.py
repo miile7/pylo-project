@@ -31,11 +31,10 @@ import pylo
 # For an example check the commented code below. Also note the return type of 
 # the `create_abstract_configuration()` which defines the return type formally.
 
-# def create_abstract_configuration() -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
+# def create_abstract_configuration(save_path) -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
 #     return plyo.AbstractConfiguration(), None, None
 
-def create_ini_configuration() -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
-    save_path = os.path.join(os.path.dirname(__file__), "tmp_test_files", "configuration.ini")
+def create_ini_configuration(save_path) -> typing.Tuple[pylo.AbstractConfiguration, typing.Union[tuple, None], typing.Union[tuple, None]]:
     return pylo.IniConfiguration(save_path), None, None
 
 configurations = (
@@ -59,13 +58,16 @@ example_data = (
 @pytest.mark.skipif(len(configurations) == 0, reason="There is no configuration, the 'configurations' tuple is empty.")
 class TestConfigurationPersistantSave:
     @pytest.mark.parametrize("create_configuration", configurations)
-    def test_save_and_load(self, create_configuration):
+    def test_save_and_load(self, tmpdir, create_configuration):
         """Test if values that are set, then the configuration is saved and 
         then loaded again, are the same."""
 
         global example_data
+
+        tmp_file = tmpdir.join("configuration.ini")
+
         # create the configuration
-        configuration, load_args, save_args = create_configuration()
+        configuration, load_args, save_args = create_configuration(tmp_file)
 
         # set the values
         for group, key, value, args in example_data:
@@ -78,7 +80,7 @@ class TestConfigurationPersistantSave:
             configuration.saveConfiguration()
         
         # create a new empty configuration
-        configuration, load_args, save_args = create_configuration()
+        configuration, load_args, save_args = create_configuration(tmp_file)
 
         # define the types without values
         for group, key, value, args in example_data:
@@ -95,13 +97,16 @@ class TestConfigurationPersistantSave:
             assert configuration.getValue(group, key) == value
         
     @pytest.mark.parametrize("create_configuration", configurations)
-    def test_save_and_define_after_load(self, create_configuration):
+    def test_save_and_define_after_load(self, tmpdir, create_configuration):
         """Test if values that are set, then the configuration is saved and 
         then loaded again, are the same."""
 
         global example_data
+
+        tmp_file = tmpdir.join("configuration.ini")
+
         # create the configuration
-        configuration, load_args, save_args = create_configuration()
+        configuration, load_args, save_args = create_configuration(tmp_file)
 
         # set the values
         for group, key, value, args in example_data:
@@ -114,7 +119,7 @@ class TestConfigurationPersistantSave:
             configuration.saveConfiguration()
         
         # create a new empty configuration
-        configuration, load_args, save_args = create_configuration()
+        configuration, load_args, save_args = create_configuration(tmp_file)
         
         # load the configuration
         if isinstance(load_args, (list, tuple)):
