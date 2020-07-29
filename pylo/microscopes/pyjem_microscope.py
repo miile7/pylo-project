@@ -126,6 +126,31 @@ class PyJEMMicroscope(MicroscopeInterface):
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
 
+        # the factor to multiply the focus with to show it to the user, 
+        # the user entered values will be divided by this factor and then 
+        # passed to the PyJEM functions
+        try:
+            focus_calibration_factor = (
+                self.controller.configuration.getValue(
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    "focus-calibration"
+                )
+            )
+        except KeyError:
+            focus_calibration_factor = None
+        
+        # the factor to get from the objective fine lense value to the 
+        # objective coarse lense value
+        try:
+            self.objective_lense_coarse_fine_stepwidth = (
+                self.controller.configuration.getValue(
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    "objective-lense-coarse-fine-stepwidth"
+                )
+            )
+        except KeyError:
+            self.objective_lense_coarse_fine_stepwidth = None
+
         # the factor to multiply the lense current with to get the magnetic
         # field
         try:
@@ -150,6 +175,12 @@ class PyJEMMicroscope(MicroscopeInterface):
         except KeyError:
             magnetic_field_unit = None
 
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
+                              0xFFFF)
+        else:
+            max_ol_current = 0xFFFF
+        
         self.supported_measurement_variables = [
             # limits taken from 
             # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
@@ -157,11 +188,11 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "focus", 
                 "Focus (absolut)", 
                 min_value=-1, 
-                max_value=50, 
-                unit="\u03BCm" # micrometer
+                max_value=1000, 
+                unit="\u03BCm".encode("utf-8"), # micrometer
                 format=int,
                 # step by one increases the focus (in LOWMag-Mode) by 3 microns
-                calibration=3
+                calibration=focus_calibration_factor
             ),
             # tilt depends on holder
             MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
@@ -172,7 +203,7 @@ class PyJEMMicroscope(MicroscopeInterface):
                 unit="hex",
                 format=hex_int,
                 min_value=0x0,
-                max_value=0xFFFF,
+                max_value=max_ol_current,
                 calibrated_unit=magnetic_field_unit,
                 calibrated_name="Magnetic Field",
                 calibration=magnetic_field_calibration_factor,
@@ -180,17 +211,17 @@ class PyJEMMicroscope(MicroscopeInterface):
             )
         ]
 
-        # the lenses
+        # lenses
         self._lense_control = Lens3()
-        # the stage
+        # stage
         self._stage = Stage3()
-        # Electron opcical system
+        # electron opcical system
         self._eos = EOS3()
-        # ???
+        # field emission gun
         self._feg = FEG3()
         # gun
         self._gun = GUN3()
-        # the aperture
+        # aperture
         self._aperture = Apt3()
         # a lock so only one action can be performed at once at the microscope
         self._action_lock = threading.Lock()
@@ -502,7 +533,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         Parameters
         ----------
         value : int or float
-            The value to set the objective lense current to.
+            The value to set the objective lense current to in objective fine
+            lense steps
         """
 
         if not self.isValidMeasurementVariableValue("ol-current", value):
@@ -512,9 +544,11 @@ class PyJEMMicroscope(MicroscopeInterface):
         # lock the microscope
         self._action_lock.acquire()
 
-        # self._lense_control.SetOLc(value // self.objective_lense_coarse_solution)
-        # self._lense_control.SetOLf(value % self.objective_lense_coarse_solution)
-        self._lense_control.SetOLf(value)
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            self._lense_control.SetOLc(value // self.objective_lense_coarse_fine_stepwidth)
+            self._lense_control.SetOLf(value % self.objective_lense_coarse_fine_stepwidth)
+        else:
+            self._lense_control.SetOLf(value)
 
         # allow other functions to use the microscope
         self._action_lock.release()
@@ -639,15 +673,26 @@ class PyJEMMicroscope(MicroscopeInterface):
         Returns
         -------
         float
-            The actual current of the objective lense at the microscope
+            The actual current of the objective lense at the microscope,
+            measured in objective fine lense steps
         """
 
         # lock the microscope
         self._action_lock.acquire()
 
-        value = self._lense_control.GetOLf()
-        if isinstance(value, (list, tuple)):
-            value = value[1]
+        fine_value = self._lense_control.GetOLf()
+        if isinstance(fine_value, (list, tuple)):
+            fine_value = fine_value[1]
+
+        coarse_value = self._lense_control.GetOLc()
+        if isinstance(coarse_value, (list, tuple)):
+            coarse_value = coarse_value[1]
+
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            value = (coarse_value * self.objective_lense_coarse_fine_stepwidth + 
+                     fine_value)
+        else:
+            value = fine_value
 
         # allow other functions to use the microscope
         self._action_lock.release()
@@ -705,35 +750,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         self._action_lock.release()
 
         return round(pos[STAGE_INDEX_Y_TILT], 2)
-    
-    def resetToEmergencyState(self) -> None:
-        """Reset the machine to an emergency state.
-        
-        This function blocks the `PyJEMMicroscope::_action_lock`.
-        """
-
-        # self._action_lock.acquire()
-
-        # switch off the beam valve
-        # documentation sais: "This works for FEG and 3100EF" for 
-        # FEG3::SetBeamValve() and for FEG3::setFEGEmissionOff()
-        self._feg.SetBeamValve(0)
-
-        # Do not change emission, if there are bad values and it is 
-        # switched on, this may have bad effects
-        # self._feg.SetFEGEmissionOff(1)
-
-        # the documentation sais: "This does not work for FEG"
-        # same for the gun, do not touch the gun, this may have bad
-        # side effects
-        # self._gun.SetBeamSw(0)
-
-        # beam blanking, should not be used but may be used for emergency mode
-        # self._aperture.SetBeamBlank(1)
-
-        # self._action_lock.release()
-
-        super().resetToEmergencyState()
 
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
@@ -752,6 +768,23 @@ class PyJEMMicroscope(MicroscopeInterface):
         # deadlock (this function blocks the lock, 
         # PyJEMMicroscope::setInLorenzMode() waits for the lock)
         self._action_lock.acquire()
+
+        # close the beam valve
+        # documentation sais: "This works for FEG and 3100EF" for 
+        # FEG3::SetBeamValve() and for FEG3::setFEGEmissionOff()
+        self._feg.SetBeamValve(0)
+
+        # Do not change emission, if there are bad values and it is 
+        # switched on, this may have bad effects
+        # self._feg.SetFEGEmissionOff(1)
+
+        # the documentation sais: "This does not work for FEG"
+        # same for the gun, do not touch the gun, this may have bad
+        # side effects
+        # self._gun.SetBeamSw(0)
+
+        # beam blanking, should not be used but may be used for emergency mode
+        # self._aperture.SetBeamBlank(1)
 
         # set the stage to the original position
         self._stage.SetOrg()
@@ -772,7 +805,34 @@ class PyJEMMicroscope(MicroscopeInterface):
             The configuration to define the required options in
         """
         
-        # add the option for the calibration factor
+        # add the stepwidth of the objective coarse lense in objective fine 
+        # lense units
+        configuration.addConfigurationOption(
+            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            "objective-lense-coarse-fine-stepwidth", 
+            datatype=float, 
+            description=("The factor to calculate between the fine and " + 
+            "coarse objective lense. One step with the objective coarse " + 
+            "value is equal to this value steps with the objective fine " + 
+            "lense. So OL-fine * value = OL-coarse."), 
+            restart_required=True,
+            default_value=32
+        )
+        
+        # add the option for the calibration factor for the focus
+        configuration.addConfigurationOption(
+            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            "focus-calibration", 
+            datatype=float, 
+            description=("The calibration factor for the focus. The " + 
+            "focus set in the GUI will be divided by this factor to pass " + 
+            "it to the PyJEM functions. The focus received by the PyJEM " + 
+            "functions will be multiplied with this factor and then shown."), 
+            restart_required=True,
+            default_value=3
+        )
+        
+        # add the option for the calibration factor for the magnetic field
         configuration.addConfigurationOption(
             CONFIG_PYJEM_MICROSCOPE_GROUP, 
             "objective-lense-magnetic-field-calibration", 
