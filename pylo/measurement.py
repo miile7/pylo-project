@@ -25,6 +25,8 @@ from .blocked_function_error import BlockedFunctionError
 # from .config import DEFAULT_SAVE_DIRECTORY
 # from .config import DEFAULT_SAVE_FILE_NAME
 
+CONFIG_MEASUREMENT_GROUP = "measurement"
+
 class Measurement:
     """This class represents one measurement.
 
@@ -62,8 +64,8 @@ class Measurement:
         self.steps = steps
 
         self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
-            ("measurement", "save-directory"),
-            ("measurement", "save-file-format"),
+            (CONFIG_MEASUREMENT_GROUP, "save-directory"),
+            (CONFIG_MEASUREMENT_GROUP, "save-file-format"),
             fallback_default=True
         )
 
@@ -75,7 +77,7 @@ class Measurement:
                                "cannot be created.").format(self.save_dir)) from e
         
         self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
-            ("measurement", "log-save-path"),
+            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             fallback_default=True
         )
 
@@ -88,6 +90,26 @@ class Measurement:
                 raise OSError(("The log directory '{}' does not exist and " + 
                                "cannot be created.").format(log_dir)) from e
         
+        try:
+            self.microscope_safe_after = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "microscope-to-safe-state-after-measurement"
+            )
+        except KeyError:
+            self.microscope_safe_after = None
+
+        self.microscope_safe_after = (self.microscope_safe_after == True)
+
+        try:
+            self.camera_safe_after = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "camera-to-safe-state-after-measurement"
+            )
+        except KeyError:
+            self.camera_safe_after = None
+        
+        self.camera_safe_after = (self.camera_safe_after == True)
+
         self.current_image = None
         self.running = False
         self.logging = True
@@ -348,6 +370,11 @@ class Measurement:
             self.running = False
             self._step_index = -1
             measurement_ready()
+
+            if self.microscope_safe_after:
+                self.controller.microscope.setToSafeState()
+            if self.camera_safe_after:
+                self.controller.camera.setToSafeState()
         except StopProgram:
             self.stop()
             return
@@ -775,24 +802,47 @@ class Measurement:
         """
 
         # import as late as possible to allow changes by extensions
+        from .config import DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT
+        from .config import DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT
         from .config import DEFAULT_SAVE_DIRECTORY
         from .config import DEFAULT_SAVE_FILE_NAME
         from .config import DEFAULT_LOG_PATH
         
+        # add whether to set the microscope to the safe state after the 
+        # measurement has finished or not
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "microscope-to-safe-state-after-measurement", 
+            datatype=bool, 
+            default_value=DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT, 
+            description="Whether to set the microscope in the safe sate " + 
+            "after the measurement is finished."
+        )
+        
+        # add whether to set the camera to the safe state after the 
+        # measurement has finished or not
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "camera-to-safe-state-after-measurement", 
+            datatype=bool, 
+            default_value=DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT, 
+            description="Whether to set the camera in the safe sate " + 
+            "after the measurement is finished."
+        )
+
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-directory", 
+            CONFIG_MEASUREMENT_GROUP, "save-directory", 
             datatype=str, 
             default_value=DEFAULT_SAVE_DIRECTORY, 
             ask_if_not_present=True,
             description="The directory where to save the camera images to " + 
             "that are recorded while measuring."
         )
+
         # add an entry to the config and ask the user if there is nothing
         # saved
         configuration.addConfigurationOption(
-            "measurement", "save-file-format", 
+            CONFIG_MEASUREMENT_GROUP, "save-file-format", 
             datatype=str, 
             default_value=DEFAULT_SAVE_FILE_NAME, 
             ask_if_not_present=True,
@@ -809,8 +859,9 @@ class Measurement:
             "but use supported extensions only."
         )
         
+        # add the save path for the log
         configuration.addConfigurationOption(
-            "measurement", "log-save-path",
+            CONFIG_MEASUREMENT_GROUP, "log-save-path",
             datatype=str,
             default_value=DEFAULT_LOG_PATH,
             description=("The file path (including the file name) to save " + 
