@@ -373,12 +373,14 @@ class Controller:
             camera_class = None
             microscope_class = None
             security_counter = 0
+            loaded_dynamically = False
             # self.camera = None
             # self.microscope = None
             while ((not isinstance(self.microscope, MicroscopeInterface) or
                     not isinstance(self.camera, CameraInterface)) and
                    security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
+                loaded_dynamically = True
                 try:
                     # get the microscope and the camera from the config or 
                     # from the user
@@ -494,6 +496,18 @@ class Controller:
                                     "This is a bigger issue. Look in the code " + 
                                     "and debug the 'pylo/controller.py' file.")
                 return
+
+            if not loaded_dynamically:
+                # microscope and camera are set from outside, make sure to 
+                # initialize their configuration options
+
+                if (hasattr(self.microscope, "defineConfigurationOptions") and 
+                    callable(self.microscope.defineConfigurationOptions)):
+                    self.microscope.defineConfigurationOptions(self.configuration)
+
+                if (hasattr(self.camera, "defineConfigurationOptions") and 
+                    callable(self.camera.defineConfigurationOptions)):
+                    self.camera.defineConfigurationOptions(self.configuration)
 
             # ask all non-existing but required configuration options
             self.askIfNotPresentConfigurationOptions()

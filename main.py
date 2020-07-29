@@ -15,6 +15,10 @@ pylo.config.CONFIGURATION.setValue("pyjem-camera", "detector-name", "camera")
 pylo.config.CONFIGURATION.setValue("pyjem-camera", "image-size", 1024)
 
 controller = pylo.Controller()
+
+pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
+pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
+
 controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
 controller.camera = pylo.cameras.PyJEMCamera(controller)
 
