@@ -294,6 +294,12 @@ class PerformedMeasurement:
                     })
 
         self.controller.configuration.setValue(
+            "measurement", "microscope-to-safe-state-after-measurement", True
+        )
+        self.controller.configuration.setValue(
+            "measurement", "camera-to-safe-state-after-measurement", True
+        )
+        self.controller.configuration.setValue(
             "measurement", "log-save-path", os.path.join(self.root, "measurement.log")
         )
         self.measurement = pylo.Measurement(self.controller, self.measurement_steps)
@@ -972,6 +978,57 @@ class TestMeasurement:
     def after_stop_handler(self):
         """The event handler for testing the after_stop event."""
         self.after_stop_times.append(time.time())
+    
+    @pytest.mark.parametrize("microscope_to_safe,camera_to_safe", [
+        (True, False),
+        (False, False),
+        (False, True)
+    ])
+    def test_not_in_safe_state(self, microscope_to_safe, camera_to_safe):
+        """Test if the micorsocpe and/or camera should not be in the safe 
+        state after the measurement, they aren't.
+        """
+
+        setSleepTime(0.1)
+        performed_measurement = PerformedMeasurement(0, auto_start=False)
+        
+        performed_measurement.measurement.microscope_safe_after = microscope_to_safe
+        performed_measurement.measurement.camera_safe_after = camera_to_safe
+
+        performed_measurement.measurement.start()
+
+        assert (performed_measurement.controller.microscope.is_in_safe_state == 
+                microscope_to_safe)
+        assert (performed_measurement.controller.camera.is_in_safe_state == 
+                camera_to_safe)
+
+        setSleepTime("random")
+    
+    @pytest.mark.slow()
+    @pytest.mark.parametrize("relaxation_time", [
+        0, 2
+    ])
+    def test_relaxation_time(self, relaxation_time):
+        """Test if the relaxation time works correctly."""
+
+        setSleepTime(0)
+        performed_measurement = PerformedMeasurement(0, auto_start=False)
+        performed_measurement.measurement.relaxation_time = relaxation_time
+
+        start_time = time.time()
+        performed_measurement.measurement.start()
+        performed_measurement.measurement.waitForAllImageSavings()
+        end_time = time.time()
+
+        assert ((start_time + relaxation_time >= 
+                performed_measurement.microscope_ready_time[0]) or
+                math.isclose(start_time + relaxation_time, 
+                             performed_measurement.microscope_ready_time[0],
+                             abs_tol=0.1))
+        assert (end_time - start_time > relaxation_time or
+                math.isclose(end_time - start_time, relaxation_time, abs_tol=0.1))
+
+        setSleepTime("random")
     
     def check_events(self, stop_callable):
         """Perform the test for the events, the code is nearly the same so use

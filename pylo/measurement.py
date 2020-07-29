@@ -1,6 +1,7 @@
 import io
 import os
 import csv
+import time
 import typing
 import datetime
 
@@ -42,6 +43,15 @@ class Measurement:
         The controller
     save_dir : str
         The absolute path of the directory where to save this measurement to
+    microscope_safe_after : bool
+        Whether to set the microscope in its safe mode if the measurememt is 
+        finished
+    camera_safe_after : bool
+        Whether to set the camera in its safe mode if the measurememt is 
+        finished
+    relaxation_time : float
+        The relaxation time in seconds to wait after the microscope has been 
+        set to lorenz mode
     name_format : str
         The file name how to save the images (including the extension, 
         supported are all the extensions provided by the `CameraInterface`),
@@ -63,12 +73,14 @@ class Measurement:
         self.tags = {}
         self.steps = steps
 
+        # prepare the save directory and the file format
         self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
             (CONFIG_MEASUREMENT_GROUP, "save-directory"),
             (CONFIG_MEASUREMENT_GROUP, "save-file-format"),
             fallback_default=True
         )
 
+        # make sure the directory exists
         if not os.path.exists(self.save_dir):
             try:
                 os.makedirs(self.save_dir, exist_ok=True)
@@ -76,13 +88,14 @@ class Measurement:
                 raise OSError(("The save directory '{}' does not exist and " + 
                                "cannot be created.").format(self.save_dir)) from e
         
+        # get the log path
         self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
             (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             fallback_default=True
         )
 
+        # make sure the parent directory exists
         log_dir = os.path.dirname(self._log_path)
-        
         if not os.path.exists(log_dir):
             try:
                 os.makedirs(log_dir, exist_ok=True)
@@ -90,6 +103,7 @@ class Measurement:
                 raise OSError(("The log directory '{}' does not exist and " + 
                                "cannot be created.").format(log_dir)) from e
         
+        # prepare whether to go in safe mode after the measurement has finished
         try:
             self.microscope_safe_after = self.controller.configuration.getValue(
                 CONFIG_MEASUREMENT_GROUP,
@@ -100,6 +114,7 @@ class Measurement:
 
         self.microscope_safe_after = (self.microscope_safe_after == True)
 
+        # prepare whether to go in safe mode after the measurement has finished
         try:
             self.camera_safe_after = self.controller.configuration.getValue(
                 CONFIG_MEASUREMENT_GROUP,
@@ -109,6 +124,20 @@ class Measurement:
             self.camera_safe_after = None
         
         self.camera_safe_after = (self.camera_safe_after == True)
+
+        # prepare the relaxation time to wait before continuing after the 
+        # measurement is set to the lorenz mode
+        try:
+            self.relaxation_time = self.controller.configuration.getValue(
+                CONFIG_MEASUREMENT_GROUP,
+                "relaxation-time-lorenz-mode"
+            )
+        except KeyError:
+            self.relaxation_time = None
+        
+        if (not isinstance(self.relaxation_time, (int, float)) or 
+            self.relaxation_time < 0):
+            self.relaxation_time = 0
 
         self.current_image = None
         self.running = False
@@ -241,6 +270,18 @@ class Measurement:
         try:
             # set to lorenz mode
             self.controller.microscope.setInLorenzMode(True)
+        
+            if (isinstance(self.relaxation_time, (int, float)) and 
+                self.relaxation_time > 0):
+                start_time = time.time()
+
+                while time.time() - start_time < self.relaxation_time:
+                    # allow calling stop() function while waiting
+                    time.sleep(0.01)
+
+                    if not self.running:
+                        # stop() is called
+                        return
 
             if not self.running:
                 # stop() is called
@@ -346,13 +387,18 @@ class Measurement:
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly, do this while waiting
             # for the save threads to finish
-            thread = ExceptionThread(target=self.controller.microscope.resetToSafeState)
-            thread.start()
-            reset_threads.append(thread)
-            
-            thread = ExceptionThread(target=self.controller.camera.resetToSafeState)
-            thread.start()
-            reset_threads.append(thread)
+            if self.microscope_safe_after:
+                thread = ExceptionThread(
+                    target=self.controller.microscope.resetToSafeState
+                )
+                thread.start()
+                reset_threads.append(thread)
+            if self.camera_safe_after:
+                thread = ExceptionThread(
+                    target=self.controller.camera.resetToSafeState
+                )
+                thread.start()
+                reset_threads.append(thread)
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
@@ -370,11 +416,6 @@ class Measurement:
             self.running = False
             self._step_index = -1
             measurement_ready()
-
-            if self.microscope_safe_after:
-                self.controller.microscope.setToSafeState()
-            if self.camera_safe_after:
-                self.controller.camera.setToSafeState()
         except StopProgram:
             self.stop()
             return
@@ -804,9 +845,20 @@ class Measurement:
         # import as late as possible to allow changes by extensions
         from .config import DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT
         from .config import DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT
+        from .config import DEFAULT_RELAXATION_TIME
         from .config import DEFAULT_SAVE_DIRECTORY
         from .config import DEFAULT_SAVE_FILE_NAME
         from .config import DEFAULT_LOG_PATH
+        
+        # add whether a relaxation time after the lornez mode is activated
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "relaxation-time-lorenz-mode", 
+            datatype=float, 
+            default_value=DEFAULT_RELAXATION_TIME, 
+            description="The relaxation time in seconds to wait after the " + 
+            "microscope is switched to lorenz mode. Use 0 or negative values " + 
+            "to ignore."
+        )
         
         # add whether to set the microscope to the safe state after the 
         # measurement has finished or not
