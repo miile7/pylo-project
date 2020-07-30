@@ -242,6 +242,8 @@ class DummyController(pylo.Controller):
 
 class DummyView(pylo.AbstractView):
     def askFor(self, *args, **kwargs):
+        print(args, kwargs)
+        assert False
         return ["DEFAULT_ASK_FOR_ANSWER"] * len(args)
     
     def showError(self, error, how_to_fix):
@@ -333,6 +335,7 @@ class PerformedMeasurement:
                         "x-tilt": t
                     })
 
+        pylo.Measurement.defineConfigurationOptions(self.controller.configuration)
         self.controller.configuration.setValue(
             "measurement", "microscope-to-safe-state-after-measurement", True
         )
@@ -342,9 +345,15 @@ class PerformedMeasurement:
         self.controller.configuration.setValue(
             "measurement", "log-save-path", os.path.join(self.root, "measurement.log")
         )
+        self.controller.configuration.setValue(
+            "measurement", "save-directory", self.root
+        )
+        self.controller.configuration.setValue(
+            "measurement", "save-file-format", "{counter}-dummy-measurement.tif"
+        )
         self.measurement = pylo.Measurement(self.controller, self.measurement_steps)
-        self.measurement.save_dir = self.root
-        self.measurement.name_format = "{counter}-dummy-measurement.tif"
+        # self.measurement.save_dir = self.root
+        # self.measurement.name_format = "{counter}-dummy-measurement.tif"
 
         self.measurement.tags["test key"] = "Test Value"
         self.measurement.tags["test key 2"] = 2
