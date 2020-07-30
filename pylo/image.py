@@ -187,9 +187,7 @@ def _export_image_object_to_tiff(file_path: str, image: Image) -> None:
 
     # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
     # mode defines whether RGB, RGBA, Grayscale, ... is used
-    print("pylo.Image.image_data: ", image.image_data)
     save_img = PILImage.fromarray(image.image_data, mode="L")
-    print("np.array(PIL.Image): ", np.array(save_img))
     save_img.save(file_path, format="tiff", 
                   # write tags as image description
                   tiffinfo={TIFF_IMAGE_TAGS_INDEX: json.dumps(image.tags)}, 
