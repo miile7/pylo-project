@@ -224,8 +224,24 @@ class Measurement:
             num=counter))
     
     def _setSafe(self) -> None:
-        """Set the microscope and the camera to be in safe state and stop the 
-        measurement."""
+        """Set the microscope and the camera to be in safe state."""
+
+        try:
+            self.controller.microscope.resetToSafeState()
+        except BlockedFunctionError:
+            # emergency event is called, microscope goes in emergency state by 
+            # itself
+            pass
+
+        try:
+            self.controller.camera.resetToSafeState()
+        except BlockedFunctionError:
+            # emergency event is called, camera goes in emergency state by 
+            # itself
+            pass
+    
+    def _setEmergency(self) -> None:
+        """Set the microscope and the camera to be in emergency state."""
 
         try:
             self.controller.microscope.resetToEmergencyState()
@@ -401,6 +417,10 @@ class Measurement:
                 thread.start()
                 reset_threads.append(thread)
 
+            # stop log thread
+            if isinstance(self._log_thread, LogThread):
+                self._log_thread.stop()
+
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
 
@@ -422,6 +442,7 @@ class Measurement:
         except Exception as e:
             # stop if any error occurres, just to be sure
             self.stop()
+            self._setEmergency()
             raise e
     
     def waitForAllImageSavings(self) -> None:
@@ -449,6 +470,9 @@ class Measurement:
 
         self.running = False
         self._setSafe()
+
+        if isinstance(self._log_thread, LogThread):
+            self._log_thread.stop()
 
         # fire stop event
         after_stop()

@@ -112,7 +112,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
             )
 
         self.is_in_safe_state = False
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
 
         # simulate small variance in real value in first or second digit after 
         # decimal separator
@@ -131,7 +131,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.currently_setting_lorenz_mode = False
 
     def getMeasurementVariableValue(self, id_):
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
 
         if id_ == "focus":
             return self.focus
@@ -144,7 +144,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     
     def setInLorenzMode(self, lorenz_mode):
         self.currently_setting_lorenz_mode = True
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
 
         if lorenz_mode:
             self.is_in_safe_state = False
@@ -153,12 +153,12 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.currently_setting_lorenz_mode = False
     
     def getInLorenzMode(self):
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
 
         return self.is_in_lorenz_mode
     
     def resetToSafeState(self):
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
         
         # wait for other actions to finish
         while (self.currently_setting_lorenz_mode or 
@@ -177,7 +177,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
         self.currently_recording_image = False
     
     def resetToSafeState(self):
-        respond_time = sleepRandomTime()
+        sleepRandomTime()
         
         self.is_in_safe_state = True
     
@@ -241,11 +241,34 @@ class DummyController(pylo.Controller):
         self.view = DummyView()
 
 class DummyView(pylo.AbstractView):
-    def askFor(*args, **kwargs):
-        return ("DEFAULT_ASK_FOR_ANSWER", )
+    def askFor(self, *args, **kwargs):
+        print(args, kwargs)
+        assert False
+        return ["DEFAULT_ASK_FOR_ANSWER"] * len(args)
     
-    def showError(*args, **kwargs):
-        pass
+    def showError(self, error, how_to_fix):
+        if isinstance(error, Exception):
+            raise error
+        else:
+            raise Exception(error)
+
+def remove_dirs(directories=None):
+    """Remove all given directories recursively with files inside."""
+    if not isinstance(directories, (list, tuple)):
+        directories = glob.glob(
+            os.path.join(os.path.dirname(__file__), "tmp-test-measurement-*")
+        )
+    
+    for directory in directories:
+        if os.path.exists(directory):
+            for f in os.listdir(directory):
+                path = os.path.join(directory, f)
+                if os.path.isfile(path):
+                    os.remove(path)
+                elif os.path.isdir(path):
+                    remove_dirs((path), )
+        
+            os.removedirs(directory)
 
 class PerformedMeasurement:
     """This class performs one measurement and saves some specific values which
@@ -260,13 +283,32 @@ class PerformedMeasurement:
 
     def __init__(self, num=2, before_start=None, auto_start=True, 
                  collect_file_m_times=True):
-        self.root = os.path.join(os.path.dirname(__file__), "tmp_test_files")
+        """Create and perform a measurement.
 
+        Parameters
+        ----------
+        num : int, optional
+            - 0: Measure 2 images: x-tilt -10deg and 10deg
+            - 1: Measure 12 images: focus 0 and 5, field 0, 1 and 2 and x-tilt
+                 -10deg and 10dev
+            - 2: Measure 18 images: focus 0 and 5, field 0, 1, and 2 and x-tilt
+                 -10deg, 0deg and 10deg
+        before_start : callable, optional
+            A callback that is executed before the measurement is started
+        auto_start : bool, optional
+            Whether to start the measurement automatically, default: True
+        collect_file_m_times : bool, optional
+            Whether to collect the file modification times on all images that 
+            are *EXPTECTED TO BE CREATED*, default: True
+        """
+        self.root = os.path.join(
+            os.path.dirname(__file__), 
+            "tmp-test-measurement-{}".format(random.randint(0, 9999999))
+        )
+
+        remove_dirs((self.root, ))
         if not os.path.exists(self.root):
             os.mkdir(self.root, 0o760)
-        else:
-            for f in os.listdir(self.root):
-                os.remove(os.path.join(self.root, f))
 
         self.controller = DummyController()
         self.measurement_steps = []
@@ -293,6 +335,7 @@ class PerformedMeasurement:
                         "x-tilt": t
                     })
 
+        pylo.Measurement.defineConfigurationOptions(self.controller.configuration)
         self.controller.configuration.setValue(
             "measurement", "microscope-to-safe-state-after-measurement", True
         )
@@ -302,9 +345,15 @@ class PerformedMeasurement:
         self.controller.configuration.setValue(
             "measurement", "log-save-path", os.path.join(self.root, "measurement.log")
         )
+        self.controller.configuration.setValue(
+            "measurement", "save-directory", self.root
+        )
+        self.controller.configuration.setValue(
+            "measurement", "save-file-format", "{counter}-dummy-measurement.tif"
+        )
         self.measurement = pylo.Measurement(self.controller, self.measurement_steps)
-        self.measurement.save_dir = self.root
-        self.measurement.name_format = "{counter}-dummy-measurement.tif"
+        # self.measurement.save_dir = self.root
+        # self.measurement.name_format = "{counter}-dummy-measurement.tif"
 
         self.measurement.tags["test key"] = "Test Value"
         self.measurement.tags["test key 2"] = 2
@@ -458,6 +507,10 @@ class DummyException(Exception):
     pass
 
 class TestMeasurement:
+    @classmethod
+    def teardown_class(cls):
+        remove_dirs()
+    
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
     def test_all_steps_produced_images(self, performed_measurement):
