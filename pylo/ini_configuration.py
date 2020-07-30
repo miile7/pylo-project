@@ -9,7 +9,7 @@ from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
 class IniConfiguration(AbstractConfiguration):
-    def __init__(self, file_path: typing.Optional[path_like] = None) -> None:
+    def __init__(self, file_path: typing.Optional[typing.Union[path_like]] = None) -> None:
         """Create a new abstract configuration.
 
         Raises
