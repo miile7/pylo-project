@@ -47,7 +47,8 @@ configurations = (
 example_data = (
     ("group-1", "key-1", "value-1", {}),
     ("group-1", "key-2", "value-2", {"datatype": str, "default_value": "Default",
-     "ask_if_not_present": True, "restart_required": True}),
+     "ask_if_not_present": True, "restart_required": True, 
+     "description": "Test description"}),
     ("group-1", "key-3", 1, {"datatype": int, "default_value": 5,
      "ask_if_not_present": True}),
     ("group-1", "key-4", False, {"datatype": bool, "default_value": None}),
