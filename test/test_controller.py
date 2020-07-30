@@ -7,6 +7,7 @@ if __name__ == "__main__":
 
 import random
 import pytest
+import math
 import glob
 import time
 
@@ -30,6 +31,7 @@ def remove_dirs(directories=None):
     
     for directory in directories:
         if os.path.exists(directory):
+            directory = str(directory)
             for f in os.listdir(directory):
                 path = os.path.join(directory, f)
                 if os.path.isfile(path):
@@ -411,6 +413,8 @@ class TestController:
         module = class_name.lower()
         filename = module + ".py"
 
+        directory = str(directory)
+
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, filename)
 
@@ -465,6 +469,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
 
@@ -488,6 +494,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module + ".py")
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
 
@@ -511,9 +519,11 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        args = ("A", "B", "C")
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
+        args = ("A", "B", "C")
 
         assert isinstance(obj, (list, tuple))
         assert len(obj) == 1
@@ -538,6 +548,9 @@ class TestController:
 
         controller.configuration.setValue("setup", "dummy-test-module-name2", module)
         controller.configuration.setValue("setup", "dummy-test-class-name2", class_name2)
+
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
 
         args1 = ("A", "B", "C")
         args2 = ("D", "E", "F")
@@ -571,6 +584,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
         
@@ -600,6 +615,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
         
@@ -629,6 +646,8 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
         obj = controller._dynamicGetClasses(("dummy-test-module-name", 
                                              "dummy-test-class-name"))
         
@@ -652,7 +671,10 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", "thisdoesnotexist")
         controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
 
-        with pytest.raises(ModuleNotFoundError):
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
+        with pytest.raises((ModuleNotFoundError, ImportError)):
+            # python <3.6 raises an ImportError
             controller._dynamicGetClasses(("dummy-test-module-name", 
                                            "dummy-test-class-name"))
         self.clear_dummy_class_files(path)
@@ -667,7 +689,10 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", "thisdoesnotexist")
 
-        with pytest.raises(AttributeError):
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
+        with pytest.raises((AttributeError, ImportError)):
+            # python <3.6 raises an import error
             controller._dynamicGetClasses(("dummy-test-module-name", 
                                            "dummy-test-class-name"))
         self.clear_dummy_class_files(path)
@@ -682,7 +707,10 @@ class TestController:
         controller.configuration.setValue("setup", "dummy-test-module-name", module)
         controller.configuration.setValue("setup", "dummy-test-class-name", "thisisnotaclass")
 
-        with pytest.raises((NameError, TypeError)):
+        # wait a short time, otherwise the module is sometimes not found
+        time.sleep(0.1)
+        with pytest.raises((NameError, TypeError, ImportError)):
+            # python <3.6 raises an import error
             controller._dynamicGetClasses(("dummy-test-module-name", 
                                            "dummy-test-class-name"))
         self.clear_dummy_class_files(path)
@@ -799,6 +827,8 @@ class TestController:
         by changing the settings."""
 
         name_format = "{counter}-dummy-file.tif"
+
+        tmp_path = str(tmp_path)
 
         controller.configuration.setValue(
             "measurement", "save-directory", tmp_path
@@ -977,17 +1007,21 @@ class TestController:
 
         self.init_start_program_test(controller, tmp_path)
 
-        files = os.listdir(tmp_path)
+        files = os.listdir(str(tmp_path))
 
         assert len(files) > 0
 
         for f in files:
-            mtime = os.path.getmtime(os.path.join(tmp_path, f))
+            mtime = os.path.getmtime(os.path.join(str(tmp_path), f))
 
-            assert self.start_time < mtime
-            assert max(self.before_init_times) < mtime
-            assert max(self.init_ready_times) < mtime
-            assert max(self.user_ready_times) < mtime
+            assert (self.start_time < mtime or 
+                    math.isclose(self.start_time, mtime))
+            assert (max(self.before_init_times) < mtime or 
+                    math.isclose(max(self.before_init_times), mtime))
+            assert (max(self.init_ready_times) < mtime or 
+                    math.isclose(max(self.init_ready_times), mtime))
+            assert (max(self.user_ready_times) < mtime or 
+                    math.isclose(max(self.user_ready_times), mtime))
     
     @pytest.mark.usefixtures("controller")
     def test_error_shown_microscope_module_wrong(self, tmp_path, controller):

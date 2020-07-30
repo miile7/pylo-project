@@ -773,12 +773,14 @@ class CLIView(AbstractView):
             index_width = 1
         index = 0
         values = {}
+        id_index_map = {}
 
         for line in args:
             if isinstance(line, str):
                 self.print(line)
             elif isinstance(line, dict):
                 values[line["id"]] = line["value"]
+                id_index_map[index] = line["id"]
 
                 text = ("[{index:" + str(index_width) + "}] " + 
                         "{label:" + str(label_width) + "} " + 
@@ -877,7 +879,6 @@ class CLIView(AbstractView):
 
             if 0 <= user_input and user_input <= max_index:
                 index = int(user_input)
-                id_index_map = list(values.keys())
                 id_ = id_index_map[index]
                 id_args_map = [l["id"] if isinstance(l, dict) else None for l in args]
                 args_index = id_args_map.index(id_)

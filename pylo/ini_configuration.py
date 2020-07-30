@@ -93,10 +93,11 @@ class IniConfiguration(AbstractConfiguration):
                     # save the comment
                     if len(comment) > 0:
                         w = 79
-                        c = ";"
-                        comment = ("\n" + c).join(map(
-                            lambda t: textwrap.fill(t, w), comment
-                        ))
+                        c = "; "
+                        comment_text = []
+                        for l in comment:
+                            comment_text += textwrap.wrap(l, w)
+                        comment = ("\n" + c).join(comment_text)
                         config[group][c + comment] = None
                     
                     # prepare the value

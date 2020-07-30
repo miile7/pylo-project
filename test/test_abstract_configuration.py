@@ -340,7 +340,7 @@ class TestConfiguration:
         """Test whether the restart required value is correct."""
         if not "restart_required" in expected:
             expected["restart_required"] = False
-            
+        
         assert (self.configuration.getRestartRequired(group, key) == 
                 expected["restart_required"])
 

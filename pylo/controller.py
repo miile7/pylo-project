@@ -21,6 +21,14 @@ from .microscopes.microscope_interface import MicroscopeInterface
 # from .config import CONFIGURATION
 # from .config import VIEW
 
+try:
+    test_error = ModuleNotFoundError()
+except NameError:
+    # for python <3.6, ModuleNotFound error does not exist
+    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
+    class ModuleNotFoundError(ImportError):
+        pass
+
 # the number of times the user is asked for the input, this is for avoiding
 # infinite loops that are caused by any error
 MAX_LOOP_COUNT = 1000
@@ -240,16 +248,22 @@ class Controller:
                     # save the index and the ask parameters
                     input_params[i] = (group, key)
         
+        # ordering of dict.values() and dict.keys() changes between python
+        # versions, this makes sure the order is the same
+        params_values = []
+        params_keys = []
+        for k, v in input_params.items():
+            params_values.append(v)
+            params_keys.append(k)
+        
         # check if there are values to ask for
         if len(input_params) > 0:
             # save the results of the user
-            results = self.askForConfigValues(*list(input_params.values()))
-            # check where the results should be saved in
-            target_keys = list(input_params.keys())
+            results = self.askForConfigValues(*params_values)
 
             for i, result in enumerate(results):
                 # the index in the result to return and in the parameter list
-                original_index = target_keys[i]
+                original_index = params_keys[i]
                 # replace the missing value with the asked result
                 values[original_index] = result
 
@@ -404,8 +418,8 @@ class Controller:
                         camera_class = classes[0]
                     
                 except (ModuleNotFoundError, AttributeError, NameError, 
-                        TypeError) as e:
-                    if isinstance(e, ModuleNotFoundError):
+                        TypeError, ImportError) as e:
+                    if isinstance(e, (ModuleNotFoundError, ImportError)):
                         msg = ("The microscope or the camera module could " + 
                                 "not be found: {}")
                         fix = ("Change the 'microscope-module' or the " + 
@@ -668,18 +682,26 @@ class Controller:
 
         # import as late as possible to allow changes by extensions        
         from .config import PROGRAM_NAME
+
+        # ordering of dict.values() and dict.keys() changes between python
+        # versions, this makes sure the order is the same
+        import_dir_keys = []
+        import_dir_values = []
+        for k, v in import_dirs.items():
+            import_dir_keys.append(k)
+            import_dir_values.append(v)
         
         # create a human readable list separated by comma and the last one
         # with an 'or', parameter is the list
         humanlist = lambda x: ", ".join(x[:-1]) + " or " + x[-1]
         # the path names where the Controller::_dynamicCreateClass() function 
         # looks in
-        path_names = humanlist(list(map(str, import_dirs.keys())))
+        path_names = humanlist(list(map(str, import_dir_keys)))
         # the root path to make other paths relative to this
         root = os.path.realpath(os.path.dirname(__file__))
         # the paths the Controller::_dynamicCreateClass() function looks in
         paths = list(map(lambda p: str(os.path.realpath(p)).replace(root, ""), 
-                         import_dirs.values()))
+                         import_dir_values))
         # a callback to create the file paths that are looked in, parameter is 
         # the file name
         files = lambda x: humanlist(list(map(lambda p: os.path.join(p, x), paths)))
