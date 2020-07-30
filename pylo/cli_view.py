@@ -6,6 +6,7 @@ import typing
 import textwrap
 import linecache
 
+from .pylolib import get_datatype_name
 from .datatype import Datatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
@@ -851,7 +852,7 @@ class CLIView(AbstractView):
             
             if len(errors) > 0:
                 self.error = "The values for {} are invalid.".format(
-                    human_concat_list([e[0] for e in errors], word="and")
+                    human_concat_list([e[0] for e in errors], word=" and ")
                 )
                 self.error += " (Details: "
                 for i, e in enumerate(errors):
@@ -974,7 +975,7 @@ class CLIView(AbstractView):
                             abort_command != empty_command):
                             break
         
-        name = self.getDatatypeName(input_definition["datatype"])
+        name = get_datatype_name(input_definition["datatype"])
 
         if name == "text":
             abort_command = "!abort"
@@ -1121,7 +1122,7 @@ class CLIView(AbstractView):
                                       "converted to a '{}'. Please type in " + 
                                       "a correct value.").format(
                                         val, 
-                                        self.getDatatypeName(
+                                        get_datatype_name(
                                             input_definition["datatype"]
                                         )
                                     ))
