@@ -23,8 +23,11 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
-def remove_dirs(*directories):
+def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
+    if not isinstance(directories, (list, tuple)):
+        directories = glob.glob(os.path.join(test_root, "tmp-test-controller-*"))
+    
     for directory in directories:
         for f in os.listdir(directory):
             path = os.path.join(directory, f)
@@ -40,9 +43,9 @@ pylo_root = os.path.join(root, "pylo")
 test_root = os.path.join(os.path.dirname(__file__))
 
 # clear all test directories
-remove_dirs(glob.glob(os.path.join(test_root, "test-controller-*")))
+remove_dirs()
 
-controller_tmp_path = os.path.join(test_root, "test-controller-{}".format(random.randint(0, 30)))
+controller_tmp_path = os.path.join(test_root, "tmp-test-controller-{}".format(random.randint(0, 30)))
 
 os.makedirs(controller_tmp_path, exist_ok=True)
 
@@ -253,6 +256,10 @@ def controller():
     controller.configuration.clear()
 
 class TestController:
+    @classmethod
+    def teardown_class(cls):
+        remove_dirs()
+
     @pytest.mark.usefixtures("controller")
     @pytest.mark.parametrize("lookup", configuration_test_setup)
     def test_get_configuration_value_or_ask_value_exists(self, controller, lookup):
@@ -428,7 +435,13 @@ class TestController:
     
     def clear_dummy_class_files(self, path):
         """Remove the given file."""
-        os.remove(path)
+        if os.path.exists(path):
+            if (os.path.isfile(path) and 
+                os.path.basename(path).startswith("controllertestdummyclass")):
+                os.remove(path)
+            else:
+                raise OSError("Not removing '{}' because it probably is not " + 
+                              "a controller dummy test class.")
     
     def check_dynamic_created_object(self, obj, class_name, constructor_args=None):
         """Check if the `obj` is created correctly."""
@@ -462,7 +475,7 @@ class TestController:
 
         obj = controller._dynamicCreateClass(obj)
         self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(pylo_root)
+        self.clear_dummy_class_files(path)
     
     @pytest.mark.usefixtures("controller")
     def test_dynamic_create_class_in_root_with_extension(self, controller):
@@ -786,13 +799,18 @@ class TestController:
 
         name_format = "{counter}-dummy-file.tif"
 
-        controller.configuration.setValue("measurement", "save-directory", tmp_path)
-        controller.configuration.setValue("measurement", "save-file-format", name_format)
+        controller.configuration.setValue(
+            "measurement", "save-directory", tmp_path
+        )
+        controller.configuration.setValue(
+            "measurement", "save-file-format", name_format
+        )
 
         self.init_start_program_test(controller, tmp_path, save_files=False, 
                                      change_save_path=False)
 
-        assert controller.measurement.save_dir == tmp_path
+        assert (os.path.realpath(controller.measurement.save_dir) == 
+                os.path.realpath(tmp_path))
         assert controller.measurement.name_format == name_format
 
     @pytest.mark.usefixtures("controller")
@@ -1351,11 +1369,12 @@ class TestController:
         # showCreateMeasurement() is shown twice
         assert len(controller.view.shown_create_measurement_times) == 2
 
-        # check if mircoscope and camera are created twice
-        assert requests.count(("setup", "microscope-module")) == 2
-        assert requests.count(("setup", "microscope-class")) == 2
-        assert requests.count(("setup", "camera-module")) == 2
-        assert requests.count(("setup", "camera-class")) == 2
+        # check if mircoscope and camera are created ONCE, answers are saved
+        # in the configuration
+        assert requests.count(("setup", "microscope-module")) == 1
+        assert requests.count(("setup", "microscope-class")) == 1
+        assert requests.count(("setup", "camera-module")) == 1
+        assert requests.count(("setup", "camera-class")) == 1
 
         # all first events are triggered before the restart
         assert self.before_init_times[0] <= restart_time
@@ -1374,12 +1393,6 @@ class TestController:
         assert restart_time <= self.init_ready_times[1]
         assert restart_time <= self.user_ready_times[1]
         assert restart_time <= self.microscope_ready_times[1]
-
-        # all first requests are made before the restart
-        assert restart_time <= max(request_times_dict["setup-microscope-module"])
-        assert restart_time <= max(request_times_dict["setup-microscope-class"])
-        assert restart_time <= max(request_times_dict["setup-camera-module"])
-        assert restart_time <= max(request_times_dict["setup-camera-class"])
 
         # the measurement finishes only one time
         assert len(self.measurement_ready_times) == 1
