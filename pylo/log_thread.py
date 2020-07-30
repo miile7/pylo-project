@@ -38,6 +38,7 @@ class LogThread(ExceptionThread):
 
         self.queue = queue.Queue()
         self.log_path = log_path
+        self.running = False
 
         log_dir = os.path.dirname(self.log_path)
         if not os.path.exists(log_dir):
@@ -53,6 +54,8 @@ class LogThread(ExceptionThread):
         if there is data, the data will be written to the log file.
         """
 
+        self.running = True
+        
         while self.running:
             if not self.queue.empty():
                 # open file
