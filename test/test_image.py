@@ -13,46 +13,22 @@ import pytest
 import json
 import pylo
 
-class TestImage:
-    def setup_method(self):
-        self.root = os.path.join(os.path.dirname(__file__), "tmp_test_files")
-        self.delete_files = []
-        self.image_counter = 0
+image_counter = 0
 
-        if not os.path.exists(self.root):
-            os.mkdir(self.root, 0o760)
-    
-    def teardown_method(self):
-        self.delete_files.append(self.root)
-        
-        for path in self.delete_files:
-            if os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except (FileNotFoundError, OSError):
-                    pass
-            elif os.path.isdir(path):
-                try:
-                    os.removedirs(path)
-                except (FileNotFoundError, OSError):
-                    pass
-                
-    
-    def create_dummy_image(self, file_name):
+class TestImage:
+    def create_dummy_image(self, path):
         """Create a file that contains 128bytes of random data.
 
         Parameters
         ----------
-        file_name : str
-            The file name including the extension
+        path : str
+            The file path including the extension
         
         Returns
         -------
         str
             The path
         """
-        path = os.path.join(self.root, file_name)
-        self.delete_files.append(path)
         f = open(path, "wb+")
         f.write(bytearray(random.getrandbits(8) for _ in range(128)))
         f.close()
@@ -127,14 +103,15 @@ class TestImage:
         tags = json.loads(tags)
         return dict(image.tags) == dict(tags)
     
-    def create_and_save_random_image(self, file_name, file_type):
+    def create_and_save_random_image(self, path, file_type):
         """Create a random Image object and save it.
 
         Parameters
         ----------
-        file_name : str
-            The file name where to save the image to including the file
-            extension without the path
+        path : str
+            The file path where to save the image to including the file
+            extension, if a {} is contained it will be replaces with the 
+            current image counter
         file_type : str or None
             The file type, if None is give the save function will be called
             without the file_type (this means the default of the functino is 
@@ -147,12 +124,12 @@ class TestImage:
         str
             The path where it is saved to
         """
+        global image_counter
 
         image, data, tags = self.get_random_image()
-        path = os.path.join(self.root, file_name.format(self.image_counter))
+        path = path.format(image_counter)
 
-        self.image_counter += 1
-        self.delete_files.append(path)
+        image_counter += 1
 
         if file_type == None:
             thread = image.saveTo(path)
@@ -177,11 +154,13 @@ class TestImage:
         # ("test-image-{}", "jpg"),
         # ("test-image-{}.tif", "jpg")
     ])
-    def test_random_image_save_load_data(self, file_name, file_type):
+    def test_random_image_save_load_data(self, tmp_path, file_name, file_type):
         """Test if the saved illumination data is the same as the loaded one
         """
         
-        image, path = self.create_and_save_random_image(file_name, file_type)
+        image, path = self.create_and_save_random_image(
+            os.path.join(tmp_path, file_name), file_type
+        )
         assert self.check_illumination_data(image, path)
 
     @pytest.mark.parametrize("file_name,file_type", [
@@ -190,11 +169,13 @@ class TestImage:
         ("test-image-{}", "tif"),
         ("test-image-{}.jpg", "tif"),
     ])
-    def test_random_image_save_load_tags(self, file_name, file_type):
+    def test_random_image_save_load_tags(self, tmp_path, file_name, file_type):
         """Test if the saved tags is the same as the loaded one
         """
 
-        image, path = self.create_and_save_random_image(file_name, file_type)
+        image, path = self.create_and_save_random_image(
+            os.path.join(tmp_path, file_name), file_type
+        )
         assert self.check_tags(image, path)
 
     @pytest.mark.parametrize("file_name,overwrite", [
@@ -203,12 +184,15 @@ class TestImage:
         # ("test-image-{}.jpg", None),
         ("test-image-{}.tif", None)
     ])
-    def test_overwrite_image(self, file_name, overwrite):
+    def test_overwrite_image(self, tmp_path, file_name, overwrite):
         """Test if images are overwritten by default and if overwrite is True
         """
+        global image_counter
 
         # create a random dummy image so the image exists already
-        path = self.create_dummy_image(file_name.format(self.image_counter))
+        path = self.create_dummy_image(
+            os.path.join(tmp_path, file_name.format(image_counter))
+        )
 
         image, illumination_data, tags = self.get_random_image()
 
@@ -229,12 +213,15 @@ class TestImage:
         ("test-image-{}.jpg", None),
         ("test-image-{}.tif", None)
     ])
-    def test_by_file_time_overwrite_image(self, file_name, overwrite):
+    def test_by_file_time_overwrite_image(self, tmp_path, file_name, overwrite):
         """Test if images are overwritten by default and if overwrite is True
         """
+        global image_counter
 
         # create a random dummy image so the image exists already
-        path = self.create_dummy_image(file_name.format(self.image_counter))
+        path = self.create_dummy_image(
+            os.path.join(tmp_path, file_name.format(image_counter))
+        )
         creation_time = os.path.getmtime(path)
 
         image, illumination_data, tags = self.get_random_image()
@@ -258,12 +245,15 @@ class TestImage:
         "test-image-{}.jpg",
         "test-image-{}.tif",
     ])
-    def test_prevent_overwrite_image(self, file_name):
+    def test_prevent_overwrite_image(self, tmp_path, file_name):
         """Test if images are overwritten by default and if overwrite is True
         """
+        global image_counter
 
         # create a random dummy image so the image exists already
-        path = self.create_dummy_image(file_name.format(self.image_counter))
+        path = self.create_dummy_image(
+            os.path.join(tmp_path, file_name.format(image_counter))
+        )
 
         image, illumination_data, tags = self.get_random_image()
 
@@ -274,16 +264,17 @@ class TestImage:
             # possible
             thread.join()
     
-    def test_create_directories(self):
+    def test_create_directories(self, tmp_path):
         """Test if create_directories in saveTo creates the directories
         """
+        global image_counter
+
         image, illumination_data, tags = self.get_random_image()
         
-        dir_path = os.path.join(self.root, "auto-created-dir/")
-        img_path = os.path.join(dir_path, "test-image-{}.tif".format(self.image_counter))
-
-        self.delete_files.append(img_path)
-        self.delete_files.append(dir_path)
+        dir_path = os.path.join(tmp_path, "auto-created-dir/")
+        img_path = os.path.join(
+            dir_path, "test-image-{}.tif".format(image_counter)
+        )
 
         thread = image.saveTo(img_path, create_directories=True)
         
@@ -293,16 +284,18 @@ class TestImage:
 
         assert os.path.exists(dir_path) and os.path.isdir(dir_path)
     
-    def test_error_on_missing_parent_directory(self):
+    def test_error_on_missing_parent_directory(self, tmp_path):
         """Test if saving raises an error if the parent directory does not 
         exist and the create_directories is False
         """
+        global image_counter
+
         image, illumination_data, tags = self.get_random_image()
-        dir_path = os.path.join(self.root, "non-existing-dir/")
+        dir_path = os.path.join(tmp_path, "non-existing-dir/")
         
         with pytest.raises(FileNotFoundError):
             thread = image.saveTo(
-                os.path.join(dir_path, "test-image-{}.tif".format(self.image_counter)),
+                os.path.join(dir_path, "test-image-{}.tif".format(image_counter)),
                 create_directories=False
             )
         
@@ -320,10 +313,12 @@ class TestImage:
         ("test-image-{}.tif", "jpg", "JPEG"),
         ("test-image-{}.jpg", "tif", "TIFF")
     ])
-    def test_file_types(self, file_name, file_type, PIL_expected_type):
+    def test_file_types(self, tmp_path, file_name, file_type, PIL_expected_type):
         """Test if the images are saved in the actual file types."""
 
-        image, path = self.create_and_save_random_image(file_name, file_type)
+        image, path = self.create_and_save_random_image(
+            os.path.join(tmp_path, file_name), file_type
+        )
         load_img = PILImage.open(path)
 
         assert load_img.format == PIL_expected_type
@@ -332,14 +327,14 @@ class TestImage:
         ("test-image-{}.invalidtype1", None),
         ("test-image-{}", "invalidtype2"),
     ])
-    def test_illegal_file_types(self, file_name, file_type):
+    def test_illegal_file_types(self, tmp_path, file_name, file_type):
         """Test if error is raised when the file extension is not known."""
+        global image_counter
 
         image, illumination_data, tags = self.get_random_image()
-        path = os.path.join(self.root, file_name.format(self.image_counter))
+        path = os.path.join(tmp_path, file_name.format(image_counter))
 
-        self.image_counter += 1
-        self.delete_files.append(path)
+        image_counter += 1
 
         if file_type == None:
             with pytest.raises(ValueError):
