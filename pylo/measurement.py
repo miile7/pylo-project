@@ -1,6 +1,5 @@
 import io
 import os
-import csv
 import time
 import typing
 import datetime
@@ -18,6 +17,7 @@ from .events import measurement_ready
 
 from .image import Image
 from .datatype import Datatype
+from .log_thread import LogThread
 from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
 from .measurement_variable import MeasurementVariable
@@ -93,6 +93,7 @@ class Measurement:
             (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             fallback_default=True
         )
+        self._log_thread = None
 
         # make sure the parent directory exists
         log_dir = os.path.dirname(self._log_path)
@@ -412,7 +413,6 @@ class Measurement:
                         raise error
 
             # reset everything to the state before measuring
-            self.closeLog()
             self.running = False
             self._step_index = -1
             measurement_ready()
@@ -425,13 +425,15 @@ class Measurement:
             raise e
     
     def waitForAllImageSavings(self) -> None:
-        """Wait until all threads where images are saved have finished."""
-        for thread in self._image_save_threads:
-            thread.join()
-            
-            if len(thread.exceptions):
-                for error in thread.exceptions:
-                    raise error
+        """Wait until all threads where images or the log are saved have 
+        finished."""
+        for thread in self._image_save_threads + [self._log_thread]:
+            if isinstance(thread, ExceptionThread):
+                thread.join()
+                
+                if len(thread.exceptions):
+                    for error in thread.exceptions:
+                        raise error
     
     def stop(self) -> None:
         """Stop the measurement. 
@@ -447,7 +449,6 @@ class Measurement:
 
         self.running = False
         self._setSafe()
-        self.closeLog()
 
         # fire stop event
         after_stop()
@@ -478,10 +479,8 @@ class Measurement:
             printed after the variables
         """
 
-        self._log_file = open(self._log_path, "w+", newline="")
-        self._log_writer = csv.writer(
-            self._log_file, delimiter=",", quotechar="\"", quoting=csv.QUOTE_MINIMAL
-        )
+        self._log_thread = LogThread(self._log_path)
+        self._log_thread.start()
 
         self._log_columns = before_columns + variable_ids + after_columns
         column_headlines = before_columns
@@ -503,7 +502,7 @@ class Measurement:
                 )
 
         column_headlines += after_columns
-        self._addToLog(column_headlines)
+        self._log_thread.addToLog(column_headlines)
     
     def addToLog(self, variables: dict, *columns: str) -> None:
         """Add a line of columns to the log.
@@ -553,25 +552,7 @@ class Measurement:
             else:
                 cells.append("")
         
-        self._addToLog(cells)
-
-    def _addToLog(self, cells):
-        """Add the cells to the log.
-
-        Parameters
-        ----------
-        cells : list
-            The list of cells to add to the current row of the log
-        """
-        # if not hasattr(self, "_debug_log"):
-        #     self._debug_log = []
-        # self._debug_log.append(cells)
-        self._log_writer.writerow(cells)
-    
-    def closeLog(self):
-        """Close the log."""
-        if isinstance(self._log_file, io.IOBase):
-            self._log_file.close()
+        self._log_thread.addToLog(cells)
     
     @classmethod
     def fromSeries(class_, controller: "Controller", start_conditions: dict, 
