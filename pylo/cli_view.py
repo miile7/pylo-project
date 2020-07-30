@@ -6,6 +6,7 @@ import typing
 import textwrap
 import linecache
 
+from .pylolib import format_value
 from .pylolib import get_datatype_name
 from .pylolib import human_concat_list
 from .datatype import Datatype
@@ -757,7 +758,7 @@ class CLIView(AbstractView):
         for line in args:
             if isinstance(line, dict):
                 label_widths.append(len(line["label"]))
-                value_widths.append(len(self.formatValue(
+                value_widths.append(len(format_value(
                     line["datatype"], line["value"]
                 )))
                 max_index += 1
@@ -787,23 +788,23 @@ class CLIView(AbstractView):
                 conditions = ""
                 if "min_value" in line and "max_value" in line:
                     conditions = " {} <= val <= {}".format(
-                        self.formatValue(line["datatype"], line["min_value"]),
-                        self.formatValue(line["datatype"], line["max_value"])
+                        format_value(line["datatype"], line["min_value"]),
+                        format_value(line["datatype"], line["max_value"])
                     )
                 elif "min_value" in line:
                     conditions = " >= {}".format(
-                        self.formatValue(line["datatype"], line["min_value"])
+                        format_value(line["datatype"], line["min_value"])
                     )
                 elif "max_value" in line:
                     conditions = " >= {}".format(
-                        self.formatValue(line["datatype"], line["max_value"])
+                        format_value(line["datatype"], line["max_value"])
                     )
                 
                 text_value = ""
                 if line["value"] is None:
                     text_value = none_val
                 else:
-                    text_value = self.formatValue(
+                    text_value = format_value(
                         line["datatype"], line["value"]
                     )
 
@@ -983,19 +984,19 @@ class CLIView(AbstractView):
 
         if "min_value" in input_definition and "max_value" in input_definition:
             name += " with {} <= value <= {}".format(
-                self.formatValue(
+                format_value(
                     input_definition["datatype"], input_definition["min_value"]
                 ), 
-                self.formatValue(
+                format_value(
                     input_definition["datatype"], input_definition["max_value"]
                 )
             )
         elif "min_value" in input_definition:
-            name += " with value >= {}".format(self.formatValue(
+            name += " with value >= {}".format(format_value(
                 input_definition["datatype"], input_definition["min_value"]
             ))
         elif "max_value" in input_definition:
-            name += " with value <= {}".format(self.formatValue(
+            name += " with value <= {}".format(format_value(
                 input_definition["datatype"], input_definition["max_value"]
             ))
         
