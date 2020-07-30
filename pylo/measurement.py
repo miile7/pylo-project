@@ -417,6 +417,10 @@ class Measurement:
                 thread.start()
                 reset_threads.append(thread)
 
+            # stop log thread
+            if isinstance(self._log_thread, LogThread):
+                self._log_thread.stop()
+
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
 
@@ -466,6 +470,9 @@ class Measurement:
 
         self.running = False
         self._setSafe()
+
+        if isinstance(self._log_thread, LogThread):
+            self._log_thread.stop()
 
         # fire stop event
         after_stop()
