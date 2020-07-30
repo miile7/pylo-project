@@ -29,14 +29,15 @@ def remove_dirs(directories=None):
         directories = glob.glob(os.path.join(test_root, "tmp-test-controller-*"))
     
     for directory in directories:
-        for f in os.listdir(directory):
-            path = os.path.join(directory, f)
-            if os.path.isfile(path):
-                os.remove(path)
-            elif os.path.isdir(path):
-                remove_dirs(path)
-    
-        os.removedirs(directory)
+        if os.path.exists(directory):
+            for f in os.listdir(directory):
+                path = os.path.join(directory, f)
+                if os.path.isfile(path):
+                    os.remove(path)
+                elif os.path.isdir(path):
+                    remove_dirs((path), )
+        
+            os.removedirs(directory)
 
 root = os.path.dirname(os.path.dirname(__file__))
 pylo_root = os.path.join(root, "pylo")
