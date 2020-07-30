@@ -7,11 +7,11 @@ import textwrap
 import linecache
 
 from .pylolib import get_datatype_name
+from .pylolib import human_concat_list
 from .datatype import Datatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
-from .abstract_view import human_concat_list
 
 class CLIView(AbstractView):
     """This class represents a very basic CLI view. It uses `print()` and 
