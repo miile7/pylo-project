@@ -1,40 +1,85 @@
 /**
- * Returns how many times the `value` occurres in the TagList `tg`.
+ * Returns whether the `text` contains numbers and optional one dot and optional one minus at the 
+ * start only. Note that any added whitespace will return false already.
  *
- * @param tg
- *      The TagList
- * @param value
- *      The value to compare
+ * @param text
+ *      The text to check
  *
  * @return
- *      The number of times the `value` is in the TagList
+ *      Whether the `text` is a valid number expression or not
  */
-number count_occurances(TagGroup tg, string value){
-    number count = 0;
+number is_numeric(string text){
+    if(text == ""){
+        return 0;
+    }
 
-    for(number i = 0; i < tg.TagGroupCountTags(); i++){
-        String v;
-        tg.TagGroupGetIndexedTagAsString(i, v);
+    number minus_found = 0;
+    number dot_found = 0;
 
-        if(v == value){
-            count++;
+    for(number i = 0; i < text.len(); i++){
+        string c = text.mid(i, 1);
+        number a = asc(c);
+
+        if((a < 48 || a > 57) && (i != 0 || c != "-") && (dot_found || c != ".")){
+            return 0;
         }
     }
 
-    return count;
+    return 1;
 }
 
 /**
- * Show the given `TagList`s contents (if they are strings) in the results output.
+ * Removes the entry with the given `index` from the choice `container`.
+ *
+ * @param container
+ *      The dialog choice
+ * @param index
+ *      The index
+ *
+ * @return 
+ *      The choice container
  */
-void show_tag_list(TagGroup tl){
-    result("TagList[\n")
-    for(number i = 0; i < tl.TagGroupCountTags(); i++){
-        string val;
-        tl.TagGroupGetIndexedTagAsString(i, val);
-        result("  " + i + ": '" + val + "'\n");
+TagGroup DLGRemoveChoiceItemEntry(TagGroup container, number index){
+    TagGroup items;
+    container.TagGroupGetTagAsTagGroup("Items", items);
+    items.TagGroupDeleteTagWithIndex(index);
+    container.TagGroupSetTagAsTagGroup("Items", items);
+
+    return container;
+}
+
+/**
+ * Removes the entry with the given `label` from the choice `container`.
+ *
+ * @param container
+ *      The dialog choice
+ * @param label
+ *      The label of the choice item
+ *
+ * @return 
+ *      The choice container
+ */
+TagGroup DLGRemoveChoiceItemEntry(TagGroup container, string label){
+    TagGroup items;
+    container.TagGroupGetTagAsTagGroup("Items", items);
+
+    for(number i = 0; i < items.TagGroupCountTags(); i++){
+        TagGroup item;
+        items.TagGroupGetIndexedTagAsTagGroup(i, item);
+
+        string l;
+        item.TagGroupGetTagAsString("Label", l);
+
+        if(l == label){
+            items.TagGroupDeleteTagWithIndex(i);
+            break;
+        }
     }
-    result("]\n");
+
+    container.TagGroupSetTagAsTagGroup("Items", items);
+
+    return container;
+    
 }
 
 /**
@@ -51,135 +96,34 @@ class DMViewDialog : UIFrame{
     TagGroup measurement_variables;
 
     /**
-     * A TagList that contains a TagGroup on each index. Each TagGroup has an 'index' and a 'id' key.
-     * The 'index' holds the row index in the dialog, the 'id' holds the unique Measurement Variable
-     * id this row contains.
+     * The list of inputboxes for the start values
      */
-    TagGroup index_variable_map;
-
+    TagGroup start_value_inputboxes;
+    
     /**
-     * A TagList that contains all the labels in each row telling which measurement variable is
-     * modified.
+     * The list of inputs for the series variable selects.
      */
-    TagGroup row_labels;
-
+    TagGroup series_selectboxes;
+    
     /**
-     * A TagList that contains all the selectboxes for selecting the type (series or fixed value).
+     * The list of labels showing the limits.
      */
-    TagGroup type_selectboxes;
-
+    TagGroup limit_displays;
+    
     /**
-     * A TagList that contains all the input boxes for the start values.
+     * The list of inputs for the start value.
      */
     TagGroup start_inputboxes;
-
+    
     /**
-     * A TagList that contains all the input boxes for the step width values.
+     * The list of inputs for the step width value.
      */
     TagGroup step_inputboxes;
-
+    
     /**
-     * A TagList that contains all the input boxes for the end values.
+     * The list of inputs for the end value.
      */
     TagGroup end_inputboxes;
-
-    /**
-     * The buttons for swapping upwards
-     */
-    TagGroup swap_upwards_buttons;
-
-    /**
-     * The buttons for swapping downwards
-     */
-    TagGroup swap_downwards_buttons;
-
-    /**
-     * A TagList that contains all the value limits.
-     */
-    TagGroup value_limits;
-
-    /**
-     * Return an image of an arrow pointing upwards
-     *
-     * @return
-     *      The arrow image
-     */
-    RGBImage _drawUpArrow(object self){
-        number imgw = 16;
-        number imgh = 16;
-
-        rgbimage aline := RGBImage("arrow-line", 4, imgw, imgh);
-        rgbimage ahead := RGBImage("arrow-head", 4, imgw, imgh);
-        rgbimage img := RGBImage("arrow", 4, imgw, imgh);
-
-        // width of the arrow line (twice as wide for even images)
-        number w = 2;
-        // padding bottom and top of the arrow line
-        number p = 2
-        // width of the arrow head
-        number hw = imgw / 4;
-        // height of the arrow head
-        number hh = imgh / 4;
-
-        // draw the line
-        aline = abs(icol + 0.5 - iwidth / 2) < w && irow > p + hh && irow < iheight - p ? 255 : 0;
-        // draw the triangle
-        ahead = abs(hh / hw * (icol + 0.5  - iwidth/2)) < irow && irow <= hh + p ? 255 : 0;
-
-        // combine both images
-        img = (aline + ahead);
-        
-        return img;
-    }
-
-    /** 
-     * Return an image of an arrow pointing downwards
-     *
-     * @return
-     *      The arrow image
-     */
-    RGBImage _drawDownArrow(object self){
-        RGBImage up_arrow = self._drawUpArrow();
-        number width;
-        number height;
-        up_arrow.getsize(width, height);
-
-		RGBImage down_arrow = RGBImage("arrow", 4, width, height);
-        down_arrow = up_arrow[icol, iheight - irow];
-        return down_arrow;
-    }
-
-    /**
-     * Show the measurement variables and the row-variable map in the results output.
-     */
-    void _debugMeasurementVariables(object self){
-        result("measurement_variables = [");
-        for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
-            TagGroup tg;
-            measurement_variables.TagGroupGetIndexedTagAsTagGroup(i, tg);
-
-            String id;
-            tg.TagGroupGetTagAsString("unique_id", id);
-            result(i + "=" + id);
-
-            if(i + 1 < measurement_variables.TagGroupCountTags()){
-                result(", ");
-            }
-        }
-        result("]\n");
-
-        result("index_variable_map = [");
-        for(number i = 0; i < index_variable_map.TagGroupCountTags(); i++){
-            string id;
-            index_variable_map.TagGroupGetIndexedTagAsString(i, id);
-            result(i + "=>" + id);
-
-            if(i + 1 < index_variable_map.TagGroupCountTags()){
-                result(", ");
-            }
-        }
-        result("]\n");
-    }
 
     /**
      * Returns the measurement variable of the given `index`.
@@ -224,125 +168,92 @@ class DMViewDialog : UIFrame{
     }
 
     /**
-     * Get the row index for the given measurement variable `unique_id`.
+     * Returns whether the current `UIFrame` is displayed or not.
      *
-     * @see DMViewDialog::getMeasurementVariableIdForRowIndex()
-     *
-     * @param unique_id
-     *      The id of the measurement variable to get
-     * 
-     * @return
-     *      The index or -1 if the `unique_id` does not exist
+     * @return 
+     *      1 if the dialog is shown, 0 if not
      */
-    number getRowIndexForMeasurementVariableId(object self, string unique_id){
-        for(number i = 0; i < index_variable_map.TagGroupCountTags(); i++){
-            string id;
-            index_variable_map.TagGroupGetIndexedTagAsString(i, id);
-            
-            if(id == unique_id){
-                return i;
-            }
+    number isShown(object self){
+        number t, l, b, r;
+        self.GetFrameBounds(t, l, b, r);
+
+        if(t == 0 && l == 0 && b == 0 && r == 0){
+            return 0;
+        }
+        else{
+            return 1;
+        }
+    }
+
+    /**
+     * Get the row index for the `identifier`.
+     *
+     * The row index is taken from extracting and parsing the number behind the last "-" in the 
+     * `identifier`.
+     *
+     * @param identifier
+     *      The identifier
+     *
+     * @return 
+     *      The row index or -1 if not found
+     */
+    number getIdentifierIndex(object self, string identifier){
+        number p = -1;
+
+        // extract the row number
+        while(identifier.find("-") >= 0){
+            p = identifier.find("-");
+            identifier = identifier.right(p);
+        }
+
+        if(is_numeric(identifier)){
+            // convert to a number
+            number index = identifier.val();
+            return index;
         }
 
         return -1;
     }
 
     /**
-     * Get the measurement variable `unique_id` for the given row `index`.
+     * Get the label for this measurement variable. This contains the name and the unit if there 
+     * is a unit.
      *
-     * @see DMViewDialog::getRowIndexForMeasurementVariableId()
+     * @param measurement_variable
+     *      The measurement variable as a `TagGroup`
      *
-     * @param index
-     *      The row index, zero-based
-     * 
      * @return
-     *      The unique id of the measurement variable or an empty string if the index does not exist
+     *      The label
      */
-    string getMeasurementVariableIdForRowIndex(object self, number index){
-        string unique_id = "";
-        if(0 <= index && index < index_variable_map.TagGroupCountTags()){
-            index_variable_map.TagGroupGetIndexedTagAsString(index, unique_id);
+    string _getMeasurementVariableLabel(object self, TagGroup measurement_variable){
+        string label;
+        string unit;
+
+        measurement_variable.TagGroupGetTagAsString("name", label);
+        measurement_variable.TagGroupGetTagAsString("unit", unit);
+        if(unit != ""){
+            label += " [" + unit + "]";
         }
 
-        return unique_id;
+        return label;
     }
 
     /**
-     * Set the row with the given `index` to display the given `measurement_variable`.
-     *
-     * A `measurement_variable` is a `TagGroup` with the following indices:
-     * - "name", string: The name/label to show
-     * - "unit", string: The unit, to not show a unit use "" (empty string)
-     * - "series-type", number, optional: Either 0 for using the value as fixed or 1 to use it as a 
-     *   series, if not given the current value will be kept
-     * - "start", string: The start value to display in the "unit" units
-     * - "step", string: The step width value to display in the "unit" units
-     * - "end", string: The end value to display in the "unit" units
-     * - "min_value", string: The minimum value, to not show a minimum value use "" (empty string)
-     * - "max_value", string: The maximum value, to not show a maximum value use "" (empty string)
-     *
-     * The `measurement_variable` will be saved for the `index` in the 
-     * `DMViewDialog::index_variable_map`.
+     * Get the limit text for this measurement variable. 
      *
      * @param measurement_variable
-     *      The measurement variable `TagGroup` to set, this is not validated
-     * @param index
-     *      The row index
+     *      The measurement variable as a `TagGroup`
+     *
+     * @return
+     *      The formatted limits
      */
-    void setMeasurementVariableToRow(object self, TagGroup measurement_variable, number index){
-        // the label, includes the unit
-        TagGroup row_label;
-        string name;
-        string unit;
-        measurement_variable.TagGroupGetTagAsString("name", name);
-        measurement_variable.TagGroupGetTagAsString("unit", unit);
-        row_labels.TagGroupGetIndexedTagAsTagGroup(index, row_label);
-        if(unit != ""){
-            name += " [" + unit + "]";
-        }
-        row_label.DLGTitle(name);
-
-        // choice, if exists
-        TagGroup type_select;
-        type_selectboxes.TagGroupGetIndexedTagAsTagGroup(index, type_select);
-        if(measurement_variable.TagGroupDoesTagExist("series-type")){
-            number selected_index;
-            measurement_variable.TagGroupGetTagAsShort("series-type", selected_index);
-            type_select.DLGValue(selected_index);
-        }
-        else{
-            number i = measurement_variable.TagGroupCreateNewLabeledTag("series-type");
-            measurement_variable.TagGroupSetIndexedTagAsShort(i, type_select.DLGGetValue());
-        }
-
-        // the start value
-        TagGroup start_input;
-        string start_value;
-        measurement_variable.TagGroupGetTagAsString("start", start_value);
-        start_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, start_input);
-        start_input.DLGValue(start_value);
-
-        // the step width value
-        TagGroup step_input;
-        string step_value;
-        measurement_variable.TagGroupGetTagAsString("step", step_value);
-        step_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, step_input);
-        step_input.DLGValue(step_value);
-
-        // the end value
-        TagGroup end_input;
-        string end_value;
-        measurement_variable.TagGroupGetTagAsString("end", end_value);
-        end_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, end_input);
-        end_input.DLGValue(end_value);
-
-        // boundaries
-        TagGroup limits_input;
-        string min_value = "";
-        string max_value = "";
+    string _getMeasurementVariableLimits(object self, TagGroup measurement_variable){
+        string min_value;
+        string max_value;
+        
         measurement_variable.TagGroupGetTagAsString("min_value", min_value);
         measurement_variable.TagGroupGetTagAsString("max_value", max_value);
-        value_limits.TagGroupGetIndexedTagAsTagGroup(index, limits_input);
+
         string limits = "";
         if(min_value != "" && max_value != ""){
             limits += min_value + ".." + max_value;
@@ -359,275 +270,302 @@ class DMViewDialog : UIFrame{
         if(limits != ""){
             limits = "[" + limits + "]";
         }
-        limits_input.DLGTitle(limits);
 
-        for(number i = index_variable_map.TagGroupCountTags(); i <= index; i++){
-            // cannot access indices directly, add dummies if the map does not contain enough 
-            // elements
-            index_variable_map.TagGroupInsertTagAsString(i, "");
-        }
-
-        string unique_id;
-        measurement_variable.TagGroupGetTagAsString("unique_id", unique_id);
-        index_variable_map.TagGroupSetIndexedTagAsString(index, unique_id);
+        return limits;
     }
 
     /**
-     * Saves all measurement variable inputs to the internal `DMViewDialog::measurement_variables`.
+     * Get the measurement variable that the `series_select` has selected.
+     *
+     * @param series_select
+     *      The select box
+     *
+     * @return
+     *      The measurement variable that is selected or NULL if no measurement variable is selected
      */
-    void saveMeasurementVariableInputs(object self){
+    TagGroup getSeriesSelectedMeasurementVariable(object self, TagGroup series_select){
+        // get the index
+        number selected_index = series_select.DLGGetValue();
+
+        // get all items
+        TagGroup items;
+        series_select.TagGroupGetTagAsTagGroup("Items", items);
+
+        // get selected item
+        TagGroup item;
+        items.TagGroupGetIndexedTagAsTagGroup(selected_index, item);
+
+        // get the corresponding label
+        string selected_label;
+        item.TagGroupGetTagAsString("Label", selected_label);
+
+        // find the selected measurement variable, the index is not turstworthy (because the 
+        // indices change depending on the parent selectboxes) and there is no value so use the 
+        // label to check
+        TagGroup var;
+        number found = 0;
         for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
-            TagGroup measurement_variable = self._getMeasurementVariableByIndex(i);
-            string unique_id;
-            measurement_variable.TagGroupGetTagAsString("unique_id", unique_id);
+            var = self._getMeasurementVariableByIndex(i);
+            string label = self._getMeasurementVariableLabel(var);
 
-            number index = self.getRowIndexForMeasurementVariableId(unique_id);
-
-            // series type select
-            TagGroup type_select;
-            type_selectboxes.TagGroupGetIndexedTagAsTagGroup(index, type_select);
-            if(!measurement_variable.TagGroupDoesTagExist("series-type")){
-                number j = measurement_variable.TagGroupCreateNewLabeledTag("series-type");
-                measurement_variable.TagGroupSetIndexedTagAsShort(j, type_select.DLGGetValue());
+            if(label == selected_label){
+                found = 1;
+                break;
             }
-            else{
-                measurement_variable.TagGroupSetTagAsShort("series-type", type_select.DLGGetValue());
-            }
+        }
 
-            // start
+        if(found == 0){
+            TagGroup d;
+            return d;
+        }
+        else{
+            return var;
+        }
+    }
+
+    void seriesSelectChanged(object self, TagGroup series_select){
+        // get the index of the row
+        string identifier;
+        series_select.DLGGetIdentifier(identifier);
+        number index = self.getIdentifierIndex(identifier);
+
+        TagGroup var = self.getSeriesSelectedMeasurementVariable(series_select);
+
+        if(var.TagGroupIsValid()){
+            result("Found selected measurement variable for row " + index + ".\n");
+            // show the limits
+            TagGroup limit_display;
+            limit_displays.TagGroupGetIndexedTagAsTagGroup(index, limit_display);
+            limit_display.DLGTitle(self._getMeasurementVariableLimits(var));
+
+            // show the start value
+            string start;
+            var.TagGroupGetTagAsString("start", start);
             TagGroup start_input;
             start_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, start_input);
-            measurement_variable.TagGroupSetTagAsString("start", start_input.DLGGetStringValue());
+            start_input.DLGValue(start);
+            start_input.DLGEnabled(1);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                start_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 1);
+            }
 
-            // step width
+            // show the step width value
+            string step;
+            var.TagGroupGetTagAsString("step", step);
             TagGroup step_input;
             step_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, step_input);
-            measurement_variable.TagGroupSetTagAsString("step", step_input.DLGGetStringValue());
+            step_input.DLGValue(step);
+            step_input.DLGEnabled(1);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                step_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 1);
+            }
 
-            // end
+            // show the end value
+            string end;
+            var.TagGroupGetTagAsString("end", end);
             TagGroup end_input;
             end_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, end_input);
-            measurement_variable.TagGroupSetTagAsString("end", end_input.DLGGetStringValue());
+            end_input.DLGValue(end);
+            end_input.DLGEnabled(1);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                end_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 1);
+            }
 
-            // save the values
-            measurement_variables.TagGroupSetIndexedTagAsTagGroup(i, measurement_variable);
-        }
-    }
+            // enable the next series select box if it exists
+            if(index + 1 < series_selectboxes.TagGroupCountTags()){
+                TagGroup next_series_select;
+                series_selectboxes.TagGroupGetIndexedTagAsTagGroup(index + 1, next_series_select);
+                next_series_select.DLGEnabled(1);
+                if(self.isShown()){
+                    // DLGEnabled() does not work if the dialog is shown already
+                    string i;
+                    next_series_select.DLGGetIdentifier(i);
+                    self.setElementIsEnabled(i, 1);
+                }
 
-    /**
-     * Swap the `row_index1`-th row with the `row_index2`-th row and the `row_index2`-th row with 
-     * the `row_index1`-th row. If one of the row indices is invalid or if the indices are the same, 
-     * 0 is returned and no rows will be swapped.
-     *
-     * Note that this saves all measurement variables inputs.
-     *
-     * @param row_index1
-     *      The index of one row
-     * @param row_index2
-     *      The index of the other row
-     *
-     * @return
-     *      1 if the rows were swapped successfully, 0 if not
-     */
-    number swapRows(object self, number row_index1, number row_index2){
-        self._debugMeasurementVariables();
-        self.saveMeasurementVariableInputs();
-        number c = measurement_variables.TagGroupCountTags();
+                // clear all items
+                TagGroup items;
+                next_series_select.TagGroupGetTagAsTagGroup("Items", items);
+                items.TagGroupDeleteAllTags();
 
-        if(row_index1 != row_index2 && 0 <= row_index1 && row_index1 < c && 0 <= row_index2 && row_index2 < c){
-            string var_id1 = self.getMeasurementVariableIdForRowIndex(row_index1);
-            string var_id2 = self.getMeasurementVariableIdForRowIndex(row_index2);
-            TagGroup var1 = self._getMeasurementVariableById(var_id1);
-            TagGroup var2 = self._getMeasurementVariableById(var_id2);
+                next_series_select.DLGAddChoiceItemEntry("--");
 
-            self.setMeasurementVariableToRow(var1, row_index2);
-            self.setMeasurementVariableToRow(var2, row_index1);
+                // add all measurement variables
+                for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+                    TagGroup add_var = self._getMeasurementVariableByIndex(j);
 
-            self._debugMeasurementVariables();
-            return 1;
-        }
-        return 0;
-    }
+                    string add_id;
+                    add_var.TagGroupGetTagAsString("unique_id", add_id);
 
-    /**
-     * Swap the `index`-th row with the row one above. If there is no row above, nothing will happen 
-     * and 0 will be returned, 1 otherwise.
-     *
-     * @param index
-     *      The index of the row to move one row upwards
-     *
-     * @return
-     *      1 if the rows were swapped successfully, 0 if not
-     */
-    number swapWithUpper(object self, number index){
-        return self.swapRows(index, index - 1);
-    }
+                    number var_selected_in_parent = 0;
+                    for(number k = 0; k <= index; k++){
+                        TagGroup parent_series_select;
+                        series_selectboxes.TagGroupGetIndexedTagAsTagGroup(k, parent_series_select);
 
-    /**
-     * Swap the `index`-th row with the row one below. If there is no row below, nothing will happen 
-     * and 0 will be returned, 1 otherwise.
-     *
-     * @param index
-     *      The index of the row to move one row downwards
-     *
-     * @return
-     *      1 if the rows were swapped successfully, 0 if not
-     */
-    number swapWithLower(object self, number index){
-        return self.swapRows(index, index + 1);
-    }
+                        TagGroup parent_var = self.getSeriesSelectedMeasurementVariable(parent_series_select);
 
-    /**
-     * The callback for the swap upwards button.
-     */
-    void swapUpwardsCallback(object self){
-        for(number i = 0; i < swap_upwards_buttons.TagGroupCountTags(); i++){
-            TagGroup button;
-            swap_upwards_buttons.TagGroupGetIndexedTagAsTagGroup(i, button);
+                        string parent_id;
+                        parent_var.TagGroupGetTagAsString("unique_id", parent_id);
 
-            if(button.DLGGetValue() == 1){
-                // this button is pressed
-                self.swapWithUpper(i);
-                button.DLGBevelButtonOn(0);
-                break;
+                        if(parent_id == add_id){
+                            var_selected_in_parent = 1;
+                            break;
+                        }
+                    }
+
+                    if(var_selected_in_parent == 0){
+                        next_series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(add_var))
+                    }
+                }
+
+                if(next_series_select.DLGGetValue() != 0){
+                    self.seriesSelectChanged(next_series_select);
+                }
             }
         }
-    }
-
-    /**
-     * The callback for the swap upwards button.
-     */
-    void swapDownwardsCallback(object self){
-        for(number i = 0; i < swap_downwards_buttons.TagGroupCountTags(); i++){
-            TagGroup button;
-            swap_downwards_buttons.TagGroupGetIndexedTagAsTagGroup(i, button);
-
-            if(button.DLGGetValue() == 1){
-                // this button is pressed
-                self.swapWithLower(i);
-                button.DLGBevelButtonOn(0);
-                break;
-            }
+        else{
+            result("Did NOT find selected variable.\n")
         }
-    }
-
-    /**
-     * Create the series start, step or end input
-     *
-     * @param type
-     *      The type, use 'start', 'step' or 'end'
-     * @param index
-     *      The row index
-     *
-     * @return
-     *      The input
-     */
-    TagGroup _createSeriesInput(object self, string type, number index){
-        TagGroup input = DLGCreateStringField("", 6);
-        input.DLGIdentifier("series_input_" + type + "_" + index);
-        return input;
-    }
-
-    /**
-     * Add one row for setting the measurement variables for the series to the `wrapper`.
-     *
-     * @param index
-     *      The row index
-     * @param wrapper
-     *      The wrapper
-     *
-     * @return
-     *      The wrapper with the added row
-     */
-    TagGroup _addSeriesRow(object self, number index, TagGroup wrapper){
-        // set the label
-        TagGroup row_label = DLGCreateLabel("Label " + index);
-        row_label.DLGIdentifier("rowlabel" + index);
-        row_labels.TagGroupInsertTagAsTagGroup(infinity(), row_label);
-        wrapper.DLGAddElement(row_label);
-
-        // the variable select
-        TagGroup type_select = DLGCreateChoice(1);
-        type_select.DLGAddChoiceItemEntry("Series");
-        type_select.DLGAddChoiceItemEntry("Fixed Value");
-        type_select.DLGIdentifier("type_select-" + index);
-        type_selectboxes.TagGroupInsertTagAsTagGroup(infinity(), type_select);
-        wrapper.DLGAddElement(type_select);
-
-        // the start
-        TagGroup start_input = self._createSeriesInput("start", index);
-        start_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), start_input);
-        wrapper.DLGAddElement(start_input);
-
-        // the step width
-        TagGroup step_input = self._createSeriesInput("step", index);
-        step_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), step_input);
-        wrapper.DLGAddElement(step_input);
-
-        // the end width
-        TagGroup end_input = self._createSeriesInput("end", index);
-        end_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), end_input);
-        wrapper.DLGAddElement(end_input);
-
-        // limits
-        TagGroup value_limit = DLGCreateLabel("[..]");
-        value_limit.DLGIdentifier("value_limit-" + index);
-        value_limits.TagGroupInsertTagAsTagGroup(infinity(), value_limit);
-        wrapper.DLGAddElement(value_limit);
-
-        // order buttons
-        rgbimage up_img = self._drawUpArrow();
-        // TagGroup up_button = DLGCreateBevelButton(up_img, up_img, "swapUpwardsCallback");
-        // up_button.DLGIdentifier("up_button-" + index);
-        TagGroup up_button = DLGCreateDualStateBevelButton("up_button-" + index, up_img, up_img, "swapUpwardsCallback");
-        if(index == 0){
-            up_button.DLGEnabled(0);
-        }
-        swap_upwards_buttons.TagGroupInsertTagAsTagGroup(infinity(), up_button);
-        wrapper.DLGAddElement(up_button);
-
-        rgbimage down_img = self._drawDownArrow();
-        // TagGroup down_button = DLGCreateBevelButton(down_img, down_img, "swapDownwardsCallback");
-        // down_button.DLGIdentifier("down_button-" + index);
-        TagGroup down_button = DLGCreateDualStateBevelButton("down_button-" + index, down_img, down_img, "swapDownwardsCallback");
-        if(index + 1 == measurement_variables.TagGroupCountTags()){
-            down_button.DLGEnabled(0);
-        }
-        swap_downwards_buttons.TagGroupInsertTagAsTagGroup(infinity(), down_button);
-        wrapper.DLGAddElement(down_button);
-
-        return wrapper;
     }
 
     TagGroup _createSeriesPanelContent(object self){
         TagGroup wrapper = DLGCreateGroup();
 
-        wrapper.DLGTableLayout(8, 6, 0);
+        start_value_inputboxes = NewTagList();
 
-        // first row, only the labels for start, stepwidth and end
-        wrapper.DLGAddElement(DLGCreateLabel(""));
-        wrapper.DLGAddElement(DLGCreateLabel(""));
-        wrapper.DLGAddElement(DLGCreateLabel("Start"));
-        wrapper.DLGAddElement(DLGCreateLabel("Step"));
-        wrapper.DLGAddElement(DLGCreateLabel("End"));
-        wrapper.DLGAddElement(DLGCreateLabel(""));
-        wrapper.DLGAddElement(DLGCreateLabel(""));
-        wrapper.DLGAddElement(DLGCreateLabel(""));
+        number max_rows = 1;
+        TagGroup upper_wrapper = DLGCreateBox("Start parameters");
+        upper_wrapper.DLGTableLayout(max_rows * 3, ceil(measurement_variables.TagGroupCountTags() / max_rows), 0);
+        upper_wrapper.DLGExpand("X");
+        upper_wrapper.DLGFill("X");
 
-        TagGroup parent_ids = NewTagList();
-        row_labels = NewTagList();
-        type_selectboxes = NewTagList();
+        for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+            TagGroup var = self._getMeasurementVariableByIndex(j);
+
+            string unique_id;
+            var.TagGroupGetTagAsString("unique_id", unique_id);
+
+            string label = self._getMeasurementVariableLabel(var);
+            string limits = self._getMeasurementVariableLimits(var);
+            if(limits != ""){
+                limits = " " + limits;
+            }
+
+            // TagGroup label_element = DLGCreateLabel(label, label.len() + 2);
+            TagGroup label_element = DLGCreateLabel(label, 20);
+            label_element.DLGAnchor("East");
+            upper_wrapper.DLGAddElement(label_element);
+            
+            string start;
+            var.TagGroupGetTagAsString("start", start);
+
+            TagGroup start_input = DLGCreateStringField(start, 8);
+            start_input.DLGAnchor("West");
+            start_input.DLGIdentifier("start_value-" + unique_id);
+            start_value_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), start_input);
+            upper_wrapper.DLGAddElement(start_input);
+
+            upper_wrapper.DLGAddElement(DLGCreateLabel(limits, 15));
+        }
+
+        wrapper.DLGAddElement(upper_wrapper);
+
+        TagGroup lower_wrapper = DLGCreateBox("Series");
+
+        number c = measurement_variables.TagGroupCountTags();
+        lower_wrapper.DLGTableLayout(5, c * 2, 0);
+        lower_wrapper.DLGExpand("X");
+        lower_wrapper.DLGFill("X");
+
+        // header
+        lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+        lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+        lower_wrapper.DLGAddElement(DLGCreateLabel("Start"));
+        lower_wrapper.DLGAddElement(DLGCreateLabel("Step width"));
+        lower_wrapper.DLGAddElement(DLGCreateLabel("End"));
+
+        // item lists
+        series_selectboxes = NewTagList();
+        limit_displays = NewTagList();
         start_inputboxes = NewTagList();
         step_inputboxes = NewTagList();
         end_inputboxes = NewTagList();
-        value_limits = NewTagList();
-        swap_upwards_buttons = NewTagList();
-        swap_downwards_buttons = NewTagList();
+
+        TagGroup first_series_select;
 
         // add measurement variable rows
-        for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
-            wrapper = self._addSeriesRow(i, wrapper);
+        for(number i = 0; i < c ; i++){
+            TagGroup series_select = DLGCreateChoice(0, "seriesSelectChanged");
+            series_select.DLGExternalPadding(0, i * - 50, 0, 0);
+            series_select.DLGWidth(100);
+            series_select.DLGAnchor("West");
+            series_select.DLGSide("Left");
+            if(i > 0){
+                series_select.DLGEnabled(0);
+                series_select.DLGAddChoiceItemEntry("--");
+            }
+            else{
+                first_series_select = series_select;
+                for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+                    TagGroup var = self._getMeasurementVariableByIndex(j);
+                    series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(var))
+                }
+            }
+            series_select.DLGIdentifier("series_variable-" + i);
+            series_selectboxes.TagGroupInsertTagAsTagGroup(infinity(), series_select);
+            lower_wrapper.DLGAddElement(series_select);
+
+            TagGroup limit_display = DLGCreateLabel("", 10);
+            limit_displays.TagGroupInsertTagAsTagGroup(infinity(), limit_display);
+            lower_wrapper.DLGAddElement(limit_display);
+
+            TagGroup start_input = DLGCreateStringField("", 8);
+            if(i > 0){
+                start_input.DLGEnabled(0);
+            }
+            start_input.DLGIdentifier("series_start-" + i);
+            start_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), start_input);
+            lower_wrapper.DLGAddElement(start_input);
+
+            TagGroup step_input = DLGCreateStringField("", 8);
+            if(i > 0){
+                step_input.DLGEnabled(0);
+            }
+            step_input.DLGIdentifier("series_step-" + i);
+            step_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), step_input);
+            lower_wrapper.DLGAddElement(step_input);
+
+            TagGroup end_input = DLGCreateStringField("", 8);
+            if(i > 0){
+                end_input.DLGEnabled(0);
+            }
+            end_input.DLGIdentifier("series_end-" + i);
+            end_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), end_input);
+            lower_wrapper.DLGAddElement(end_input);
+            
+            if(i + 1 < c){
+                TagGroup on_each_label = DLGCreateLabel("");
+                on_each_label.DLGIdentifier("on_each_label-" + i);
+                lower_wrapper.DLGAddElement(on_each_label);
+
+                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
+            }
         }
+        self.seriesSelectChanged(first_series_select);
+
+        wrapper.DLGAddElement(lower_wrapper);
 
         return wrapper;
     }
@@ -686,12 +624,7 @@ class DMViewDialog : UIFrame{
      */
 	object init(object self, string title, TagGroup measurement_vars, string message){
         measurement_variables = measurement_vars;
-        index_variable_map = NewTagList();
 		self.super.init(self._createContent(title, message));
-
-        for(number i = 0; i < measurement_vars.TagGroupCountTags(); i++){
-            self.setMeasurementVariableToRow(self._getMeasurementVariableByIndex(i), i);
-        }
         
 		return self;
 	}
