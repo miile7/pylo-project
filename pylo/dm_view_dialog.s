@@ -124,6 +124,11 @@ class DMViewDialog : UIFrame{
      * The list of inputs for the end value.
      */
     TagGroup end_inputboxes;
+    
+    /**
+     * The list of the labels display the "on each point" text.
+     */
+    TagGroup on_each_labels;
 
     /**
      * Returns the measurement variable of the given `index`.
@@ -382,6 +387,12 @@ class DMViewDialog : UIFrame{
 
             // enable the next series select box if it exists
             if(index + 1 < series_selectboxes.TagGroupCountTags()){
+                string name;
+                var.TagGroupGetTagAsString("name", name);
+                TagGroup on_each_label;
+                on_each_labels.TagGroupGetIndexedTagAsTagGroup(index, on_each_label);
+                on_each_label.DLGTitle("On each " + name + " point...");
+
                 TagGroup next_series_select;
                 series_selectboxes.TagGroupGetIndexedTagAsTagGroup(index + 1, next_series_select);
                 next_series_select.DLGEnabled(1);
@@ -399,13 +410,15 @@ class DMViewDialog : UIFrame{
 
                 next_series_select.DLGAddChoiceItemEntry("--");
 
-                // add all measurement variables
+                // add all remaining measurement variables
                 for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+                    // the variable to add
                     TagGroup add_var = self._getMeasurementVariableByIndex(j);
 
                     string add_id;
                     add_var.TagGroupGetTagAsString("unique_id", add_id);
 
+                    // check if the variable is set in one of the parents already
                     number var_selected_in_parent = 0;
                     for(number k = 0; k <= index; k++){
                         TagGroup parent_series_select;
@@ -417,17 +430,20 @@ class DMViewDialog : UIFrame{
                         parent_var.TagGroupGetTagAsString("unique_id", parent_id);
 
                         if(parent_id == add_id){
+                            // this parent contains this variable already
                             var_selected_in_parent = 1;
                             break;
                         }
                     }
 
                     if(var_selected_in_parent == 0){
+                        // only add if the parent does not contain the variable
                         next_series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(add_var))
                     }
                 }
 
                 if(next_series_select.DLGGetValue() != 0){
+                    // the next series has something selected already, trigger the change
                     self.seriesSelectChanged(next_series_select);
                 }
             }
@@ -499,8 +515,9 @@ class DMViewDialog : UIFrame{
         start_inputboxes = NewTagList();
         step_inputboxes = NewTagList();
         end_inputboxes = NewTagList();
+        on_each_labels = NewTagList();
 
-        TagGroup first_series_select;
+        // TagGroup first_series_select;
 
         // add measurement variable rows
         for(number i = 0; i < c ; i++){
@@ -514,7 +531,7 @@ class DMViewDialog : UIFrame{
                 series_select.DLGAddChoiceItemEntry("--");
             }
             else{
-                first_series_select = series_select;
+                // first_series_select = series_select;
                 for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
                     TagGroup var = self._getMeasurementVariableByIndex(j);
                     series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(var))
@@ -555,6 +572,7 @@ class DMViewDialog : UIFrame{
             if(i + 1 < c){
                 TagGroup on_each_label = DLGCreateLabel("");
                 on_each_label.DLGIdentifier("on_each_label-" + i);
+                on_each_labels.TagGroupInsertTagAsTagGroup(infinity(), on_each_label);
                 lower_wrapper.DLGAddElement(on_each_label);
 
                 lower_wrapper.DLGAddElement(DLGCreateLabel(""));
@@ -562,8 +580,16 @@ class DMViewDialog : UIFrame{
                 lower_wrapper.DLGAddElement(DLGCreateLabel(""));
                 lower_wrapper.DLGAddElement(DLGCreateLabel(""));
             }
+            // self.seriesSelectChanged(series_select);
         }
-        self.seriesSelectChanged(first_series_select);
+
+        // trigger changes for all selectboxes, otherwise some functions in the callback do not work,
+        // no idea why
+        for(number j = 0; j < series_selectboxes.TagGroupCountTags(); j++){
+            TagGroup series_select;
+            series_selectboxes.TagGroupGetIndexedTagAsTagGroup(j, series_select);
+            self.seriesSelectChanged(series_select);
+        }
 
         wrapper.DLGAddElement(lower_wrapper);
 
