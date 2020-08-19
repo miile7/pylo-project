@@ -337,7 +337,6 @@ class DMViewDialog : UIFrame{
         TagGroup var = self.getSeriesSelectedMeasurementVariable(series_select);
 
         if(var.TagGroupIsValid()){
-            result("Found selected measurement variable for row " + index + ".\n");
             // show the limits
             TagGroup limit_display;
             limit_displays.TagGroupGetIndexedTagAsTagGroup(index, limit_display);
@@ -384,48 +383,100 @@ class DMViewDialog : UIFrame{
                 end_input.DLGGetIdentifier(i);
                 self.setElementIsEnabled(i, 1);
             }
+        }
+        else{
+            // hide the limits
+            TagGroup limit_display;
+            limit_displays.TagGroupGetIndexedTagAsTagGroup(index, limit_display);
+            limit_display.DLGTitle("");
 
-            // enable the next series select box if it exists
-            if(index + 1 < series_selectboxes.TagGroupCountTags()){
-                string name;
+            // hide the start value
+            TagGroup start_input;
+            start_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, start_input);
+            start_input.DLGValue("");
+            start_input.DLGEnabled(0);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                start_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 0);
+            }
+
+            // hide the step width value
+            TagGroup step_input;
+            step_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, step_input);
+            step_input.DLGValue("");
+            step_input.DLGEnabled(0);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                step_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 0);
+            }
+
+            // hide the end value
+            TagGroup end_input;
+            end_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, end_input);
+            end_input.DLGValue("");
+            end_input.DLGEnabled(0);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                end_input.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, 0);
+            }
+        }
+
+        // enable the next series select box if it exists
+        if(index + 1 < series_selectboxes.TagGroupCountTags()){
+            string name;
+            number enabled;
+            if(var.TagGroupIsValid()){
                 var.TagGroupGetTagAsString("name", name);
-                TagGroup on_each_label;
-                on_each_labels.TagGroupGetIndexedTagAsTagGroup(index, on_each_label);
-                on_each_label.DLGTitle("On each " + name + " point...");
+                enabled = 1;
+            }
+            else{
+                name = "--";
+                enabled = 0;
+            }
+            TagGroup on_each_label;
+            on_each_labels.TagGroupGetIndexedTagAsTagGroup(index, on_each_label);
+            on_each_label.DLGTitle("On each " + name + " point series over...");
 
-                TagGroup next_series_select;
-                series_selectboxes.TagGroupGetIndexedTagAsTagGroup(index + 1, next_series_select);
-                next_series_select.DLGEnabled(1);
-                if(self.isShown()){
-                    // DLGEnabled() does not work if the dialog is shown already
-                    string i;
-                    next_series_select.DLGGetIdentifier(i);
-                    self.setElementIsEnabled(i, 1);
-                }
+            TagGroup next_series_select;
+            series_selectboxes.TagGroupGetIndexedTagAsTagGroup(index + 1, next_series_select);
+            next_series_select.DLGEnabled(enabled);
+            if(self.isShown()){
+                // DLGEnabled() does not work if the dialog is shown already
+                string i;
+                next_series_select.DLGGetIdentifier(i);
+                self.setElementIsEnabled(i, enabled);
+            }
 
-                // clear all items
-                TagGroup items;
-                next_series_select.TagGroupGetTagAsTagGroup("Items", items);
-                items.TagGroupDeleteAllTags();
+            // clear all items
+            TagGroup items;
+            next_series_select.TagGroupGetTagAsTagGroup("Items", items);
+            items.TagGroupDeleteAllTags();
 
-                next_series_select.DLGAddChoiceItemEntry("--");
+            next_series_select.DLGAddChoiceItemEntry("--");
 
-                // add all remaining measurement variables
-                for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
-                    // the variable to add
-                    TagGroup add_var = self._getMeasurementVariableByIndex(j);
+            // add all remaining measurement variables
+            for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+                // the variable to add
+                TagGroup add_var = self._getMeasurementVariableByIndex(j);
 
-                    string add_id;
-                    add_var.TagGroupGetTagAsString("unique_id", add_id);
+                string add_id;
+                add_var.TagGroupGetTagAsString("unique_id", add_id);
 
-                    // check if the variable is set in one of the parents already
-                    number var_selected_in_parent = 0;
-                    for(number k = 0; k <= index; k++){
-                        TagGroup parent_series_select;
-                        series_selectboxes.TagGroupGetIndexedTagAsTagGroup(k, parent_series_select);
+                // check if the variable is set in one of the parents already
+                number var_selected_in_parent = 0;
+                for(number k = 0; k <= index; k++){
+                    TagGroup parent_series_select;
+                    series_selectboxes.TagGroupGetIndexedTagAsTagGroup(k, parent_series_select);
 
-                        TagGroup parent_var = self.getSeriesSelectedMeasurementVariable(parent_series_select);
+                    TagGroup parent_var = self.getSeriesSelectedMeasurementVariable(parent_series_select);
 
+                    if(parent_var.TagGroupIsValid()){
                         string parent_id;
                         parent_var.TagGroupGetTagAsString("unique_id", parent_id);
 
@@ -435,22 +486,28 @@ class DMViewDialog : UIFrame{
                             break;
                         }
                     }
-
-                    if(var_selected_in_parent == 0){
-                        // only add if the parent does not contain the variable
-                        next_series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(add_var))
-                    }
                 }
 
-                if(next_series_select.DLGGetValue() != 0){
-                    // the next series has something selected already, trigger the change
-                    self.seriesSelectChanged(next_series_select);
+                if(var_selected_in_parent == 0){
+                    // only add if the parent does not contain the variable
+                    next_series_select.DLGAddChoiceItemEntry(self._getMeasurementVariableLabel(add_var))
                 }
             }
+
+            if(next_series_select.DLGGetValue() != 0){
+                // the next series has something selected already, trigger the change
+                self.seriesSelectChanged(next_series_select);
+            }
         }
-        else{
-            result("Did NOT find selected variable.\n")
-        }
+    }
+
+    TagGroup _createInputLine(object self, number columns){
+        TagGroup input_line = DLGCreateGroup();
+        input_line.DLGTableLayout(columns, 1, 0);
+        input_line.DLGExpand("X");
+        input_line.DLGFill("X");
+
+        return input_line;
     }
 
     TagGroup _createSeriesPanelContent(object self){
@@ -495,19 +552,25 @@ class DMViewDialog : UIFrame{
 
         wrapper.DLGAddElement(upper_wrapper);
 
-        TagGroup lower_wrapper = DLGCreateBox("Series");
+        TagGroup lower_wrapper = DLGCreateBox("Series parameters");
 
+        // number of input rows
         number c = measurement_variables.TagGroupCountTags();
-        lower_wrapper.DLGTableLayout(5, c * 2, 0);
-        lower_wrapper.DLGExpand("X");
-        lower_wrapper.DLGFill("X");
 
+        // column widths
+        number cw2 = 10;
+        number cw3 = 10;
+        number cw4 = 10;
+        number cw5 = 10;
+        
         // header
-        lower_wrapper.DLGAddElement(DLGCreateLabel(""));
-        lower_wrapper.DLGAddElement(DLGCreateLabel(""));
-        lower_wrapper.DLGAddElement(DLGCreateLabel("Start"));
-        lower_wrapper.DLGAddElement(DLGCreateLabel("Step width"));
-        lower_wrapper.DLGAddElement(DLGCreateLabel("End"));
+        TagGroup input_line = self._createInputLine(4);
+        input_line.DLGAddElement(DLGCreateLabel("Series over...", 34));
+        input_line.DLGAddElement(DLGCreateLabel("Start", cw3));
+        input_line.DLGAddElement(DLGCreateLabel("Step width", cw4));
+        input_line.DLGAddElement(DLGCreateLabel("End", cw5));
+
+        lower_wrapper.DLGAddElement(input_line);
 
         // item lists
         series_selectboxes = NewTagList();
@@ -521,8 +584,9 @@ class DMViewDialog : UIFrame{
 
         // add measurement variable rows
         for(number i = 0; i < c ; i++){
+            TagGroup input_line = self._createInputLine(5);
             TagGroup series_select = DLGCreateChoice(0, "seriesSelectChanged");
-            series_select.DLGExternalPadding(0, i * - 50, 0, 0);
+            series_select.DLGExternalPadding(0, i * -50, 0, 0);
             series_select.DLGWidth(100);
             series_select.DLGAnchor("West");
             series_select.DLGSide("Left");
@@ -539,46 +603,47 @@ class DMViewDialog : UIFrame{
             }
             series_select.DLGIdentifier("series_variable-" + i);
             series_selectboxes.TagGroupInsertTagAsTagGroup(infinity(), series_select);
-            lower_wrapper.DLGAddElement(series_select);
+            input_line.DLGAddElement(series_select);
 
-            TagGroup limit_display = DLGCreateLabel("", 10);
+            TagGroup limit_display = DLGCreateLabel("", cw2);
             limit_displays.TagGroupInsertTagAsTagGroup(infinity(), limit_display);
-            lower_wrapper.DLGAddElement(limit_display);
+            input_line.DLGAddElement(limit_display);
 
-            TagGroup start_input = DLGCreateStringField("", 8);
+            TagGroup start_input = DLGCreateStringField("", cw3);
             if(i > 0){
                 start_input.DLGEnabled(0);
             }
             start_input.DLGIdentifier("series_start-" + i);
             start_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), start_input);
-            lower_wrapper.DLGAddElement(start_input);
+            input_line.DLGAddElement(start_input);
 
-            TagGroup step_input = DLGCreateStringField("", 8);
+            TagGroup step_input = DLGCreateStringField("", cw4);
             if(i > 0){
                 step_input.DLGEnabled(0);
             }
             step_input.DLGIdentifier("series_step-" + i);
             step_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), step_input);
-            lower_wrapper.DLGAddElement(step_input);
+            input_line.DLGAddElement(step_input);
 
-            TagGroup end_input = DLGCreateStringField("", 8);
+            TagGroup end_input = DLGCreateStringField("", cw5);
             if(i > 0){
                 end_input.DLGEnabled(0);
             }
             end_input.DLGIdentifier("series_end-" + i);
             end_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), end_input);
-            lower_wrapper.DLGAddElement(end_input);
+            input_line.DLGAddElement(end_input);
+
+            lower_wrapper.DLGAddElement(input_line);
             
             if(i + 1 < c){
-                TagGroup on_each_label = DLGCreateLabel("");
+                TagGroup on_each_label = DLGCreateLabel("", 40);
                 on_each_label.DLGIdentifier("on_each_label-" + i);
+                on_each_label.DLGExternalPadding(0, (i + 1) * -50, 0, 0);
+                on_each_label.DLGAnchor("West");
+                on_each_label.DLGExpand("X");
+                on_each_label.DLGHeight(1);
                 on_each_labels.TagGroupInsertTagAsTagGroup(infinity(), on_each_label);
                 lower_wrapper.DLGAddElement(on_each_label);
-
-                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
-                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
-                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
-                lower_wrapper.DLGAddElement(DLGCreateLabel(""));
             }
             // self.seriesSelectChanged(series_select);
         }
