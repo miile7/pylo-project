@@ -1174,6 +1174,94 @@ class DMViewDialog : UIFrame{
             return 0;
         }
     }
+
+    /**
+     * Get the measurement start values as a `TagGroup`, the keys are the unique_ids of the 
+     * measurement variables, the values are the (unformatted) values
+     *
+     * @return
+     *      The measurement start values
+     */
+    TagGroup getStart(object self){
+        TagGroup start = NewTagGroup();
+
+        // travel through measurement variables and get the corresponding input, save the value 
+        // (unformatted)
+        for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
+            TagGroup var = self._getMeasurementVariableByIndex(i);
+            string unique_id;
+            var.TagGroupGetTagAsString("unique_id", unique_id);
+
+            TagGroup input;
+            start_value_inputboxes.TagGroupGetTagAsTagGroup(unique_id, input);
+
+            string value = input.DLGGetStringValue();
+
+            number index = start.TagGroupCreateNewLabeledTag(unique_id);
+            start.TagGroupSetTagAsString(unique_id, value);
+        }
+
+        return start;
+    }
+
+    /**
+     * Get the series definition a `TagGroup` that has the 'variable', 'start', 'step-width', 
+     * 'end' and a 'on-each-point' index. The 'on-each-point' index is optional. It can contain 
+     * another series with the above given indices.
+     *
+     * @return 
+     *      The measurement series
+     */
+    TagGroup getSeries(object self){
+        TagGroup series = NewTagGroup();
+        TagGroup s = series;
+
+        for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
+            TagGroup var = self.getSeriesSelectedMeasurementVariable(i);
+
+            if(var.TagGroupIsValid()){
+                number index;
+                if(i > 0){
+                    TagGroup tmp = NewTagGroup();
+
+                    // create the 'on-each-point' index in the parent group and set the current 
+                    // series to be saved to this TagGroup
+                    index = s.TagGroupCreateNewLabeledTag("on-each-point");
+                    s.TagGroupSetIndexedTagAsTagGroup(index, tmp);
+                    s = tmp;
+                }
+
+                // save the unique_id as the variable index
+                string unique_id;
+                var.TagGroupGetTagAsString("unique_id", unique_id);
+                index = s.TagGroupCreateNewLabeledTag("variable");
+                s.TagGroupSetIndexedTagAsString(index, unique_id);
+
+                TagGroup input;
+                string value;
+
+                // save the start
+                start_inputboxes.TagGroupGetIndexedTagAsTagGroup(i, input);
+                value = input.DLGGetStringValue();
+                index = s.TagGroupCreateNewLabeledTag("start");
+                s.TagGroupSetIndexedTagAsString(index, value);
+
+                // save the step width
+                step_inputboxes.TagGroupGetIndexedTagAsTagGroup(i, input);
+                value = input.DLGGetStringValue();
+                index = s.TagGroupCreateNewLabeledTag("step-width");
+                s.TagGroupSetIndexedTagAsString(index, value);
+
+                // save the end
+                end_inputboxes.TagGroupGetIndexedTagAsTagGroup(i, input);
+                value = input.DLGGetStringValue();
+                index = s.TagGroupCreateNewLabeledTag("end");
+                s.TagGroupSetIndexedTagAsString(index, value);
+            }
+        }
+
+        return series;
+    }
 }
 
 TagGroup m_vars = NewTagList();
@@ -1275,11 +1363,10 @@ m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
 
 object dialog = alloc(DMViewDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
 
-// for(number i = 0; i < m_vars.TagGroupCountTags(); i++){
-//     TagGroup v;
-//     m_vars.TagGroupGetIndexedTagAsTagGroup(i, v);
-//     dialog.setMeasurementVariableToRow(v, i);
-// }
 if(dialog.pose()){
+    // TagGroup start = dialog.getStart();
+    // TagGroup series = dialog.getSeries();
 
+    // start.TagGroupOpenBrowserWindow(0);
+    // series.TagGroupOpenBrowserWindow(0);
 }
