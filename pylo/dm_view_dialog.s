@@ -96,6 +96,11 @@ class DMViewDialog : UIFrame{
     TagGroup measurement_variables;
 
     /**
+     * The label that displays the error messages if there are some.
+     */
+    TagGroup error_display;
+
+    /**
      * The `TagGroup` of inputboxes for the start values, the unique_id of the measurement variable 
      * is the key, the value is the inputbox.
      */
@@ -193,6 +198,24 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+     * Convert the user input `value` in the `measurement_variable`s format to a numeric value.
+     *
+     * @param measurement_variable
+     *      The measurement variable that defines the format
+     * @param value
+     *      The string value
+     * @param parsable
+     *      Whether the `value` was parsable or not
+     *
+     * @return
+     *      The numeric value to calculate with
+     */
+    number getNumericValue(object self, TagGroup measurement_variable, string value, number &parsable){
+        parsable = is_numeric(value);
+        return value.val();
+    }
+
+    /**
      * Get the row index for the `identifier`.
      *
      * The row index is taken from extracting and parsing the number behind the last "-" in the 
@@ -267,11 +290,11 @@ class DMViewDialog : UIFrame{
         }
         else if(min_value != ""){
             limits += ">= " + min_value;
-            // limits += "≥ " + min_value;
+            // limits += "= " + min_value;
         }
         else if(max_value != ""){
             limits += "<= " + max_value;
-            // limits += "≤ " + max_value;
+            // limits += "= " + max_value;
         }
 
         if(limits != ""){
@@ -357,12 +380,231 @@ class DMViewDialog : UIFrame{
         }
     }
 
+    number validateInputs(object self){
+
+    }
+
+    /**
+     * Validate the text inside the `input`. The `type` tells which input type the `input` is. It
+     * can be the following:
+     * - "start_value": A start parameter input box
+     * - "series_start": A start value of a series
+     * - "series_step_width": A step width value of a series
+     * - "series_end": An end value of a series
+     *
+     * This function also checks if the start is less than the end if either a start or an end value
+     * is given and if the step width is less than the maximum span of numbers (end - start).
+     *
+     * The `errors` will contain error messages separated by "\n".
+     *
+     * If the `type` is not valid, 0 will be returned but no errors will be set to the `errors`.
+     *
+     * @param type
+     *      The type of the `input`, use "start_value", "series_start", "series_step_width" or 
+     *      "series_end"
+     * @param input
+     *      The dialog input field
+     * @param errors
+     *      The variable to save the errors to, all errors are separated by "\n"s.
+     *
+     * @return
+     *      1 if the value is valid, 0 if not
+     */
+    number _validateMeasurementVariableValueInput(object self, string type, TagGroup input, string &errors){
+        number valid = 1;
+        TagGroup var;
+        number index = -1;
+        if(type == "start_value"){
+            // remove "start_value-" from the identifier, the remaining part is the unique_id of the
+            // measurement variable
+            string unique_id;
+            string identifier;
+            input.DLGGetIdentifier(identifier);
+            // "start_value-".len() == 12
+            unique_id = identifier.right(identifier.len() - 12);
+            var = self._getMeasurementVariableById(unique_id);
+        }
+        else if(type == "series_start" || type == "series_step_width" || type == "series_end"){
+            // get the row index from the identifier
+            string identifier;
+            input.DLGGetIdentifier(identifier);
+            index = self.getIdentifierIndex(identifier);
+
+            if(index >= 0){
+                // get the selected measurement variable from the index
+                var = self.getSeriesSelectedMeasurementVariable(index);
+            }
+        }
+
+        if(var.TagGroupIsValid()){
+            string var_name;
+            string input_name;
+            string min_value;
+            string max_value;
+            string formatted_min_value;
+            string formatted_max_value;
+            number min_value_num;
+            number max_value_num;
+            number is_step_width = 0;
+            number check_series_start = 0;
+            number check_series_end = 0;
+            var.TagGroupGetTagAsString("min_value", min_value);
+            var.TagGroupGetTagAsString("max_value", max_value);
+            var.TagGroupGetTagAsString("name", var_name);
+
+            if(var.TagGroupDoesTagExist("formatted_min_value")){
+                var.TagGroupGetTagAsString("formatted_min_value", formatted_min_value);
+            }
+            else{
+                formatted_min_value = min_value;
+            }
+            if(var.TagGroupDoesTagExist("formatted_max_value")){
+                var.TagGroupGetTagAsString("formatted_max_value", formatted_max_value);
+            }
+            else{
+                formatted_max_value = max_value;
+            }
+
+            if(type == "start_value"){
+                input_name = "start value";
+            }
+            else if(type == "series_start"){
+                check_series_end = 1;
+                input_name = "series start value"
+            }
+            else if(type == "series_step_width"){
+                is_step_width = 1;
+                input_name = "series step width"
+            }
+            else if(type == "series_end"){
+                check_series_start = 1;
+                input_name = "series end value"
+            }
+
+            string error_start_template = "The " + input_name + " for the " + var_name;
+            errors = "";
+
+            string value = input.DLGGetStringValue();
+            if(value == ""){
+                // value has to be given, no optional values are present and if there is a variable
+                // the current input is enabled too
+                errors += error_start_template + " is empty but it has to be given.\n";
+                valid = 0;
+            }
+            else{
+                number parsable;
+                number value_num = self.getNumericValue(var, value, parsable);
+
+                if(parsable == 0){
+                    errors += error_start_template + " not parsable.\n";
+                    valid = 0;
+                }
+                else{
+                    string start_value;
+                    string end_value;
+                    number start_num;
+                    number end_num;
+
+                    if(index >= 0 && (is_step_width == 1 || check_series_start == 1)){
+                        // get the start input of this row
+                        TagGroup start_input;
+                        start_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, start_input);
+
+                        // get value and convert to number
+                        start_value = start_input.DLGGetStringValue();
+
+                        if(start_value != ""){
+                            number start_parsable;
+                            start_num = self.getNumericValue(var, start_value, start_parsable);
+
+                            if(start_parsable == 0){
+                                start_value = "";
+                                start_num = 0;
+                            }
+                        }
+                    }
+                    if(index >= 0 && (is_step_width == 1 || check_series_end == 1)){
+                        // get the end input of this row
+                        TagGroup end_input;
+                        end_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, end_input);
+
+                        // get value and convert to number
+                        end_value = end_input.DLGGetStringValue();
+
+                        if(end_value != ""){
+                            number end_parsable;
+                            end_num = self.getNumericValue(var, end_value, end_parsable);
+
+                            if(end_parsable == 0){
+                                end_value = "";
+                                end_num = 0;
+                            }
+                        }
+                    }
+
+                    if(is_step_width){
+                        if(value_num <= 0){
+                            errors += error_start_template + " is less or equal to 0 which is not allowed (" + value_num + "<=0).\n";
+                            valid = 0;
+                        }
+                        if(start_value != "" && end_value != "" && value_num > end_num - start_num){
+                            errors += error_start_template + " greater than the difference between the start and end value, so there is only the start value in the series (the next step is outside the end already) (" + value_num + ">" + (end_num - start_num) + ").\n";
+                            valid = 0;
+                        }
+                    }
+                    else{
+                        if(min_value != ""){
+                            min_value_num = min_value.val();
+
+                            if(value_num < min_value_num){
+                                errors += error_start_template + " is less than the minimum value (" + value_num + "<" + min_value_num + ").\n";
+                                valid = 0;
+                            }
+                        }
+                        if(max_value != ""){
+                            max_value_num = max_value.val();
+
+                            if(value_num > max_value_num){
+                                errors += error_start_template + " is greater than the maximum value (" + value_num + ">" + max_value_num + ").\n";
+                                valid = 0;
+                            }
+                        }
+
+                        if(check_series_start && value_num <= start_num){
+                            errors += error_start_template + " is less or equal to the start value (" + value_num + "<=" + start_num + ").\n"
+                            valid = 0;
+                        }
+                        if(check_series_end && value_num >= end_num){
+                            errors += error_start_template + " is greater or equal to the end value (" + value_num + ">=" + end_num + ").\n"
+                            valid = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        return valid;
+    }
+
+    /**
+     * The callback for the start input.
+     */
+    void startChangedCallback(object self, TagGroup series_end_input){
+        string errors;
+        self._validateMeasurementVariableValueInput("start_value", series_end_input, errors);
+        error_display.DLGTitle(errors);
+    }
+
     /**
      * The callback for the series start input.
      *
      * This changes the start values to the value of the series start.
      */
     void seriesStartChangedCallback(object self, TagGroup series_start_input){
+        string errors;
+        self._validateMeasurementVariableValueInput("series_start", series_start_input, errors);
+        error_display.DLGTitle(errors);
+
         // get the identifier
         string identifier;
         series_start_input.DLGGetIdentifier(identifier);
@@ -383,6 +625,24 @@ class DMViewDialog : UIFrame{
 
             start_input.DLGValue(series_start_input.DLGGetStringValue());
         }
+    }
+
+    /**
+     * The callback for the series step width input.
+     */
+    void seriesStepWidthChangedCallback(object self, TagGroup series_step_width_input){
+        string errors;
+        self._validateMeasurementVariableValueInput("series_step_width", series_step_width_input, errors);
+        error_display.DLGTitle(errors);
+    }
+
+    /**
+     * The callback for the series end input.
+     */
+    void seriesEndChangedCallback(object self, TagGroup series_end_input){
+        string errors;
+        self._validateMeasurementVariableValueInput("series_end", series_end_input, errors);
+        error_display.DLGTitle(errors);
     }
 
     /**
@@ -619,6 +879,18 @@ class DMViewDialog : UIFrame{
     TagGroup _createSeriesPanelContent(object self){
         TagGroup wrapper = DLGCreateGroup();
 
+        // TagGroup error_headline = DLGCreateLabel("Errors:");
+        // wrapper.DLGAddElement(error_headline);
+        TagGroup error_box = DLGCreateBox("Errors");
+
+        error_display = DLGCreateLabel("Currently no errors", 100);
+        error_display.DLGHeight(2);
+        error_display.DLGExpand("X");
+        error_display.DLGFill("X");
+        // wrapper.DLGAddElement(error_display);
+        error_box.DLGAddElement(error_display);
+        wrapper.DLGAddElement(error_box);
+
         // save all start value input boxes in a group
         start_value_inputboxes = NewTagGroup();
 
@@ -647,7 +919,7 @@ class DMViewDialog : UIFrame{
             string start;
             var.TagGroupGetTagAsString("start", start);
 
-            TagGroup start_input = DLGCreateStringField(start, 8);
+            TagGroup start_input = DLGCreateStringField(start, 8, "startChangedCallback");
             start_input.DLGAnchor("West");
             start_input.DLGIdentifier("start_value-" + unique_id);
 
@@ -683,6 +955,8 @@ class DMViewDialog : UIFrame{
         input_line.DLGAddElement(DLGCreateLabel("End", cw5));
 
         lower_wrapper.DLGAddElement(input_line);
+        lower_wrapper.DLGExpand("X");
+        lower_wrapper.DLGFill("X");
 
         // item lists
         series_selectboxes = NewTagList();
@@ -731,13 +1005,13 @@ class DMViewDialog : UIFrame{
             input_line.DLGAddElement(start_input);
 
             // add the step width input, value will be updated by DMViewDialog::seriesSelectChanged()
-            TagGroup step_input = DLGCreateStringField("", cw4);
+            TagGroup step_input = DLGCreateStringField("", cw4, "seriesStepWidthChangedCallback");
             step_input.DLGIdentifier("series_step-" + i);
             step_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), step_input);
             input_line.DLGAddElement(step_input);
 
             // add the end input, value will be updated by DMViewDialog::seriesSelectChanged()
-            TagGroup end_input = DLGCreateStringField("", cw5);
+            TagGroup end_input = DLGCreateStringField("", cw5, "seriesEndChangedCallback");
             end_input.DLGIdentifier("series_end-" + i);
             end_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), end_input);
             input_line.DLGAddElement(end_input);
@@ -747,7 +1021,7 @@ class DMViewDialog : UIFrame{
             // add the "on each point"-label, between the measurement variables, text will be 
             // updated by DMViewDialog::seriesSelectChanged()
             if(i + 1 < c){
-                TagGroup on_each_label = DLGCreateLabel("", 40);
+                TagGroup on_each_label = DLGCreateLabel("", 60);
                 on_each_label.DLGIdentifier("on_each_label-" + i);
                 on_each_label.DLGExternalPadding(0, (i + 1) * -50, 0, 0);
                 on_each_label.DLGAnchor("West");
@@ -799,7 +1073,8 @@ class DMViewDialog : UIFrame{
 
         if(message != ""){
             // description text
-            TagGroup label = DLGCreateLabel(message);
+            TagGroup label = DLGCreateLabel(message, 100);
+            label.DLGHeight(3);
             dialog_items.DLGAddElement(label);
         }
 
@@ -902,7 +1177,39 @@ index = tg.TagGroupCreateNewLabeledTag("end");
 tg.TagGroupSetIndexedTagAsNumber(index, 3);
 m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
 
-object dialog = alloc(DMViewDialog).init("Test Dialog", m_vars, "Test Message");
+// Condenser lense (testing only)
+tg = NewTagGroup();
+index = tg.TagGroupCreateNewLabeledTag("name");
+tg.TagGroupSetIndexedTagAsString(index, "Condenser lense");
+index = tg.TagGroupCreateNewLabeledTag("unique_id");
+tg.TagGroupSetIndexedTagAsString(index, "cl-current");
+index = tg.TagGroupCreateNewLabeledTag("unit");
+tg.TagGroupSetIndexedTagAsString(index, "hex");
+index = tg.TagGroupCreateNewLabeledTag("min_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x0);
+index = tg.TagGroupCreateNewLabeledTag("formatted_min_value");
+tg.TagGroupSetIndexedTagAsString(index, "0x0");
+index = tg.TagGroupCreateNewLabeledTag("max_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
+index = tg.TagGroupCreateNewLabeledTag("formatted_max_value");
+tg.TagGroupSetIndexedTagAsString(index, "0x8000");
+index = tg.TagGroupCreateNewLabeledTag("start");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("formatted_start");
+tg.TagGroupSetIndexedTagAsString(index, "0x0");
+index = tg.TagGroupCreateNewLabeledTag("step");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x100);
+index = tg.TagGroupCreateNewLabeledTag("formatted_step");
+tg.TagGroupSetIndexedTagAsString(index, "0x100");
+index = tg.TagGroupCreateNewLabeledTag("end");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
+index = tg.TagGroupCreateNewLabeledTag("formatted_end");
+tg.TagGroupSetIndexedTagAsString(index, "0x8000");
+index = tg.TagGroupCreateNewLabeledTag("format");
+tg.TagGroupSetIndexedTagAsString(index, "hex");
+m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+
+object dialog = alloc(DMViewDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
 
 // for(number i = 0; i < m_vars.TagGroupCountTags(); i++){
 //     TagGroup v;
