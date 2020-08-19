@@ -96,7 +96,8 @@ class DMViewDialog : UIFrame{
     TagGroup measurement_variables;
 
     /**
-     * The list of inputboxes for the start values
+     * The `TagGroup` of inputboxes for the start values, the unique_id of the measurement variable 
+     * is the key, the value is the inputbox.
      */
     TagGroup start_value_inputboxes;
     
@@ -208,9 +209,9 @@ class DMViewDialog : UIFrame{
         // extract the row number
         while(identifier.find("-") >= 0){
             p = identifier.find("-");
-            identifier = identifier.right(p);
+            identifier = identifier.right(identifier.len() - p - 1);
         }
-
+        
         if(is_numeric(identifier)){
             // convert to a number
             number index = identifier.val();
@@ -286,7 +287,8 @@ class DMViewDialog : UIFrame{
      *      The select box
      *
      * @return
-     *      The measurement variable that is selected or NULL if no measurement variable is selected
+     *      The measurement variable that is selected or an invalid `TagGroup` if there is no 
+     *      variable selected
      */
     TagGroup getSeriesSelectedMeasurementVariable(object self, TagGroup series_select){
         // get the index
@@ -326,6 +328,50 @@ class DMViewDialog : UIFrame{
         else{
             return var;
         }
+    }
+
+    /**
+     * Get the measurement variable that the series select in the `rowindex` has selected.
+     *
+     * @param rowindex
+     *      The index of the roe
+     *
+     * @return
+     *      The measurement variable that is selected or an invalid `TagGroup` if there is no 
+     *      variable selected
+     */
+    TagGroup getSeriesSelectedMeasurementVariable(object self, number rowindex){
+        TagGroup series_select;
+        series_selectboxes.TagGroupGetIndexedTagAsTagGroup(rowindex, series_select);
+
+        if(series_select.TagGroupIsValid()){
+            return self.getSeriesSelectedMeasurementVariable(series_select);
+        }
+        else{
+            TagGroup d;
+            return d;
+        }
+    }
+
+    /**
+     * The callback for the series start input.
+     *
+     * This changes the start values to the value of the series start.
+     */
+    void seriesStartChangedCallback(object self, TagGroup series_start_input){
+        string identifier;
+        series_start_input.DLGGetIdentifier(identifier);
+        
+        number index = self.getIdentifierIndex(identifier);
+        TagGroup var = self.getSeriesSelectedMeasurementVariable(index);
+
+        string unique_id;
+        var.TagGroupGetTagAsString("unique_id", unique_id);
+
+        TagGroup start_input;
+        start_value_inputboxes.TagGroupGetTagAsTagGroup(unique_id, start_input);
+
+        start_input.DLGValue(series_start_input.DLGGetStringValue());
     }
 
     void seriesSelectChanged(object self, TagGroup series_select){
@@ -513,7 +559,7 @@ class DMViewDialog : UIFrame{
     TagGroup _createSeriesPanelContent(object self){
         TagGroup wrapper = DLGCreateGroup();
 
-        start_value_inputboxes = NewTagList();
+        start_value_inputboxes = NewTagGroup();
 
         number max_rows = 1;
         TagGroup upper_wrapper = DLGCreateBox("Start parameters");
@@ -544,7 +590,10 @@ class DMViewDialog : UIFrame{
             TagGroup start_input = DLGCreateStringField(start, 8);
             start_input.DLGAnchor("West");
             start_input.DLGIdentifier("start_value-" + unique_id);
-            start_value_inputboxes.TagGroupInsertTagAsTagGroup(infinity(), start_input);
+
+            number index = start_value_inputboxes.TagGroupCreateNewLabeledTag(unique_id);
+            start_value_inputboxes.TagGroupSetIndexedTagAsTagGroup(index, start_input);
+            
             upper_wrapper.DLGAddElement(start_input);
 
             upper_wrapper.DLGAddElement(DLGCreateLabel(limits, 15));
@@ -580,8 +629,6 @@ class DMViewDialog : UIFrame{
         end_inputboxes = NewTagList();
         on_each_labels = NewTagList();
 
-        // TagGroup first_series_select;
-
         // add measurement variable rows
         for(number i = 0; i < c ; i++){
             TagGroup input_line = self._createInputLine(5);
@@ -609,7 +656,7 @@ class DMViewDialog : UIFrame{
             limit_displays.TagGroupInsertTagAsTagGroup(infinity(), limit_display);
             input_line.DLGAddElement(limit_display);
 
-            TagGroup start_input = DLGCreateStringField("", cw3);
+            TagGroup start_input = DLGCreateStringField("", cw3, "seriesStartChangedCallback");
             if(i > 0){
                 start_input.DLGEnabled(0);
             }
