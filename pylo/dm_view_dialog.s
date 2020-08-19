@@ -380,10 +380,6 @@ class DMViewDialog : UIFrame{
         }
     }
 
-    number validateInputs(object self){
-
-    }
-
     /**
      * Validate the text inside the `input`. The `type` tells which input type the `input` is. It
      * can be the following:
@@ -581,6 +577,53 @@ class DMViewDialog : UIFrame{
                     }
                 }
             }
+        }
+
+        return valid;
+    }
+
+    /**
+     * Validates all inputs.
+     */
+    number validateInputs(object self, string &errors){
+        number valid = 1;
+        errors = "";
+
+        for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
+            TagGroup input;
+            string input_error = "";
+
+            // validate start input
+            TagGroup var = self._getMeasurementVariableByIndex(j);
+            string unique_id;
+            var.TagGroupGetTagAsString("unique_id", unique_id);
+
+            start_value_inputboxes.TagGroupGetTagAsTagGroup(unique_id, input);
+
+            input_error = "";
+            valid = valid && self._validateMeasurementVariableValueInput("start_value", input, input_error);
+            errors += input_error;
+
+            // validate row, there is one row for each measurement variable so it is the same 
+            // counter
+
+            // start
+            start_inputboxes.TagGroupGetIndexedTagAsTagGroup(j, input);
+            input_error = ""
+            valid = valid && self._validateMeasurementVariableValueInput("series_start", input, input_error);
+            errors += input_error;
+
+            // step
+            step_inputboxes.TagGroupGetIndexedTagAsTagGroup(j, input);
+            input_error = ""
+            valid = valid && self._validateMeasurementVariableValueInput("series_step_width", input, input_error);
+            errors += input_error;
+
+            // end
+            end_inputboxes.TagGroupGetIndexedTagAsTagGroup(j, input);
+            input_error = ""
+            valid = valid && self._validateMeasurementVariableValueInput("series_end", input, input_error);
+            errors += input_error;
         }
 
         return valid;
@@ -1110,6 +1153,27 @@ class DMViewDialog : UIFrame{
         
 		return self;
 	}
+
+    /**
+     * Overwriting pose function, before clicking 'OK' the inputs are validated. If there are errors
+     * an error dialog is shown.
+     */
+    number pose(object self){
+        if(self.super.pose()){
+            string errors;
+            if(self.validateInputs(errors) != 1){
+                showAlert("There are the following errors in the current series: \n\n" + errors + "\n\nEither fix them or press 'Cancel'.", 0);
+                error_display.DLGTitle(errors);
+                return self.pose();
+            }
+            else{
+                return 1;
+            }
+        }
+        else{
+            return 0;
+        }
+    }
 }
 
 TagGroup m_vars = NewTagList();
