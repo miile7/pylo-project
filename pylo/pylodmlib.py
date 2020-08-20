@@ -15,8 +15,8 @@ try:
     import DigitalMicrograph as DM
     outside_mode = False
 except (ModuleNotFoundError, ImportError) as e:
-    # raise RuntimeError("This class can onle be used inside Digital Micrograph.")
-    outside_mode = True
+    raise RuntimeError("This class can onle be used inside Digital Micrograph.")
+    # outside_mode = True
 
 def executeDMScript(file_path: str, 
                     synchronized_variables: typing.Optional[dict]={}, 

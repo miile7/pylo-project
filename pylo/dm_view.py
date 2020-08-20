@@ -12,8 +12,8 @@ except NameError:
 try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
-    # raise RuntimeError("This class can onle be used inside Digital Micrograph.")
-    pass
+    raise RuntimeError("This class can onle be used inside Digital Micrograph.")
+    # pass
 
 from .datatype import Datatype
 from .stop_program import StopProgram
