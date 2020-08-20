@@ -1207,109 +1207,15 @@ class DMViewSeriesDialog : UIFrame{
     }
 }
 
-TagGroup m_vars = NewTagList();
-
-number index;
-TagGroup tg;
-
-// Focus Measurement variable
-tg = NewTagGroup();
-index = tg.TagGroupCreateNewLabeledTag("name");
-tg.TagGroupSetIndexedTagAsString(index, "Focus");
-index = tg.TagGroupCreateNewLabeledTag("unique_id");
-tg.TagGroupSetIndexedTagAsString(index, "focus");
-index = tg.TagGroupCreateNewLabeledTag("unit");
-tg.TagGroupSetIndexedTagAsString(index, "nm");
-index = tg.TagGroupCreateNewLabeledTag("min_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 0);
-index = tg.TagGroupCreateNewLabeledTag("max_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 100);
-index = tg.TagGroupCreateNewLabeledTag("start");
-tg.TagGroupSetIndexedTagAsNumber(index, 0);
-index = tg.TagGroupCreateNewLabeledTag("step");
-tg.TagGroupSetIndexedTagAsNumber(index, 10);
-index = tg.TagGroupCreateNewLabeledTag("end");
-tg.TagGroupSetIndexedTagAsNumber(index, 100);
-m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
-
-// Tilt Measurement variable
-tg = NewTagGroup();
-index = tg.TagGroupCreateNewLabeledTag("name");
-tg.TagGroupSetIndexedTagAsString(index, "X-Tilt");
-index = tg.TagGroupCreateNewLabeledTag("unique_id");
-tg.TagGroupSetIndexedTagAsString(index, "x-tilt");
-index = tg.TagGroupCreateNewLabeledTag("unit");
-tg.TagGroupSetIndexedTagAsString(index, "deg");
-index = tg.TagGroupCreateNewLabeledTag("min_value");
-tg.TagGroupSetIndexedTagAsNumber(index, -15);
-index = tg.TagGroupCreateNewLabeledTag("max_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 15);
-index = tg.TagGroupCreateNewLabeledTag("start");
-tg.TagGroupSetIndexedTagAsNumber(index, -10);
-index = tg.TagGroupCreateNewLabeledTag("step");
-tg.TagGroupSetIndexedTagAsNumber(index, 1);
-index = tg.TagGroupCreateNewLabeledTag("end");
-tg.TagGroupSetIndexedTagAsNumber(index, 10);
-m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
-
-// Magnetic Field Measurement variable
-tg = NewTagGroup();
-index = tg.TagGroupCreateNewLabeledTag("name");
-tg.TagGroupSetIndexedTagAsString(index, "Magnetic Field");
-index = tg.TagGroupCreateNewLabeledTag("unique_id");
-tg.TagGroupSetIndexedTagAsString(index, "ol-current");
-index = tg.TagGroupCreateNewLabeledTag("unit");
-tg.TagGroupSetIndexedTagAsString(index, "T");
-index = tg.TagGroupCreateNewLabeledTag("min_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 0);
-index = tg.TagGroupCreateNewLabeledTag("max_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 3);
-index = tg.TagGroupCreateNewLabeledTag("start");
-tg.TagGroupSetIndexedTagAsNumber(index, 0);
-index = tg.TagGroupCreateNewLabeledTag("step");
-tg.TagGroupSetIndexedTagAsNumber(index, 0.3);
-index = tg.TagGroupCreateNewLabeledTag("end");
-tg.TagGroupSetIndexedTagAsNumber(index, 3);
-m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
-
-// Condenser lense (testing only)
-tg = NewTagGroup();
-index = tg.TagGroupCreateNewLabeledTag("name");
-tg.TagGroupSetIndexedTagAsString(index, "Condenser lense");
-index = tg.TagGroupCreateNewLabeledTag("unique_id");
-tg.TagGroupSetIndexedTagAsString(index, "cl-current");
-index = tg.TagGroupCreateNewLabeledTag("unit");
-tg.TagGroupSetIndexedTagAsString(index, "hex");
-index = tg.TagGroupCreateNewLabeledTag("min_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 0x0);
-index = tg.TagGroupCreateNewLabeledTag("formatted_min_value");
-tg.TagGroupSetIndexedTagAsString(index, "0x0");
-index = tg.TagGroupCreateNewLabeledTag("max_value");
-tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
-index = tg.TagGroupCreateNewLabeledTag("formatted_max_value");
-tg.TagGroupSetIndexedTagAsString(index, "0x8000");
-index = tg.TagGroupCreateNewLabeledTag("start");
-tg.TagGroupSetIndexedTagAsNumber(index, 0);
-index = tg.TagGroupCreateNewLabeledTag("formatted_start");
-tg.TagGroupSetIndexedTagAsString(index, "0x0");
-index = tg.TagGroupCreateNewLabeledTag("step");
-tg.TagGroupSetIndexedTagAsNumber(index, 0x100);
-index = tg.TagGroupCreateNewLabeledTag("formatted_step");
-tg.TagGroupSetIndexedTagAsString(index, "0x100");
-index = tg.TagGroupCreateNewLabeledTag("end");
-tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
-index = tg.TagGroupCreateNewLabeledTag("formatted_end");
-tg.TagGroupSetIndexedTagAsString(index, "0x8000");
-index = tg.TagGroupCreateNewLabeledTag("format");
-tg.TagGroupSetIndexedTagAsString(index, "hex");
-m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+// m_vars are defined in the python file executing this file
+// TagGroup m_vars = NewTagList();
 
 object dialog = alloc(DMViewSeriesDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
 
-if(dialog.pose()){
-    // TagGroup start = dialog.getStart();
-    // TagGroup series = dialog.getSeries();
+TagGroup start;
+TagGroup series;
 
-    // start.TagGroupOpenBrowserWindow(0);
-    // series.TagGroupOpenBrowserWindow(0);
+if(dialog.pose()){
+    start = dialog.getStart();
+    series = dialog.getSeries();
 }
