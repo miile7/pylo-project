@@ -1,10 +1,11 @@
 import DigitalMicrograph as DM
+import typing
 import time
 
 # required_files = {}
 
-def executeDMScript(filename, synchronized_variables={}):
-    """Require the given `filename` and execute the contained script as a 
+def executeDMScript(file_path, synchronized_variables={}):
+    """Require the given `file_path` and execute the contained script as a 
     dm-script.
 
     The `synchronized_variables` can later be received via the 
@@ -32,18 +33,18 @@ def executeDMScript(filename, synchronized_variables={}):
     """
     # global required_files
 
-    script = DMScriptWrapper(filename, synchronized_variables)
-    # required_files[filename] = script
+    script = DMScriptWrapper(file_path, synchronized_variables)
+    # required_files[file_path] = script
     
     return script
 
-# def getDMScriptVariable(filename, variable_name):
-#     """Get the variable of the of the executed file at the `filename`.
+# def getDMScriptVariable(file_path, variable_name):
+#     """Get the variable of the of the executed file at the `file_path`.
 
 #     Raises
 #     ------
 #     KeyError
-#         When the `filename` was not required by the `executeDMScript()` 
+#         When the `file_path` was not required by the `executeDMScript()` 
 #         function
 
 #     Parameters
@@ -59,7 +60,7 @@ def executeDMScript(filename, synchronized_variables={}):
 #     """
 #     global required_files
 
-#     script = required_files[filename]
+#     script = required_files[file_path]
 #     return script.getSyncedVar(variable_name)
 
 class DMScriptWrapper:
@@ -67,8 +68,8 @@ class DMScriptWrapper:
 
     Parameters
     ----------
-    filename : str
-        The file name of the file to require
+    file_path : str
+        The file path of the file to require
     persistent_tag : str
         The unique persistent tag name where the variables will be saved
     synchronized_variables : dict
@@ -76,16 +77,32 @@ class DMScriptWrapper:
         in the dm-script code, the value is the datatype that is used for the 
         `TagGroupSetTagAs<datatype>()`, `TagGroupGetTagAs<datatype>()`, ... 
         functions
+    require_before : list
+        A list of file paths to require before requiring the `file_path`
     """
 
-    def __init__(self, filename: str, syncronized_variables: dict) -> None:
-        """Initialize the script wrapper."""
-        self.filename = filename
+    def __init__(self, file_path: str, syncronized_variables: dict, require_before: typing.Optional[typing.List[str]]=[]) -> None:
+        """Initialize the script wrapper.
+        
+        Parameters
+        ----------
+        file_path : str
+            The file path of the file to require
+        synchronized_variables : dict
+            The variables to synchronize, the key is the exact name of the 
+            variable in the dm-script code, the value is the datatype that is 
+            used for the `TagGroupSetTagAs<datatype>()`, 
+            `TagGroupGetTagAs<datatype>()`, ...
+        require_before : list of strings
+            File paths of dm-script files to require before requiring the `file`
+        """
+        self.file_path = file_path
         self._creation_time_id = str(round(time.time() * 100))
         self.persistent_tag = "python-dm-communication-" + self._creation_time_id
         self.syncronized_variables = syncronized_variables
+        self.require_before = require_before
     
-    def __del__(self):
+    def __del__(self) -> None:
         """Desctruct the object."""
         self.freeAllSyncedVars()
     
@@ -97,8 +114,15 @@ class DMScriptWrapper:
         bool
             Success
         """
-        with open(self.filename) as f:
-            script = f.read()
+        prefix = []
+        if isinstance(self.require_before, (list, tuple)):
+            for fp in self.require_before:
+                with open(fp) as f:
+                    prefix.append(f.read())
+        
+        with open(self.file_path) as f:
+            script = "\n\n".join(prefix) + "\n\n"
+            script += f.read()
         
             script += "\n" + self.getSyncDMCode()
 

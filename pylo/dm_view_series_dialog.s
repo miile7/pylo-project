@@ -1,91 +1,7 @@
 /**
- * Returns whether the `text` contains numbers and optional one dot and optional one minus at the 
- * start only. Note that any added whitespace will return false already.
- *
- * @param text
- *      The text to check
- *
- * @return
- *      Whether the `text` is a valid number expression or not
+ * The dialog to show for the series select.
  */
-number is_numeric(string text){
-    if(text == ""){
-        return 0;
-    }
-
-    number minus_found = 0;
-    number dot_found = 0;
-
-    for(number i = 0; i < text.len(); i++){
-        string c = text.mid(i, 1);
-        number a = asc(c);
-
-        if((a < 48 || a > 57) && (i != 0 || c != "-") && (dot_found || c != ".")){
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-/**
- * Removes the entry with the given `index` from the choice `container`.
- *
- * @param container
- *      The dialog choice
- * @param index
- *      The index
- *
- * @return 
- *      The choice container
- */
-TagGroup DLGRemoveChoiceItemEntry(TagGroup container, number index){
-    TagGroup items;
-    container.TagGroupGetTagAsTagGroup("Items", items);
-    items.TagGroupDeleteTagWithIndex(index);
-    container.TagGroupSetTagAsTagGroup("Items", items);
-
-    return container;
-}
-
-/**
- * Removes the entry with the given `label` from the choice `container`.
- *
- * @param container
- *      The dialog choice
- * @param label
- *      The label of the choice item
- *
- * @return 
- *      The choice container
- */
-TagGroup DLGRemoveChoiceItemEntry(TagGroup container, string label){
-    TagGroup items;
-    container.TagGroupGetTagAsTagGroup("Items", items);
-
-    for(number i = 0; i < items.TagGroupCountTags(); i++){
-        TagGroup item;
-        items.TagGroupGetIndexedTagAsTagGroup(i, item);
-
-        string l;
-        item.TagGroupGetTagAsString("Label", l);
-
-        if(l == label){
-            items.TagGroupDeleteTagWithIndex(i);
-            break;
-        }
-    }
-
-    container.TagGroupSetTagAsTagGroup("Items", items);
-
-    return container;
-    
-}
-
-/**
- * The dialog to show for the settings and the series select.
- */
-class DMViewDialog : UIFrame{
+class DMViewSeriesDialog : UIFrame{
     /**
      * The `MeasurementVariable`s as a TagList. Each entry contains a TagGroup which represents the 
      * python `MeasurementVariable` object. Each attribute of the object can be received with the
@@ -211,8 +127,23 @@ class DMViewDialog : UIFrame{
      *      The numeric value to calculate with
      */
     number getNumericValue(object self, TagGroup measurement_variable, string value, number &parsable){
-        parsable = is_numeric(value);
-        return value.val();
+        string format = "";
+        if(measurement_variable.TagGroupDoesTagExist("format")){
+            measurement_variable.TagGroupGetTagAsString("format", format)
+        }
+
+        // trim() is defined in pylolib.s and is required automatically from python side
+        value = value.trim();
+
+        if(format == "hex"){
+            // hex2dec() is defined in pylolib.s and is required automatically from python side
+            return hex2dec(value, parsable);
+        }
+        else{
+            // is_numeric() is defined in pylolib.s and is required automatically from python side
+            parsable = is_numeric(value);
+            return value.val();
+        }
     }
 
     /**
@@ -236,6 +167,7 @@ class DMViewDialog : UIFrame{
             identifier = identifier.right(identifier.len() - p - 1);
         }
         
+        // is_numeric() is defined in pylolib.s and is required automatically from python side
         if(is_numeric(identifier)){
             // convert to a number
             number index = identifier.val();
@@ -278,11 +210,22 @@ class DMViewDialog : UIFrame{
      *      The formatted limits
      */
     string _getMeasurementVariableLimits(object self, TagGroup measurement_variable){
-        string min_value;
-        string max_value;
+        string min_value = "";
+        string max_value = "";
         
-        measurement_variable.TagGroupGetTagAsString("min_value", min_value);
-        measurement_variable.TagGroupGetTagAsString("max_value", max_value);
+        if(measurement_variable.TagGroupDoesTagExist("formatted_min_value")){
+            measurement_variable.TagGroupGetTagAsString("formatted_min_value", min_value);
+        }
+        if(measurement_variable.TagGroupDoesTagExist("formatted_max_value")){
+            measurement_variable.TagGroupGetTagAsString("formatted_max_value", max_value);
+        }
+        
+        if(min_value == ""){
+            measurement_variable.TagGroupGetTagAsString("min_value", min_value);
+        }
+        if(max_value == ""){
+            measurement_variable.TagGroupGetTagAsString("max_value", max_value);
+        }
 
         string limits = "";
         if(min_value != "" && max_value != ""){
@@ -716,8 +659,13 @@ class DMViewDialog : UIFrame{
             limit_display.DLGTitle(self._getMeasurementVariableLimits(var));
 
             // enable the start value
-            string start;
-            var.TagGroupGetTagAsString("start", start);
+            string start = "";
+            if(var.TagGroupDoesTagExist("formatted_start")){
+                var.TagGroupGetTagAsString("formatted_start", start);
+            }
+            if(start == ""){
+                var.TagGroupGetTagAsString("start", start);
+            }
             TagGroup start_input;
             start_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, start_input);
             start_input.DLGValue(start);
@@ -730,8 +678,13 @@ class DMViewDialog : UIFrame{
             }
 
             // enable the step width value
-            string step;
-            var.TagGroupGetTagAsString("step", step);
+            string step = "";
+            if(var.TagGroupDoesTagExist("formatted_step")){
+                var.TagGroupGetTagAsString("formatted_step", step);
+            }
+            if(step == ""){
+                var.TagGroupGetTagAsString("step", step);
+            }
             TagGroup step_input;
             step_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, step_input);
             step_input.DLGValue(step);
@@ -744,8 +697,13 @@ class DMViewDialog : UIFrame{
             }
 
             // enable the end value
-            string end;
-            var.TagGroupGetTagAsString("end", end);
+            string end = "";
+            if(var.TagGroupDoesTagExist("formatted_end")){
+                var.TagGroupGetTagAsString("formatted_end", end);
+            }
+            if(end == ""){
+                var.TagGroupGetTagAsString("end", end);
+            }
             TagGroup end_input;
             end_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, end_input);
             end_input.DLGValue(end);
@@ -959,8 +917,13 @@ class DMViewDialog : UIFrame{
             label_element.DLGAnchor("East");
             upper_wrapper.DLGAddElement(label_element);
             
-            string start;
-            var.TagGroupGetTagAsString("start", start);
+            string start = "";
+            if(var.TagGroupDoesTagExist("formatted_start")){
+                var.TagGroupGetTagAsString("formatted_start", start);
+            }
+            if(start == ""){
+                var.TagGroupGetTagAsString("start", start);
+            }
 
             TagGroup start_input = DLGCreateStringField(start, 8, "startChangedCallback");
             start_input.DLGAnchor("West");
@@ -985,7 +948,7 @@ class DMViewDialog : UIFrame{
         number c = measurement_variables.TagGroupCountTags();
 
         // column widths
-        number cw2 = 10;
+        number cw2 = 12;
         number cw3 = 10;
         number cw4 = 10;
         number cw5 = 10;
@@ -1341,7 +1304,7 @@ index = tg.TagGroupCreateNewLabeledTag("format");
 tg.TagGroupSetIndexedTagAsString(index, "hex");
 m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
 
-object dialog = alloc(DMViewDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
+object dialog = alloc(DMViewSeriesDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
 
 if(dialog.pose()){
     // TagGroup start = dialog.getStart();
