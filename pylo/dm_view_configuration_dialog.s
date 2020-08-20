@@ -41,7 +41,7 @@ class DMViewConfigurationDialog : UIFrame{
     /**
      * Get the input index for the `identifier`.
      *
-     * The input index is taken from extracting and parsing the number behind the last "-" in the 
+     * The input index is taken from extracting and parsing the number behind the last "/" in the 
      * `identifier`.
      *
      * @param identifier
@@ -54,8 +54,8 @@ class DMViewConfigurationDialog : UIFrame{
         number p = -1;
 
         // extract the row number
-        while(identifier.find("-") >= 0){
-            p = identifier.find("-");
+        while(identifier.find("/") >= 0){
+            p = identifier.find("/");
             identifier = identifier.right(identifier.len() - p - 1);
         }
         
@@ -97,7 +97,22 @@ class DMViewConfigurationDialog : UIFrame{
      */
     number _validateInput(object self, TagGroup input, string &errors){
         number valid = 1;
-        number index = -1;
+
+        // string identifier;
+        // input.DLGGetIdentifier(identifier);
+
+        // number pos = identifier.find("/");
+        // string group = identifier.left(pos);
+
+        // identifier = identifier.right(identifier.len() - pos);
+        // number pos = identifier.find("/");
+        // string key = identifier.left(pos);
+
+        // TagGroup group_tg;
+        // configuration.TagGroupGetTagAsTagGroup(group, group_tg);
+
+        // TagGroup value_tg;
+        // group_tg.TagGroupGetTagAsTagGroup(key, value_tg);)
         
         return valid;
     }
@@ -249,7 +264,7 @@ class DMViewConfigurationDialog : UIFrame{
                     input = DLGCreateStringField(value, cw2);
                 }
 
-                input.DLGIdentifier(group + "/" + key + "-" + counter);
+                input.DLGIdentifier(group + "/" + key + "/" + counter);
 
                 if(type != "boolean"){
                     input.DLGAnchor("North");
@@ -365,34 +380,48 @@ class DMViewConfigurationDialog : UIFrame{
         }
     }
 
-    // /**
-    //  * Get the measurement start values as a `TagGroup`, the keys are the unique_ids of the 
-    //  * measurement variables, the values are the (unformatted) values
-    //  *
-    //  * @return
-    //  *      The measurement start values
-    //  */
-    // TagGroup getStart(object self){
-    //     TagGroup start = NewTagGroup();
+    /**
+     * Get the configuration as a `TagGroup`.
+     *
+     * @return
+     *      The configuration `TagGroup`
+     */
+    number getConfiguration(object self, TagGroup input, string &errors){
+        TagGroup config_vars = NewTagGroup();
 
-    //     // travel through measurement variables and get the corresponding input, save the value 
-    //     // (unformatted)
-    //     for(number i = 0; i < measurement_variables.TagGroupCountTags(); i++){
-    //         TagGroup var = self._getMeasurementVariableByIndex(i);
-    //         string unique_id;
-    //         var.TagGroupGetTagAsString("unique_id", unique_id);
+        for(number j = 0; j < inputs.TagGroupCountTags(); j++){
+            TagGroup input;
+            string input_error = "";
 
-    //         TagGroup input;
-    //         start_value_inputboxes.TagGroupGetTagAsTagGroup(unique_id, input);
+            inputs.TagGroupGetIndexedTagAsTagGroup(j, input);
 
-    //         string value = input.DLGGetStringValue();
+            string identifier;
+            input.DLGGetIdentifier(identifier);
 
-    //         number index = start.TagGroupCreateNewLabeledTag(unique_id);
-    //         start.TagGroupSetTagAsString(unique_id, value);
-    //     }
+            number pos = identifier.find("/");
+            string group = identifier.left(pos);
 
-    //     return start;
-    // }
+            identifier = identifier.right(identifier.len() - pos);
+            number pos = identifier.find("/");
+            string key = identifier.left(pos);
+            
+            TagGroup group_tg;
+            if(inputs.TagGroupDoesTagExist(group) == 0){
+                group_tg = NewTagGroup();
+                number i = inputs.TagGroupCreateNewLabeledTag(group);
+                inputs.TagGroupSetIndexedTagAsTagGroup(i, group_tg);
+            }
+            else{
+                group_tg.TagGroupGetTagAsTagGroup(group, group_tg);
+            }
+            
+            string value = input.DLGGetValue();
+            number i = group_tg.TagGroupCreateNewLabeledTag(key);
+            group_tg.TagGroupSetIndexedTagAsString(i, value);
+        }
+
+        return config_vars;
+    }
 }
 
 // config_vars are defined in the python file executing this file
