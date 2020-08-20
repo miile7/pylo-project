@@ -67,7 +67,7 @@ class AbstractView:
         -------
         dict, dict
             A dict that defines the start conditions of the measurement where 
-            each`MeasurementVariable`s ids as a key and the value is the start 
+            each `MeasurementVariable`s ids as a key and the value is the start 
             value (value has to be the uncalibrated value)
             Another dict that contains the series with a 'variable', 'start', 
             'end' and 'step-width' key and an optional 'on-each-point' key that 
