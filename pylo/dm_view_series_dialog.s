@@ -83,9 +83,9 @@ TagGroup DLGRemoveChoiceItemEntry(TagGroup container, string label){
 }
 
 /**
- * The dialog to show for the series select.
+ * The dialog to show for the settings and the series select.
  */
-class DMViewSeriesDialog : UIFrame{
+class DMViewDialog : UIFrame{
     /**
      * The `MeasurementVariable`s as a TagList. Each entry contains a TagGroup which represents the 
      * python `MeasurementVariable` object. Each attribute of the object can be received with the
@@ -1341,7 +1341,7 @@ index = tg.TagGroupCreateNewLabeledTag("format");
 tg.TagGroupSetIndexedTagAsString(index, "hex");
 m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
 
-object dialog = alloc(DMViewSeriesDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
+object dialog = alloc(DMViewDialog).init("Create lorenz mode measurement -- PyLo", m_vars, "Create a new measurememt series to measure probes in the lorenz mode (low mag mode). Select the start properties. The series defines over which variables the series will be done. On each series point there can be another series.");
 
 if(dialog.pose()){
     // TagGroup start = dialog.getStart();
