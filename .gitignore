@@ -145,3 +145,6 @@ test/tmp_test_files
 
 # PyJEM files
 PyJEM
+
+# file for launching dm scripts, only used for development
+dm_script_main.s
