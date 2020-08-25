@@ -911,6 +911,20 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+     * Switch the panels to show the series panel.
+     */
+    void switchToSeriesPanel(object self){
+        panel_list.DLGValue(0);
+    }
+
+    /**
+     * Switch the panels to show the configuration panel.
+     */
+    void switchToConfigurationPanel(object self){
+        panel_list.DLGValue(1);
+    }
+
+    /**
      * Create one row for the lower wrapper.
      *
      * @param columns
@@ -937,14 +951,27 @@ class DMViewDialog : UIFrame{
     TagGroup _createSeriesSetupContent(object self){
         TagGroup wrapper = DLGCreateGroup();
 
+        TagGroup description_line = DLGCreateGroup();
+        // description_line.DLGTableLayout(2, 1, 0);
+        description_line.DLGExpand("X");
+        description_line.DLGFill("X");
+
         // description text
         string description = "Create a new measurememt series to measure probes in the lorenz mode ";
         description += "(low mag mode). Select the start properties. The series defines over which ";
         description += "variables the series will be done. On each series point there can be ";
         description += "another series."
-        TagGroup description_label = DLGCreateLabel(description, 130);
+        TagGroup description_label = DLGCreateLabel(description, 110);
         description_label.DLGHeight(3);
-        wrapper.DLGAddElement(description_label);
+        description_label.DLGAnchor("West");
+        description_line.DLGAddElement(description_label);
+
+        // change to measurement button
+        // TagGroup settings_button = DLGCreatePushButton("Settings", "switchToConfigurationPanel");
+        // settings_button.DLGAnchor("East");
+        // description_line.DLGAddElement(settings_button);
+
+        wrapper.DLGAddElement(description_line);
 
         // TagGroup error_headline = DLGCreateLabel("Errors:");
         // wrapper.DLGAddElement(error_headline);
@@ -1001,7 +1028,7 @@ class DMViewDialog : UIFrame{
             
             // add the limits
             upper_wrapper.DLGAddElement(DLGCreateLabel(limits, 14));
-            // add the start
+            // // add the start
             upper_wrapper.DLGAddElement(start_input);
         }
 
@@ -1126,23 +1153,36 @@ class DMViewDialog : UIFrame{
     TagGroup _createConfigurationContent(object self){
         TagGroup wrapper = DLGCreateGroup();
 
+        TagGroup description_line = DLGCreateGroup();
+        // description_line.DLGTableLayout(2, 1, 0);
+        description_line.DLGExpand("X");
+        description_line.DLGFill("X");
+
         // description text
         string description = "Set the settings used for recording a new measurement."
-        TagGroup description_label = DLGCreateLabel(description, 130);
+        TagGroup description_label = DLGCreateLabel(description, 110);
         description_label.DLGHeight(1);
-        wrapper.DLGAddElement(description_label);
+        description_label.DLGAnchor("West");
+        description_line.DLGAddElement(description_label);
+
+        // change to measurement button
+        // TagGroup measurement_button = DLGCreatePushButton("Switch to series", "switchToSeriesPanel");
+        // measurement_button.DLGAnchor("East");
+        // description_line.DLGAddElement(measurement_button);
+
+        wrapper.DLGAddElement(description_line);
 
         // TagGroup error_headline = DLGCreateLabel("Errors:");
         // wrapper.DLGAddElement(error_headline);
-        TagGroup error_box = DLGCreateBox("Errors");
+        // TagGroup error_box = DLGCreateBox("Errors");
 
-        error_display = DLGCreateLabel("Currently no errors", 130);
-        error_display.DLGHeight(2);
-        error_display.DLGExpand("X");
-        error_display.DLGFill("X");
-        // wrapper.DLGAddElement(error_display);
-        error_box.DLGAddElement(error_display);
-        wrapper.DLGAddElement(error_box);
+        // error_display = DLGCreateLabel("Currently no errors", 130);
+        // error_display.DLGHeight(2);
+        // error_display.DLGExpand("X");
+        // error_display.DLGFill("X");
+        // // wrapper.DLGAddElement(error_display);
+        // error_box.DLGAddElement(error_display);
+        // wrapper.DLGAddElement(error_box);
 
         // save all start value input boxes in a group
         config_inputs = NewTagList();
@@ -1313,15 +1353,25 @@ class DMViewDialog : UIFrame{
 		TagGroup dialog_items;
 		TagGroup dialog_tags = DLGCreateDialog(title, dialog_items);
 
-        TagGroup series_panel = DLGCreatePanel();
+        // TagGroup series_panel = DLGCreatePanel();
+        // series_panel.DLGAddElement(self._createSeriesSetupContent());
+
+        // TagGroup configuration_panel = DLGCreatePanel();
+        // configuration_panel.DLGAddElement(self._createConfigurationContent());
+
+        // panel_list = DLGCreatePanelList(0);
+        // panel_list.DLGAddPanel(series_panel);
+        // panel_list.DLGAddPanel(configuration_panel);
+
+        TagGroup series_panel = DLGCreateTab("Create series");
         series_panel.DLGAddElement(self._createSeriesSetupContent());
 
-        TagGroup configuration_panel = DLGCreatePanel();
+        TagGroup configuration_panel = DLGCreateTab("Settings");
         configuration_panel.DLGAddElement(self._createConfigurationContent());
 
-        panel_list = DLGCreatePanelList(0);
-        panel_list.DLGAddPanel(series_panel);
-        panel_list.DLGAddPanel(configuration_panel);
+        panel_list = DLGCreateTabList(0);
+        panel_list.DLGAddTab(series_panel);
+        panel_list.DLGAddTab(configuration_panel);
         
         // Tabs do not work as a direct child of the dialog items, so probably panels don't too, 
         // therefore create a warpper 
@@ -1358,7 +1408,7 @@ class DMViewDialog : UIFrame{
      * Show the series dialog.
      */
     number poseSeries(object self){
-        panel_list.DLGValue(0);
+        self.switchToSeriesPanel();
         return self.pose();
     }
 
@@ -1366,7 +1416,7 @@ class DMViewDialog : UIFrame{
      * Show the configuration dialog.
      */
     number poseConfiguration(object self){
-        panel_list.DLGValue(1);
+        self.switchToConfigurationPanel();
         return self.pose();
     }
 
@@ -1744,8 +1794,8 @@ TagGroup series;
 TagGroup configuration;
 
 // if(dialog.pose()){
-// if(dialog.poseSeries()){
-if(dialog.poseConfiguration()){
+if(dialog.poseSeries()){
+// if(dialog.poseConfiguration()){
     start = dialog.getStart();
     series = dialog.getSeries();
     configuration = dialog.getConfiguration();
