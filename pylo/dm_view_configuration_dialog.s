@@ -39,34 +39,43 @@ class DMViewConfigurationDialog : UIFrame{
     }
 
     /**
-     * Get the input index for the `identifier`.
+     * Get the `group`, the `key` and the input `index` for the `identifier`.
      *
-     * The input index is taken from extracting and parsing the number behind the last "/" in the 
-     * `identifier`.
+     * The values are taken from the identifier by splitting by "/".
      *
      * @param identifier
      *      The identifier
+     * @param group
+     *      The reference to save the group to
+     * @param key
+     *      The reference to save the key to
+     * @param index
+     *      The reference to save the index to
      *
      * @return 
-     *      The input index or -1 if not found
+     *      1 if the `identifier` was parsed successfully, 0 if not
      */
-    number getIdentifierIndex(object self, string identifier){
+    number parseIdentifier(object self, string identifier, string &group, string &key, number &index){
         number p = -1;
 
-        // extract the row number
-        while(identifier.find("/") >= 0){
-            p = identifier.find("/");
-            identifier = identifier.right(identifier.len() - p - 1);
-        }
-        
-        // is_numeric() is defined in pylolib.s and is required automatically from python side
-        if(is_numeric(identifier)){
-            // convert to a number
-            number index = identifier.val();
-            return index;
-        }
+        p = identifier.find("/");
+        group = identifier.left(p);
+        identifier = identifier.right(identifier.len() - p - 1);
 
-        return -1;
+        p = identifier.find("/");
+        key = identifier.left(p);
+        identifier = identifier.right(identifier.len() - p - 1);
+
+        if(group != "" && key != "" && is_numeric(identifier)){
+            index = identifier.val();
+            return 1;
+        }
+        else{
+            group = "";
+            key = "";
+            index = -1;
+            return 0;
+        }
     }
 
     /**
@@ -332,7 +341,7 @@ class DMViewConfigurationDialog : UIFrame{
         if(message != ""){
             // description text
             TagGroup label = DLGCreateLabel(message, 130);
-            label.DLGHeight(3);
+            label.DLGHeight(1);
             dialog_items.DLGAddElement(label);
         }
         
@@ -386,7 +395,7 @@ class DMViewConfigurationDialog : UIFrame{
      * @return
      *      The configuration `TagGroup`
      */
-    number getConfiguration(object self, TagGroup input, string &errors){
+    TagGroup getConfiguration(object self){
         TagGroup config_vars = NewTagGroup();
 
         for(number j = 0; j < inputs.TagGroupCountTags(); j++){
@@ -397,27 +406,27 @@ class DMViewConfigurationDialog : UIFrame{
 
             string identifier;
             input.DLGGetIdentifier(identifier);
-
-            number pos = identifier.find("/");
-            string group = identifier.left(pos);
-
-            identifier = identifier.right(identifier.len() - pos);
-            number pos = identifier.find("/");
-            string key = identifier.left(pos);
             
-            TagGroup group_tg;
-            if(inputs.TagGroupDoesTagExist(group) == 0){
-                group_tg = NewTagGroup();
-                number i = inputs.TagGroupCreateNewLabeledTag(group);
-                inputs.TagGroupSetIndexedTagAsTagGroup(i, group_tg);
-            }
-            else{
-                group_tg.TagGroupGetTagAsTagGroup(group, group_tg);
-            }
+            string group;
+            string key;
+            number index;
             
-            string value = input.DLGGetValue();
-            number i = group_tg.TagGroupCreateNewLabeledTag(key);
-            group_tg.TagGroupSetIndexedTagAsString(i, value);
+            if(self.parseIdentifier(identifier, group, key, index)){
+                TagGroup group_tg;
+                if(config_vars.TagGroupDoesTagExist(group) != 0){
+                    config_vars.TagGroupGetTagAsTagGroup(group, group_tg);
+                }
+
+                if(group_tg.TagGroupIsValid() == 0){
+                    group_tg = NewTagGroup();
+                    number i = config_vars.TagGroupCreateNewLabeledTag(group);
+                    config_vars.TagGroupSetIndexedTagAsTagGroup(i, group_tg);
+                }
+                
+                string value = input.DLGGetStringValue();
+                number k = group_tg.TagGroupCreateNewLabeledTag(key);
+                group_tg.TagGroupSetIndexedTagAsString(k, value);
+            }
         }
 
         return config_vars;
@@ -539,10 +548,11 @@ config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
 
 // config_vars.TagGroupOpenBrowserWindow(0);
 
-object dialog = alloc(DMViewConfigurationDialog).init("Create lorenz mode measurement -- PyLo", config_vars, "Set the settings used for recording a new measurement.");
+object dialog = alloc(DMViewConfigurationDialog).init("Lorenz mode measurement settings -- PyLo", config_vars, "Set the settings used for recording a new measurement.");
 
 TagGroup configuration;
 
 if(dialog.pose()){
-    // configuration = dialog.getConfiguration();
+    configuration = dialog.getConfiguration();
+    // configuration.TagGroupOpenBrowserWindow(0);
 }
