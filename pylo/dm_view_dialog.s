@@ -989,47 +989,57 @@ class DMViewDialog : UIFrame{
         start_value_inputboxes = NewTagGroup();
 
         // the number of variables to show in one row
-        number max_rows = 1;
+        number max_cols = 2;
+        number max_rows = ceil(measurement_variables.TagGroupCountTags() / max_cols);
 
-        TagGroup upper_wrapper = DLGCreateBox("Start parameters");
-        upper_wrapper.DLGTableLayout(max_rows * 3, ceil(measurement_variables.TagGroupCountTags() / max_rows), 0);
+        // TagGroup upper_wrapper = DLGCreateBox("Start parameters");
+        TagGroup upper_wrapper = DLGCreateGroup();
+        upper_wrapper.DLGTableLayout(max_cols, 1, 0);
         upper_wrapper.DLGExpand("X");
         upper_wrapper.DLGFill("X");
 
-        // go through the measurement variables and add all the start input boxes
-        for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
-            TagGroup var = self._getMeasurementVariableByIndex(j);
-
-            string unique_id;
-            var.TagGroupGetTagAsString("unique_id", unique_id);
-
-            string label = self._getMeasurementVariableLabel(var);
-            string limits = self._getMeasurementVariableLimits(var);
-
-            TagGroup label_element = DLGCreateLabel(label, 36);
-            label_element.DLGAnchor("East");
-            upper_wrapper.DLGAddElement(label_element);
+        for(number i = 0; i < max_cols; i++){
+            TagGroup col = DLGCreateBox("Start parameters");
+            col.DLGTableLayout(3, max_rows, 0);
+            col.DLGExpand("X");
+            col.DLGFill("X");
             
-            string start = "";
-            if(var.TagGroupDoesTagExist("formatted_start")){
-                var.TagGroupGetTagAsString("formatted_start", start);
-            }
-            if(start == ""){
-                var.TagGroupGetTagAsString("start", start);
-            }
+            // go through the measurement variables and add all the start input boxes
+            for(number j = i * max_rows; j < min((i + 1) * max_rows, measurement_variables.TagGroupCountTags()); j++){
+                TagGroup var = self._getMeasurementVariableByIndex(j);
 
-            TagGroup start_input = DLGCreateStringField(start, 12, "startChangedCallback");
-            start_input.DLGAnchor("West");
-            start_input.DLGIdentifier("start_value-" + unique_id);
+                string unique_id;
+                var.TagGroupGetTagAsString("unique_id", unique_id);
 
-            // add the input box to the internal list to access them later on
-            number index = start_value_inputboxes.TagGroupCreateNewLabeledTag(unique_id);
-            start_value_inputboxes.TagGroupSetIndexedTagAsTagGroup(index, start_input);
-            
-            // add the limits
-            upper_wrapper.DLGAddElement(DLGCreateLabel(limits, 14));
-            // // add the start
-            upper_wrapper.DLGAddElement(start_input);
+                string label = self._getMeasurementVariableLabel(var);
+                string limits = self._getMeasurementVariableLimits(var);
+
+                TagGroup label_element = DLGCreateLabel(label, 28);
+                label_element.DLGAnchor("East");
+                col.DLGAddElement(label_element);
+                
+                string start = "";
+                if(var.TagGroupDoesTagExist("formatted_start")){
+                    var.TagGroupGetTagAsString("formatted_start", start);
+                }
+                if(start == ""){
+                    var.TagGroupGetTagAsString("start", start);
+                }
+
+                TagGroup start_input = DLGCreateStringField(start, 12, "startChangedCallback");
+                start_input.DLGAnchor("West");
+                start_input.DLGIdentifier("start_value-" + unique_id);
+
+                // add the input box to the internal list to access them later on
+                number index = start_value_inputboxes.TagGroupCreateNewLabeledTag(unique_id);
+                start_value_inputboxes.TagGroupSetIndexedTagAsTagGroup(index, start_input);
+                
+                // add the limits
+                col.DLGAddElement(DLGCreateLabel(limits, 16));
+                // // add the start
+                col.DLGAddElement(start_input);
+            }
+            upper_wrapper.DLGAddElement(col);
         }
 
         wrapper.DLGAddElement(upper_wrapper);
