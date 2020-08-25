@@ -70,6 +70,11 @@ class DMViewDialog : UIFrame{
     TagGroup panel_list;
 
     /**
+     * Whether the user is allowed to switch between the series and the settings panel.
+     */
+    number allow_panel_change;
+
+    /**
      * Returns the measurement variable of the given `index`.
      *
      * @param index
@@ -1409,16 +1414,23 @@ class DMViewDialog : UIFrame{
 	object init(object self, string title, TagGroup measurement_vars, TagGroup configuration_vars){
         measurement_variables = measurement_vars;
         configuration = configuration_vars;
+        allow_panel_change = 1;
 		self.super.init(self._createContent(title));
         
 		return self;
 	}
+
+    void updateAllowPanelChange(object self, number allow_change){
+        allow_panel_change = allow_change;
+        panel_list.DLGEnabled(allow_panel_change);
+    }
 
     /**
      * Show the series dialog.
      */
     number poseSeries(object self){
         self.switchToSeriesPanel();
+        self.updateAllowPanelChange(0);
         return self.pose();
     }
 
@@ -1427,6 +1439,7 @@ class DMViewDialog : UIFrame{
      */
     number poseConfiguration(object self){
         self.switchToConfigurationPanel();
+        self.updateAllowPanelChange(0);
         return self.pose();
     }
 
@@ -1810,6 +1823,9 @@ if(dialog_startup == "series"){
 }
 else if(dialog_startup == "configuration"){
     success = dialog.poseConfiguration();
+}
+else{
+    success = dialog.pose();
 }
 
 if(success){
