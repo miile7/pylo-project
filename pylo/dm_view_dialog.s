@@ -1792,9 +1792,10 @@ class DMViewDialog : UIFrame{
 // index = config_vars.TagGroupCreateNewLabeledTag("measurement");
 // config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
 
-// m_vars and config_vars are defined in the python file executing this file
+// dialog_startup, m_vars and config_vars are defined in the python file executing this file
 // TagGroup m_vars = NewTagList();
 // TagGroup config_vars = NewTagList();
+// string dialog_startup = "series"; 
 string title = "PyLo";
 
 object dialog = alloc(DMViewDialog).init(title, m_vars, config_vars);
@@ -1802,10 +1803,16 @@ object dialog = alloc(DMViewDialog).init(title, m_vars, config_vars);
 TagGroup start;
 TagGroup series;
 TagGroup configuration;
+number success;
 
-// if(dialog.pose()){
-if(dialog.poseSeries()){
-// if(dialog.poseConfiguration()){
+if(dialog_startup == "series"){
+    success = dialog.poseSeries();
+}
+else if(dialog_startup == "configuration"){
+    success = dialog.poseConfiguration();
+}
+
+if(success){
     start = dialog.getStart();
     series = dialog.getSeries();
     configuration = dialog.getConfiguration();
