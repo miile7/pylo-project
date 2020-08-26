@@ -1,5 +1,6 @@
 import os
 import typing
+import traceback
 
 try:
     test_error = ModuleNotFoundError()
@@ -12,8 +13,7 @@ except NameError:
 try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
-    raise RuntimeError("This class can onle be used inside Digital Micrograph.")
-    # pass
+    DM = None
 
 from .datatype import Datatype
 from .stop_program import StopProgram
@@ -21,14 +21,46 @@ from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
 from .pylolib import get_datatype_name
-from .pylodmlib import executeDMScript
+
+if DM is not None:
+    from .pylodmlib import executeDMScript
+else:
+    def executeDMScript(*args, **kwargs):
+        raise RuntimeError("This pylodmlib can only be imported inside the " + 
+                           "Digital Micrograph program by Gatan.")
 
 class DMView(AbstractView):
     def __init__(self) -> None:
         """Get the view object."""
+        if DM == None:
+            raise RuntimeError("This class can only be used inside the " + 
+                               "Digital Micrograph program by Gatan.")
+            
         super().__init__()
 
         self._rel_path = os.path.dirname(__file__)
+
+    def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        how_to_fix : str, optional
+            A text that helps the user to interpret and avoid this error,
+            default: None
+        """
+        print("Error:", error)
+        if isinstance(error, Exception):
+            traceback.print_exc()
+        print("  Fix:", how_to_fix)
+        # script = "showAlert(\"{}\", 0);".format(msg)
     
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -322,16 +354,15 @@ class DMView(AbstractView):
             if start_tg != None and start_tg.IsValid():
                 start = {}
 
-                for var in controller.microscope.supported_measurement_variables:
-                    if start_tg.DoesTagExist(var.unique_id):
-                        s, v = start_tg.GetTagAsString(var.unique_id)
+                for var in measurement_variables:
+                    s, v = start_tg.GetTagAsString(var.unique_id)
 
-                        if s:
-                            # convert value from formatted to numeric value
-                            if isinstance(var.format, Datatype):
-                                v = var.format.parse(v)
-                            
-                            start[var.unique_id] = var.ensureUncalibratedValue(v)
+                    if s:
+                        # convert value from formatted to numeric value
+                        if isinstance(var.format, Datatype):
+                            v = var.format.parse(v)
+                        
+                        start[var.unique_id] = var.ensureUncalibratedValue(v)
             
             # get the series tag group
             try:
@@ -339,46 +370,57 @@ class DMView(AbstractView):
             except KeyError:
                 series_tg = None
             
-            if series_tg != None and series_tg.IsValid():
+            print("{{Debug}} DMView::_showDialog(): script[series]: ", series_tg)
+            
+            if series_tg != None:
+                print("{{Debug}} DMView::_showDialog(): parsing series")
                 # convert the series tag group to a dict
                 series = {}
                 series_act = series
                 keys = ("start", "end", "step-width")
                 safety_counter = 0
                 while series_act != None and safety_counter < 1000:
-                    if "variable" not in series_act:
-                        try:
-                            var = controller.microscope.getMeasurementVariableById(series_act["variable"])
-                        except KeyError:
-                            var = None
+                    var = None
+                    s, unique_id = series_tg.GetTagAsString("variable")
+                    print("{{Debug}} DMView::_showDialog(): getting variable: ", s, unique_id)
+                    if s:
+                        for v in measurement_variables:
+                            if v.unique_id == unique_id:
+                                var = v
+                                break
                     
                     if var == None:
                         # the current variable is invalid, stop parsing
                         series_act = None
+                        print("{{Debug}} DMView::_showDialog(): couldn't find variable")
                         break
                         
                     for k in keys:
                         # go through start, end and step-width and save the 
                         # values
-                        if series_tg.DoesTagExist(k):
-                            s, v = series_tg.GetTagAsString(k)
+                        s, v = series_tg.GetTagAsString(k)
+                        print("{{Debug}} DMView::_showDialog(): for key", k, "getting value", s, v)
 
-                            if s:
-                                # convert value from formatted to numeric value
-                                if isinstance(var.format, Datatype):
-                                    v = var.format.parse(v)
-                                
-                                series_act[k] = var.ensureUncalibratedValue(v)
+                        if s:
+                            # convert value from formatted to numeric value
+                            if isinstance(var.format, Datatype):
+                                v = var.format.parse(v)
+                            
+                            series_act[k] = var.ensureUncalibratedValue(v)
+                            print("{{Debug}} DMView::_showDialog(): series_act[k] is now", series_act[k])
                     
                     # check if there is an on-each-point tag group
-                    if series_tg.DoesTagExist("on-each-point"):
+                    s, v = series_tg.GetTagAsTagGroup("on-each-point")
+                    if s:
                         series_act["on-each-point"] = {}
-                        series_act = series_act["on-each-point"]
+                        series_tg = v
                     else:
                         series_act = None
                         break
                     
                     safety_counter += 1
+            else:
+                print("{{Debug}} DMView::_showDialog(): series_tg is not valid or None", series_tg)
 
             # get the configuration tag group
             try:
@@ -412,7 +454,10 @@ class DMView(AbstractView):
                                 
                                 config[group][key] = val
         
-        if not success:
-            raise StopProgram
-        else:
+        print("{Debug} DMView::_showDialog():", success, start, series, config)
+
+        if success and ((start is not None and series is not None) or 
+           config is not None):
             return start, series, config
+        else:
+            raise StopProgram
