@@ -27,6 +27,9 @@ PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
   - [matplolib](https://matplotlib.org/) 
     ([pip](https://pypi.org/project/matplotlib/), 
     [conda](https://anaconda.org/conda-forge/matplotlib))
+    - [sip](https://www.riverbankcomputing.com/software/sip/) 
+      ([pip](https://pypi.org/project/sip/),
+      [conda](https://anaconda.org/anaconda/sip))
 - [NumPy](https://numpy.org/) ([pip](https://pypi.org/project/numpy/), 
   [conda](https://anaconda.org/anaconda/numpy))
 - [PIL (Pillow)](https://python-pillow.org/) 
