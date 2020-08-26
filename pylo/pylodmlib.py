@@ -13,10 +13,9 @@ except NameError:
 
 try:
     import DigitalMicrograph as DM
-    outside_mode = False
 except (ModuleNotFoundError, ImportError) as e:
-    raise RuntimeError("This class can onle be used inside Digital Micrograph.")
-    # outside_mode = True
+    raise RuntimeError("This class can onle be used inside the Digital " + 
+                       "Micrograph program by Gatan.")
 
 def executeDMScript(file_path: str, 
                     synchronized_variables: typing.Optional[dict]={}, 
@@ -41,9 +40,9 @@ def executeDMScript(file_path: str,
         The file path of the file to require
     synchronized_variables : dict, optional
         The variables to synchronize, the key is the exact name of the 
-        variable in the dm-script code, the value is the datatype that is 
-        used for the `TagGroupSetTagAs<datatype>()`, 
-        `TagGroupGetTagAs<datatype>()`, ...
+        variable in the dm-script code, the value is the datatype as it is 
+        taken from the `getDMType()` function, this are the most basic types
+        as either python types or as common string expressions
     require_before : list of strings, optional
         File paths of dm-script files to require before requiring the `file`
     script_prefix : str, optional
@@ -58,6 +57,62 @@ def executeDMScript(file_path: str,
     return DMScriptWrapper(file_path, synchronized_variables, require_before,
                            script_prefix)
 
+def getDMType(datatype, for_taggroup=False):
+    """Get the dm-script equivalent for the given `datatype`.
+
+    Note that not all types are supported, even if there is an equvalent in 
+    dm-script.
+
+    Raises
+    ------
+    LookupError
+        When the `datatype` is not known
+
+    Parameters
+    ----------
+    datatype : str or type
+        The type to get the dm-script type of, python types and common type 
+        expressions are supported
+    for_taggroup : boolean, optional
+        Whether the datatype should be returned so it can be used directly in 
+        `taggroup.GetTagAs<datatype>()` function or not, default: False
+    
+    Returns
+    -------
+    str
+        The datatype name in dm-script
+    """
+
+    if isinstance(datatype, str):
+        datatype = datatype.lower()
+    
+    if datatype in (int, "int", "integer", "long"):
+        if for_taggroup:
+            return "Long"
+        else:
+            return "Number"
+    elif datatype == "short":
+        if for_taggroup:
+            return "Short"
+        else:
+            return "Number"
+    elif datatype in (float, "float", "double", "decimal", "number", "realnumber"):
+        if for_taggroup:
+            return "Float"
+        else:
+            return "realnumber"
+    elif datatype in (bool, "boolean"):
+        if for_taggroup:
+            return "Boolean"
+        else:
+            return "Number"
+    elif datatype in ("string", "text"):
+        return "String"
+    elif datatype == "taggroup":
+        return "TagGroup"
+    else:
+        raise LookupError("Cannot find the dm-script type for '{}'".format(datatype))
+
 class DMScriptWrapper:
     """Wraps a dm-script.
 
@@ -67,11 +122,11 @@ class DMScriptWrapper:
         The file path of the file to require
     persistent_tag : str
         The unique persistent tag name where the variables will be saved
-    synchronized_variables : dict
-        The variables to synchronize, the key is the exact name of the variable 
-        in the dm-script code, the value is the datatype that is used for the 
-        `TagGroupSetTagAs<datatype>()`, `TagGroupGetTagAs<datatype>()`, ... 
-        functions
+    synchronized_variables : dict, optional
+        The variables to synchronize, the key is the exact name of the 
+        variable in the dm-script code, the value is the datatype as it is 
+        taken from the `getDMType()` function, this are the most basic types
+        as either python types or as common string expressions
     require_before : list
         A list of file paths to require before requiring the `file_path`
     script_prefix : str, optional
@@ -90,9 +145,9 @@ class DMScriptWrapper:
             The file path of the file to require
         synchronized_variables : dict, optional
             The variables to synchronize, the key is the exact name of the 
-            variable in the dm-script code, the value is the datatype that is 
-            used for the `TagGroupSetTagAs<datatype>()`, 
-            `TagGroupGetTagAs<datatype>()`, ...
+            variable in the dm-script code, the value is the datatype as it is 
+            taken from the `getDMType()` function, this are the most basic 
+            types as either python types or as common string expressions
         require_before : list of strings, optional
             File paths of dm-script files to require before requiring the `file`
         script_prefix : str, optional
@@ -218,7 +273,7 @@ class DMScriptWrapper:
         for var_name, var_type in self.synchronized_variables.items():
             dm_script.append(sync_code_template.format(
                 tg=sync_code_tg_name, pt=self.persistent_tag, var=var_name, 
-                type=var_type[0].upper() + var_type[1:].lower()
+                type=getDMType(var_type, for_taggroup=True)
             ))
         
         return "\n" + "\n".join(dm_script)
@@ -249,7 +304,7 @@ class DMScriptWrapper:
         # UserTags are enough but they are not supported in python :(
         user_tags = DM.GetPersistentTagGroup()
         path = self.persistent_tag + ":" + var_name
-        func_name = "GetTagAs" + var_type[0].upper() + var_type[1:].lower()
+        func_name = "GetTagAs" + getDMType(var_type, for_taggroup=True)
 
         # check if the datatype is supported by trying
         if hasattr(user_tags, func_name):
@@ -257,6 +312,8 @@ class DMScriptWrapper:
             if callable(func):
                 success, val = func(path)
 
+                if isinstance(val, DM.Py_TagGroup):
+                    print("DMScriptWrapper::getSyncedVar(): val.IsValid(): ", val.IsValid(), val)
                 if success:
                     return val
         
@@ -274,6 +331,8 @@ class DMScriptWrapper:
         global outside_mode
 
         if not outside_mode:
+            print("{Debug} DMScriptWrapper::freeAllSyncedVars(): Skipping freeing")
+            return
             DM.ExecuteScriptString(
                 "GetPersistentTagGroup()." + 
                 "TagGroupDeleteTagWithLabel(\"" + self.persistent_tag + "\");"
