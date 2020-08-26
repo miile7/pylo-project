@@ -17,9 +17,21 @@ contains Events on image recording to add plugins that change the measuring beha
 
 PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
 
-- PyJEM by JEOL (for only for `PyJEMMicroscope` and `PyJEMCamera` needs httplib2, cv2=OpenCV and matplolib)
-- [NumPy](https://numpy.org/)
-- [PIL=Pillow](https://python-pillow.org/)
+- PyJEM by JEOL (needs the following packages, not installed by default)
+  - [httplib2](https://github.com/httplib2/httplib2) 
+    ([pip](https://pypi.org/project/httplib2/), 
+    [conda](https://anaconda.org/conda-forge/httplib2))
+  - [cv2 (OpenCV)](https://opencv.org/) 
+    ([pip](https://pypi.org/project/opencv-python/), 
+    [conda](https://anaconda.org/conda-forge/opencv))
+  - [matplolib](https://matplotlib.org/) 
+    ([pip](https://pypi.org/project/matplotlib/), 
+    [conda](https://anaconda.org/conda-forge/matplotlib))
+- [NumPy](https://numpy.org/) ([pip](https://pypi.org/project/numpy/), 
+  [conda](https://anaconda.org/anaconda/numpy))
+- [PIL (Pillow)](https://python-pillow.org/) 
+  ([pip](https://pypi.org/project/Pillow/), 
+  [conda](https://anaconda.org/anaconda/pillow))
 
 ### General
 
