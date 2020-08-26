@@ -13,8 +13,10 @@ from .events import series_ready
 
 from .measurement import Measurement
 from .stop_program import StopProgram
+from .abstract_view import AbstractView
 from .exception_thread import ExceptionThread
 from .cameras.camera_interface import CameraInterface
+from .abstract_configuration import AbstractConfiguration
 from .microscopes.microscope_interface import MicroscopeInterface
 
 # from .config import PROGRAM_NAME
@@ -67,8 +69,18 @@ class Controller:
         The measurement to do
     """
 
-    def __init__(self) -> None:
+    def __init__(self, view: typing.Optional[AbstractView]=None,
+                 configuration: typing.Optional[AbstractConfiguration]=None) -> None:
         """Create the controller object.
+
+        Parameters
+        ----------
+        view : AbstractView, optional
+            The view object to use, if not given the `config.VIEW` will be used
+            instead
+        configuration : AbstractConfiguration, optional
+            The configuration object to use, if not given the 
+            `config.CONFIGURATION` will be used instead
 
         Fired Events
         ------------
@@ -78,12 +90,19 @@ class Controller:
 
         before_start()
 
-        # import as late as possible to allow changes by extensions
-        from .config import CONFIGURATION
-        from .config import VIEW
-
-        self.configuration = CONFIGURATION
-        self.view = VIEW
+        if not isinstance(view, AbstractView):
+            # import as late as possible to allow changes by extensions
+            from .config import VIEW
+            self.view = VIEW
+        else:
+            self.view = view
+        
+        if not isinstance(configuration, AbstractConfiguration):
+            # import as late as possible to allow changes by extensions
+            from .config import CONFIGURATION
+            self.configuration = CONFIGURATION
+        else:
+            self.configuration = configuration
 
         Controller.defineConfigurationOptions(self.configuration)
         Measurement.defineConfigurationOptions(self.configuration)
