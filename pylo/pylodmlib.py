@@ -172,7 +172,6 @@ class DMScriptWrapper:
         bool
             Success
         """
-        global outside_mode
 
         prefix = []
         if isinstance(self.require_before, (list, tuple)):
@@ -187,13 +186,12 @@ class DMScriptWrapper:
         
             script += "\n" + self.getSyncDMCode()
 
-            if outside_mode:
+            if DM is None:
                 print(script)
                 path = os.path.join(os.path.dirname(__file__), "pylodmlib-tmp-script.s")
                 f = open(path, "w+")
                 f.write(script)
-                f.close()
-                
+                f.close()   
             else:
                 DM.ExecuteScriptString(script)
             
@@ -294,9 +292,8 @@ class DMScriptWrapper:
         mixed
             The variable value
         """
-        global outside_mode
 
-        if var_name not in self.synchronized_variables or outside_mode:
+        if var_name not in self.synchronized_variables:
             return None
         
         var_type = self.synchronized_variables[var_name]
@@ -328,11 +325,8 @@ class DMScriptWrapper:
         # python way does not work
         # user_tags = DM.GetPersistentTagGroup()
         # user_tags.TagGroupDeleteTagWithLabel(persistent_tag)
-        global outside_mode
-
-        if not outside_mode:
-            print("{Debug} DMScriptWrapper::freeAllSyncedVars(): Skipping freeing")
-            return
+        
+        if DM is not None:
             DM.ExecuteScriptString(
                 "GetPersistentTagGroup()." + 
                 "TagGroupDeleteTagWithLabel(\"" + self.persistent_tag + "\");"
