@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import errno
@@ -242,6 +243,7 @@ class DMScriptWrapper:
         self.readvars = readvars
         self.synchronized_readvars = {}
         self.debug = bool(debug)
+        self._slash_split_reg = re.compile("(?<!/)/(?!/)")
     
     def __del__(self) -> None:
         """Desctruct the object."""
@@ -404,7 +406,7 @@ class DMScriptWrapper:
                         )
                     
                     dmscript.append(
-                        "__exec_dmscript_linearizeTags({tg}_tg, {key}, \"{key}\");".format(
+                        "__exec_dmscript_linearizeTags({tg}_tg, {key}, \"{key}\", \"{key}\");".format(
                             key=var_name, tg=sync_code_tg_name
                     ))
                 else:
@@ -481,6 +483,14 @@ class DMScriptWrapper:
             raise ValueError("The type_def has to be a dict or a list.")
 
         path = list(path)
+
+        dmscript.append("\n".join((
+            "if(!{tg}_tg.TagGroupDoesTagExist(\"{{{{available-paths}}}}{var}\")){{",
+                "number index_{var}_{t}{r} = {tg}_tg.TagGroupCreateNewLabeledTag(\"{{{{available-paths}}}}{var}\");",
+                "{tg}_tg.TagGroupSetIndexedTagAsString(index_{var}_{t}{r}, \"\");",
+            "}}"
+        )).format(tg=dm_tg_name, var=var_name, t=round(time.time() * 100),
+                  r=random.randint(0, 99999999)))
         
         for var_key, var_type in iterator:
             if isinstance(var_type, (dict, list, tuple)):
@@ -509,6 +519,10 @@ class DMScriptWrapper:
                     "{tg}_tg.TagGroupSetIndexedTagAs{tgtype}({tg}_index, {var}_{varkey}_{t}{r});",
                     "{tg}_index = {tg}_tg.TagGroupCreateNewLabeledTag(\"{{{{type}}}}{destpath}\")",
                     "{tg}_tg.TagGroupSetIndexedTagAsString({tg}_index, \"{tgtype}\");",
+                    "string available_index_{var}_{varkey}_{t}{r};",
+                    "{tg}_tg.TagGroupGetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
+                    "available_index_{var}_{varkey}_{t}{r} += \"{destpath};\";",
+                    "{tg}_tg.TagGroupSetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
                 )).format(
                     tg=dm_tg_name, var=var_name, varkey=var_key,
                     scripttype=get_dm_type(var_type, for_taggroup=False),
@@ -525,23 +539,80 @@ class DMScriptWrapper:
     
     def _loadVariablesFromDMScript(self) -> None:
         """Load the variables from the persistent tags to dm-script."""
+
+        self.synchronized_readvars = {}
         
         for var_name, var_type in self.readvars.items():
-            # UserTags are enough but they are not supported in python :(
-            user_tags = DM.GetPersistentTagGroup()
-            path = self.persistent_tag + ":" + var_name
-            func_name = "GetTagAs" + get_dm_type(var_type, for_taggroup=True)
+            if isinstance(var_type, (dict, list, tuple)):
+                pass
+            else:
+                dm_type = get_dm_type(var_type, for_taggroup=True)
 
-            # check if the datatype is supported by trying
-            if hasattr(user_tags, func_name):
-                func = getattr(user_tags, func_name)
-                if callable(func):
-                    success, val = func(path)
+                if dm_type == "TagGroup" or dm_type == "TagList":
+                    pass
+                else:
+                    success, val = self._getVarFromPersistentTags(var_name, var_name)
+                    path = self.persistent_tag + ":" + var_name
 
-                    if success:
-                        return val
+                    # check if the datatype is supported by trying
+                    if hasattr(user_tags, func_name):
+                        func = getattr(user_tags, func_name)
+                        if callable(func):
+                            success, val = func(path)
+
+                            if success:
+                                return val
             
             return None
+    
+    def _getVarFromPersistentTags(self, path, var_name):
+        if not isinstance(path, (list, tuple)):
+            path = [path]
+        if isinstance(path, tuple):
+            path = list(path)
+        
+        path = ":".join(map(
+            lambda x: "[{}]".format(x) if isinstance(x, int) else x,
+            [self.persistent_tag] + path
+        ))
+        
+        var_type = self.readvars[var_name]
+        if isinstance(var_type, str):
+            dm_type = get_dm_type(var_type, for_taggroup=True)
+        else:
+            dm_type = None
+
+        # UserTags are enough but they are not supported in python :(
+        # do not save the persistent tags to a variable, this way they do 
+        # not work anymore (for any reason)
+        if dm_type == "Long":
+            success, value = DM.GetPersistentTagGroup().GetTagAsLong(path)
+        elif dm_type == "Float":
+            success, value = DM.GetPersistentTagGroup().GetTagAsFloat(path)
+        elif dm_type == "Boolean":
+            success, value = DM.GetPersistentTagGroup().GetTagAsBoolean(path)
+        elif dm_type == "String":
+            success, value = DM.GetPersistentTagGroup().GetTagAsString(path)
+        elif (dm_type in ("TagGroup", "TagList") or 
+              isinstance(var_type, (dict, tuple, list))):
+            
+            if dm_type == "TagGroup" or isinstance(var_type, dict):
+                list_mode = False
+            else:
+                list_mode = True
+            
+            if list_mode:
+                value = []
+            else:
+                value = {}
+            
+            success, all_keys = DM.GetPersistentTagGroup().GetTagAsString(path + ":{{available_paths}}" + str(var_name))
+
+            if success:
+                all_keys = all_keys.split(";")
+                all_paths = [self._slash_split_reg.split(k) for k in all_keys]
+        
+        return success, value
 
     def getSyncedVar(self, var_name: str) -> typing.Any:
         """Get the value of the `var_name` dm-script variable.
@@ -609,7 +680,12 @@ class DMScriptWrapper:
             return r;
         }
 
-        void __exec_dmscript_linearizeTags(TagGroup &linearized, TagGroup tg, string path){
+        void __exec_dmscript_linearizeTags(TagGroup &linearized, TagGroup tg, string var_name, string path){
+            string available_paths = "";
+            if(linearized.TagGroupDoesTagExist("{{available-paths}}" + var_name)){
+                linearized.TagGroupGetTagAsString("{{available-paths}}" + var_name, available_paths);
+            }
+
             for(number i = 0; i < tg.TagGroupCountTags(); i++){
                 String label;
                 if(tg.TagGroupIsList()){
@@ -628,7 +704,7 @@ class DMScriptWrapper:
                     TagGroup value;
                     
                     tg.TagGroupGetIndexedTagAsTagGroup(i, value);
-                    __exec_dmscript_linearizeTags(linearized, value, p);
+                    __exec_dmscript_linearizeTags(linearized, value, var_name, p);
                     
                     if(value.TagGroupIsList()){
                         type_name = "TagList";
@@ -714,7 +790,17 @@ class DMScriptWrapper:
                 if(type_name != ""){
                     index = linearized.TagGroupCreateNewLabeledTag("{{type}}" + p);
                     linearized.TagGroupSetIndexedTagAsString(index, type_name);
+
+                    available_paths += p + ";";
                 }
+            }
+            
+            if(!linearized.TagGroupDoesTagExist("{{available-paths}}" + var_name)){
+                number ind = linearized.TagGroupCreateNewLabeledTag("{{available-paths}}" + var_name);
+                linearized.TagGroupSetIndexedTagAsString(ind, available_paths);
+            }
+            else{
+                linearized.TagGroupSetTagAsString("{{available-paths}}" + var_name, available_paths);
             }
         }
         """
