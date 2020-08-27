@@ -17,7 +17,7 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
-_debug_mode = True
+_debug_mode = False
 
 try:
     import DigitalMicrograph as DM
@@ -261,8 +261,11 @@ class DMScriptWrapper:
         dmscript = self.getExecDMScriptCode()
         
         if self.debug:
-            with open(tempfile.mkstemp(), "w+") as f:
-                f.write(dmscript)
+            f, path = tempfile.mkstemp(text=True)
+            f.write(dmscript)
+            f.close()
+            print("execdmscript: Did not execute script but saved to {} " + 
+                  "because file is running in debug mode.".format(path))
             return True
         else:
             DM.ExecuteScriptString(dmscript)
@@ -401,6 +404,7 @@ class DMScriptWrapper:
                 if dm_type == "TagGroup" or dm_type == "TagList":
                     # autoguess a TagGroup/TagList
                     if not linearize_functions_added:
+                        linearize_functions_added = True
                         dmscript.append(
                             DMScriptWrapper._getLinearizeTagGroupFunctionsCode()
                         )
@@ -493,47 +497,57 @@ class DMScriptWrapper:
                   r=random.randint(0, 99999999)))
         
         for var_key, var_type in iterator:
+            dms = ""
             if isinstance(var_type, (dict, list, tuple)):
                 if list_mode:
                     # important so future calls knwo that this was a list
                     var_key = int(var_key)
                 else:
                     var_key = str(var_key)
+                
                 dmscript += self._recursivelyGetTagGroupDefCode(
                     dm_tg_name, var_type, var_name, path + [var_key]
                 )
+
+                if isinstance(var_type, dict):
+                    var_type = "TagGroup"
+                else:
+                    var_type = "TagList"
             else:
-                source_path = ":".join(map(
-                    lambda x: "[{}]".format(x) if isinstance(x, int) else x,
-                    path + [var_key]
-                ))
-                destination_path = "/".join(map(
-                    lambda x: x.replace("/", "//") if isinstance(x, str) else str(x),
-                    [var_name] + path + [var_key]
-                ))
                 dms = "\n".join((
-                    "",
                     "{scripttype} {var}_{varkey}_{t}{r};",
                     "{var}.TagGroupGetTagAs{tgtype}(\"{srcpath}\", {var}_{varkey}_{t}{r});",
                     "{tg}_index = {tg}_tg.TagGroupCreateNewLabeledTag(\"{destpath}\")",
                     "{tg}_tg.TagGroupSetIndexedTagAs{tgtype}({tg}_index, {var}_{varkey}_{t}{r});",
-                    "{tg}_index = {tg}_tg.TagGroupCreateNewLabeledTag(\"{{{{type}}}}{destpath}\")",
-                    "{tg}_tg.TagGroupSetIndexedTagAsString({tg}_index, \"{tgtype}\");",
-                    "string available_index_{var}_{varkey}_{t}{r};",
-                    "{tg}_tg.TagGroupGetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
-                    "available_index_{var}_{varkey}_{t}{r} += \"{destpath};\";",
-                    "{tg}_tg.TagGroupSetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
-                )).format(
-                    tg=dm_tg_name, var=var_name, varkey=var_key,
-                    scripttype=get_dm_type(var_type, for_taggroup=False),
-                    tgtype=get_dm_type(var_type, for_taggroup=True),
-                    srcpath=source_path,
-                    destpath=destination_path,
-                    t=round(time.time() * 100),
-                    r=random.randint(0, 99999999)
-                )
+                ))
 
-                dmscript.append(dms)
+            source_path = ":".join(map(
+                lambda x: "[{}]".format(x) if isinstance(x, int) else x,
+                path + [var_key]
+            ))
+            destination_path = "/".join(map(
+                lambda x: x.replace("/", "//") if isinstance(x, str) else str(x),
+                [var_name] + path + [var_key]
+            ))
+            dms = "\n".join((
+                dms,
+                "{tg}_index = {tg}_tg.TagGroupCreateNewLabeledTag(\"{{{{type}}}}{destpath}\")",
+                "{tg}_tg.TagGroupSetIndexedTagAsString({tg}_index, \"{tgtype}\");",
+                "string available_index_{var}_{varkey}_{t}{r};",
+                "{tg}_tg.TagGroupGetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
+                "available_index_{var}_{varkey}_{t}{r} += \"{destpath};\";",
+                "{tg}_tg.TagGroupSetTagAsString(\"{{{{available-paths}}}}{var}\", available_index_{var}_{varkey}_{t}{r});",
+            )).format(
+                tg=dm_tg_name, var=var_name, varkey=var_key,
+                scripttype=get_dm_type(var_type, for_taggroup=False),
+                tgtype=get_dm_type(var_type, for_taggroup=True),
+                srcpath=source_path,
+                destpath=destination_path,
+                t=round(time.time() * 100),
+                r=random.randint(0, 99999999)
+            )
+
+            dmscript.append(dms)
 
         return dmscript
     
@@ -543,45 +557,118 @@ class DMScriptWrapper:
         self.synchronized_readvars = {}
         
         for var_name, var_type in self.readvars.items():
-            if isinstance(var_type, (dict, list, tuple)):
-                pass
-            else:
-                dm_type = get_dm_type(var_type, for_taggroup=True)
-
-                if dm_type == "TagGroup" or dm_type == "TagList":
-                    pass
-                else:
-                    success, val = self._getVarFromPersistentTags(var_name, var_name)
-                    path = self.persistent_tag + ":" + var_name
-
-                    # check if the datatype is supported by trying
-                    if hasattr(user_tags, func_name):
-                        func = getattr(user_tags, func_name)
-                        if callable(func):
-                            success, val = func(path)
-
-                            if success:
-                                return val
+            path = self.persistent_tag + ":" + var_name
             
-            return None
-    
-    def _getVarFromPersistentTags(self, path, var_name):
-        if not isinstance(path, (list, tuple)):
-            path = [path]
-        if isinstance(path, tuple):
-            path = list(path)
-        
-        path = ":".join(map(
-            lambda x: "[{}]".format(x) if isinstance(x, int) else x,
-            [self.persistent_tag] + path
-        ))
-        
-        var_type = self.readvars[var_name]
-        if isinstance(var_type, str):
-            dm_type = get_dm_type(var_type, for_taggroup=True)
-        else:
-            dm_type = None
+            var_type = self.readvars[var_name]
+            if isinstance(var_type, str):
+                dm_type = get_dm_type(var_type, for_taggroup=True)
+            else:
+                dm_type = None
+            
+            if (dm_type in ("TagGroup", "TagList") or 
+                isinstance(var_type, (dict, list, tuple))):
+                value = None
 
+                # get the paths of all elements added to this group, recursive
+                # travelling is not possible because TagGroups cannot be saved
+                # to variables
+                success, tg_keys = (DM.GetPersistentTagGroup().
+                                    GetTagAsString(
+                                        self.persistent_tag + ":{{available-paths}}" + str(var_name)
+                                    ))
+
+                if success:
+                    tg_keys = tg_keys.split(";")
+
+                    for tg_key in tg_keys:
+                        paths = self._slash_split_reg.split(tg_key)
+                        
+                        for i, path in enumerate(paths):
+                            # build the value structure
+                            if i == 0:
+                                # set the variables values as the "base"
+                                if (dm_type == "TagGroup" or 
+                                    isinstance(var_type, dict)):
+                                    cur_type = "TagGroup"
+                                    if value is None:
+                                        value = {}
+                                    value_ref = value
+                                else:
+                                    cur_type = "TagList"
+                                    if value is None:
+                                        value = []
+                                    value_ref = value
+                            else:
+                                # parse the key depending on the parent
+                                # type, cur_type is not overwritten yet
+                                if cur_type == "TagList":
+                                    key = int(path)
+                                    while key >= len(value_ref):
+                                        # also prepare the current index 
+                                        # with none so it can be set by 
+                                        # value_ref[key] = v, if the 
+                                        # key already exists and is None
+                                        # append was wrong
+                                        value_ref.append(None)
+                                elif cur_type == "TagGroup":
+                                    key = path
+                                    if key not in value_ref:
+                                        value_ref[key] = None
+                                else:
+                                    break
+                                
+                                # the the current path that the persistent
+                                # TagGroup contains the key of
+                                cur_path = "/".join(map(str, paths[0:(i + 1)]))
+                                
+                                # get the current datatype
+                                s, cur_type = (DM.GetPersistentTagGroup().
+                                        GetTagAsString(
+                                            self.persistent_tag + 
+                                            ":{{type}}" + str(cur_path)
+                                        ))
+                            
+                                if cur_type == "TagGroup":
+                                    # create a new dict and save it in 
+                                    # the current key, then set the
+                                    # reference to this new dict
+                                    if isinstance(value_ref[key], dict):
+                                        value_ref[key] = {}
+                                    value_ref = value_ref[key]
+                                elif cur_type == "TagList":
+                                    # create a new list, add as many times
+                                    # None as necessary to reach the
+                                    # current index
+                                    if not isinstance(value_ref[key], list):
+                                        value_ref[key] = []
+                                    value_ref = value_ref[key]
+                                else:
+                                    # the current type is a real value, 
+                                    # get the parsed value and stop (there 
+                                    # should not be any more paths coming,
+                                    # just to be sure)
+                                    s, v = self._getParsedValueFromPersistentTags(
+                                        "{}:{}".format(
+                                            self.persistent_tag, cur_path
+                                        ), 
+                                        cur_type
+                                    )
+
+                                    if s:
+                                        value_ref[key] = v
+                                    else:
+                                        success = False
+                                    break
+            else:
+                success, value = self._getParsedValueFromPersistentTags(
+                    path, var_type
+                )
+            
+            if success:
+                self.synchronized_readvars[var_name] = value
+
+    def _getParsedValueFromPersistentTags(self, path, var_type):
+        dm_type = get_dm_type(var_type, for_taggroup=True)
         # UserTags are enough but they are not supported in python :(
         # do not save the persistent tags to a variable, this way they do 
         # not work anymore (for any reason)
@@ -593,24 +680,8 @@ class DMScriptWrapper:
             success, value = DM.GetPersistentTagGroup().GetTagAsBoolean(path)
         elif dm_type == "String":
             success, value = DM.GetPersistentTagGroup().GetTagAsString(path)
-        elif (dm_type in ("TagGroup", "TagList") or 
-              isinstance(var_type, (dict, tuple, list))):
-            
-            if dm_type == "TagGroup" or isinstance(var_type, dict):
-                list_mode = False
-            else:
-                list_mode = True
-            
-            if list_mode:
-                value = []
-            else:
-                value = {}
-            
-            success, all_keys = DM.GetPersistentTagGroup().GetTagAsString(path + ":{{available_paths}}" + str(var_name))
-
-            if success:
-                all_keys = all_keys.split(";")
-                all_paths = [self._slash_split_reg.split(k) for k in all_keys]
+        else:
+            ValueError("The datatype '{}' is not supported".format(var_type))
         
         return success, value
 
@@ -830,91 +901,9 @@ class DMScriptWrapper:
             elif isinstance(script, pathlib.PurePath):
                 normalized.append(("file", script))
             elif isinstance(script, str) and script != "":
-                if _is_pathname_valid(script):
+                if os.path.isfile(script):
                     normalized.append(("file", script))
                 else:
                     normalized.append(("script", script))
 
         return normalized
-
-# Sadly, Python fails to provide the following magic number for us.
-ERROR_INVALID_NAME = 123
-'''
-Windows-specific error code indicating an invalid pathname.
-
-See Also
-----------
-https://docs.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
-    Official listing of all such codes.
-'''
-
-def _is_pathname_valid(pathname: str) -> bool:
-    '''
-    `True` if the passed pathname is a valid pathname for the current OS;
-    `False` otherwise.
-
-    Taken from https://stackoverflow.com/a/34102855/5934316
-    '''
-    # If this pathname is either not a string or is but is empty, this pathname
-    # is invalid.
-    try:
-        if not isinstance(pathname, str) or not pathname:
-            return False
-
-        # Strip this pathname's Windows-specific drive specifier (e.g., `C:\`)
-        # if any. Since Windows prohibits path components from containing `:`
-        # characters, failing to strip this `:`-suffixed prefix would
-        # erroneously invalidate all valid absolute Windows pathnames.
-        _, pathname = os.path.splitdrive(pathname)
-
-        # Directory guaranteed to exist. If the current OS is Windows, this is
-        # the drive to which Windows was installed (e.g., the "%HOMEDRIVE%"
-        # environment variable); else, the typical root directory.
-        root_dirname = os.environ.get('HOMEDRIVE', 'C:') \
-            if sys.platform == 'win32' else os.path.sep
-        assert os.path.isdir(root_dirname)   # ...Murphy and her ironclad Law
-
-        # Append a path separator to this directory if needed.
-        root_dirname = root_dirname.rstrip(os.path.sep) + os.path.sep
-
-        # Test whether each path component split from this pathname is valid or
-        # not, ignoring non-existent and non-readable path components.
-        for pathname_part in pathname.split(os.path.sep):
-            try:
-                os.lstat(root_dirname + pathname_part)
-            # If an OS-specific exception is raised, its error code
-            # indicates whether this pathname is valid or not. Unless this
-            # is the case, this exception implies an ignorable kernel or
-            # filesystem complaint (e.g., path not found or inaccessible).
-            #
-            # Only the following exceptions indicate invalid pathnames:
-            #
-            # * Instances of the Windows-specific "WindowsError" class
-            #   defining the "winerror" attribute whose value is
-            #   "ERROR_INVALID_NAME". Under Windows, "winerror" is more
-            #   fine-grained and hence useful than the generic "errno"
-            #   attribute. When a too-long pathname is passed, for example,
-            #   "errno" is "ENOENT" (i.e., no such file or directory) rather
-            #   than "ENAMETOOLONG" (i.e., file name too long).
-            # * Instances of the cross-platform "OSError" class defining the
-            #   generic "errno" attribute whose value is either:
-            #   * Under most POSIX-compatible OSes, "ENAMETOOLONG".
-            #   * Under some edge-case OSes (e.g., SunOS, *BSD), "ERANGE".
-            except OSError as exc:
-                if hasattr(exc, 'winerror'):
-                    if exc.winerror == ERROR_INVALID_NAME:
-                        return False
-                elif exc.errno in {errno.ENAMETOOLONG, errno.ERANGE}:
-                    return False
-    # If a "TypeError" exception was raised, it almost certainly has the
-    # error message "embedded NUL character" indicating an invalid pathname.
-    except TypeError as exc:
-        return False
-    # If no exception was raised, all path components and hence this
-    # pathname itself are valid. (Praise be to the curmudgeonly python.)
-    else:
-        return True
-    # If any other exception was raised, this is an unrelated fatal issue
-    # (e.g., a bug). Permit this exception to unwind the call stack.
-    #
-    # Did we mention this should be shipped with Python already?
