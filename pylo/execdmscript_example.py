@@ -1,3 +1,9 @@
+"""This is an example file of how to use the `execdmscript` module."""
+
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+# This is only for getting the __file__ for importing, this is not necessary
+# normally, skip until the next line
+#
 try:
 	import DigitalMicrograph as DM
 	in_digital_micrograph = True
@@ -54,9 +60,14 @@ if in_digital_micrograph and file_is_missing:
 		# set a default if the __file__ could not be received
 		__file__ = ""
 
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+
+# The start of the example file
+
 import os
 import sys
 import pprint
+import traceback
 
 if __file__ != "":	
 	base_path = str(os.path.dirname(__file__))
@@ -68,37 +79,11 @@ import execdmscript
 
 script1 = """
 number a = 40;
-number b = -193.782;
 number c = a + b;
 string d = \"This is a test string\";
 """
 
-script2 = """
-number index;
-TagGroup tg1 = NewTagGroup();
-index = tg1.TagGroupCreateNewLabeledTag("key1");
-tg1.TagGroupSetIndexedTagAsString(index, "value1");
-
-index = tg1.TagGroupCreateNewLabeledTag("key2");
-tg1.TagGroupSetIndexedTagAsNumber(index, c);
-
-TagGroup tl1 = NewTagList();
-tl1.TagGroupInsertTagAsString(infinity(), "list value 1");
-tl1.TagGroupInsertTagAsString(infinity(), "list value 2");
-tl1.TagGroupInsertTagAsNumber(infinity(), 100);
-
-TagGroup tg2 = NewTagGroup();
-index = tg2.TagGroupCreateNewLabeledTag("list");
-tg2.TagGroupSetIndexedTagAsTagGroup(index, tl1);
-index = tg2.TagGroupCreateNewLabeledTag("list-count");
-tg2.TagGroupSetIndexedTagAsNumber(index, tl1.TagGroupCountTags());
-
-index = tg1.TagGroupCreateNewLabeledTag("key3");
-tg1.TagGroupSetIndexedTagAsTagGroup(index, tg2);
-
-index = tg1.TagGroupCreateNewLabeledTag("key4");
-tg1.TagGroupSetIndexedTagAsBoolean(index, 0);
-"""
+script2 = os.path.join(os.path.dirname(__file__), "execdmscript_example.s")
 
 script3 = """
 TagGroup tg3 = NewTagGroup();
@@ -151,21 +136,31 @@ readvars = {
     "tl4": [str, int],
     "tl5": list
 }
+setvars = {
+	"b": -193.3288,
+	"tg4": {
+		"test-key 1": 1,
+		"test-key 2": {
+			"test-key 3": False,
+			"test-key 4": None
+		}
+	},
+	"tl6": [
+		"A", "B", ["U", "V"], (-101, -120)
+	]
+}
 
-try:
-    script = execdmscript.exec_dmscript(script1, script2, script3, readvars=readvars)
-    script()
-    for key in readvars.keys():
+with execdmscript.exec_dmscript(script1, script2, script3, 
+								readvars=readvars, setvars=setvars, 
+								debug=False, debug_file=None) as script:
+    for key in script.synchronized_vars.keys():
         print("Variable '", key, "'")
         pprint.pprint(script[key])
-except Exception as e:
-    print("Exception:", e)
-    raise e
 
-# wrapper = execdmscript.DMScriptWrapper(script1, script2, script3, readvars=readvars)
-
+# wrapper = execdmscript.DMScriptWrapper(script1, script2, script3, 
+# 										 readvars=readvars, setvars=setvars)
+#
 # exec_script = wrapper.getExecDMScriptCode()
-
+#
+# print("The following script is being executed:")
 # print(exec_script)
-# with open(os.path.join(os.path.dirname(__file__), "execdmscript.s"), "w+") as f:
-#     f.write(exec_script)

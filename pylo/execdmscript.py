@@ -1,3 +1,35 @@
+"""A python module to use inside Gatans Digital Micrograph. It offers to 
+exeucte dm-scripts directly or from files. In addition you can define variables
+that will passed to the dm-script and get the values of variables set in 
+the executed dm-script.
+
+You can add multiple files, files will be appended to one big file and then 
+executed in the same order. To debug those files use the `debug` option.
+
+Usage:
+```python
+>>> prefix = "\n".join((
+...     "string command = \"select-image\";",
+...     "number preselected_image = {};".format(show_image)
+... ))
+>>> # those values will be accessable if they are defined in the dm-script
+>>> rv = {"sel_img_start": "Integer",
+...         "sel_img_end": int,
+...         "options": str}
+>>> # those values will be accessable in dm-script (and later in python)
+>>> sv = {"a": 20}
+>>> with exec_dmscript(prefix, filepath, readvars=rv, setvars=sv) as script:
+...     for k in script.synchronized_vars:
+...         # show the variables value
+...         print("Variable {} has the value {}".format(k, script[k]))
+...         # script[k] is equal to script.synchronized_vars[k]
+```
+
+This uses the persistent tags to communicate from dm-script to python.
+
+Note that this is not thread-safe!
+"""
+
 import os
 import re
 import sys
@@ -22,6 +54,8 @@ except (ModuleNotFoundError, ImportError) as e:
     raise RuntimeError("This class can onle be used inside the Digital " + 
                     "Micrograph program by Gatan.")
     DM = None
+
+Convertable = typing.Union[int, float, bool, str, dict, list, tuple, None]
 
 _python_dm_type_map = ({
         "python": int,
@@ -49,8 +83,8 @@ _python_dm_type_map = ({
         "dmscript": "TagGroup",
         "names": ("TagGroup", "dict")
     }, {
-        "python": list,
-        "TagGroup": "TagList",
+        "python": (list, tuple),
+        "TagGroup": "TagGroup",
         "dmscript": "TagGroup",
         "names": ("TagList", "list")
     }
@@ -58,7 +92,9 @@ _python_dm_type_map = ({
 
 def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str, typing.Union[str, pathlib.PurePath]]], 
                   readvars: typing.Optional[dict]=None,
-                  debug: typing.Optional[bool]=False):
+                  setvars: typing.Optional[dict]=None,
+                  debug: typing.Optional[bool]=False,
+                  debug_file: typing.Optional[typing.Union[str, pathlib.PurePath]]=None):
     """Execute the `scripts` and prepare the `vars` for getting their values.
 
     The `scripts` can either be filenames of dm-script files to execute or 
@@ -102,12 +138,17 @@ def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str
     ...     "string command = \"select-image\";",
     ...     "number preselected_image = {};".format(show_image)
     ... ))
-    >>> vars = {"sel_img_start": "Integer",
+    >>> # those values will be accessable if they are defined in the dm-script
+    >>> rv = {"sel_img_start": "Integer",
     ...         "sel_img_end": int,
     ...         "options": str}
-    >>> with exec_dmscript(prefix, path, readvars=vars) as script:
-    ...     for i in range(script["sel_img_start"], script["sel_img_end"]):
-    ...         do_stuff(i, script["options"])
+    >>> # those values will be accessable in dm-script (and later in python)
+    >>> sv = {"a": 20}
+    >>> with exec_dmscript(prefix, filepath, readvars=rv, setvars=sv) as script:
+    ...     for k in script.synchronized_vars:
+    ...         # show the variables value
+    ...         print("Variable {} has the value {}".format(k, script[k]))
+    ...         # script[k] is equal to script.synchronized_vars[k]
 
     Parameters
     ----------
@@ -120,6 +161,18 @@ def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str
         execution) and to allow getting the value of, the key has to be the 
         name in dm-script, the value is the type, for defining `TagGroup` and 
         `TagList` structures use dicts and tuples or callbacks
+    setvars : dict, optional
+        The variables to set before the code is executed (note that they must 
+        not be declared), the key is the variable name, the value is the value,
+        the setvars will automatically be added to the `readvars` if there is
+        no conflict (setvars will not overwrite)
+    debug : boolean, optional
+        If True the dm-script will not be executed but written to the 
+        `debug_file`, this way errors in the dm-script can be debugged
+    debug_file : str or pathlib.PurePath, optional
+        The file to save the dm-script to, this will be overwritten if it 
+        exists, if not given the file is called "tmp-execdmscript.s" and will
+        be placed in the same directory as this file, default: None
 
     Returns
     -------
@@ -127,7 +180,8 @@ def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str
         The code to append to the dm-script code
     """
 
-    return DMScriptWrapper(*scripts, readvars=readvars, debug=debug)
+    return DMScriptWrapper(*scripts, readvars=readvars, setvars=setvars,
+                           debug=debug, debug_file=debug_file)
 
 def get_dm_type(datatype: typing.Union[str, type], 
                 for_taggroup: typing.Optional[bool]=False):
@@ -164,7 +218,8 @@ def get_dm_type(datatype: typing.Union[str, type],
     for type_def in _python_dm_type_map:
         names = list(map(lambda x: x.lower() if isinstance(x, str) else x, 
                          type_def["names"]))
-        if datatype in names or datatype == type_def["python"]:
+        if datatype in names or (isinstance(type_def["python"], (list, tuple)) and
+           datatype in type_def["python"]) or datatype == type_def["python"]:
             if for_taggroup:
                 return type_def["TagGroup"]
             else:
@@ -203,8 +258,12 @@ def get_python_type(datatype: typing.Union[str, type]):
     for type_def in _python_dm_type_map:
         names = list(map(lambda x: x.lower() if isinstance(x, str) else x, 
                          type_def["names"]))
-        if datatype in names or datatype == type_def["python"]:
-            return type_def["python"]
+        if datatype in names or (isinstance(type_def["python"], (list, tuple)) and
+           datatype in type_def["python"]) or datatype == type_def["python"]:
+            if isinstance(type_def["python"], (list, tuple)):
+                return type_def["python"][0]
+            else:
+                return type_def["python"]
     
     raise LookupError("Cannot find the python type for '{}'".format(datatype))
 
@@ -215,7 +274,9 @@ class DMScriptWrapper:
     def __init__(self,
                  *scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str, typing.Union[str, pathlib.PurePath]]], 
                  readvars: typing.Optional[dict]=None,
-                 debug: typing.Optional[bool]=False) -> None:
+                 setvars: typing.Optional[dict]=None,
+                 debug: typing.Optional[bool]=False,
+                 debug_file: typing.Optional[typing.Union[str, pathlib.PurePath]]=None) -> None:
         """Initialize the script wrapper.
 
         Parameters
@@ -225,21 +286,42 @@ class DMScriptWrapper:
             tuple with 'file' or 'script' at index 0 and the file path or the 
             script code at index 1
         readvars : dict, optional
-            The variables to read from the dm-script executed code (after the code
-            execution) and to allow getting the value of, the key has to be the 
-            name in dm-script, the value is the type, for defining `TagGroup` and 
-            `TagList` structures use dicts and tuples or callbacks
-        debug : bool, optional
-            Whether to use the debug mode (allow usage without 
-            DigitalMicrograph) or not
+            The variables to read from the dm-script executed code (after the 
+            code execution) and to allow getting the value of, the key has to 
+            be the name in dm-script, the value is the type, for defining 
+            `TagGroup` and `TagList` structures use dicts and tuples or 
+            callbacks
+        setvars : dict, optional
+            The variables to set before the code is executed (note that they 
+            must not be declared), the key is the variable name, the value is 
+            the value, the setvars will automatically be added to the 
+            `readvars` if there is no conflict (setvars will not overwrite)
+        debug : boolean, optional
+            If True the dm-script will not be executed but written to the 
+            `debug_file`, this way errors in the dm-script can be debugged
+        debug_file : str or pathlib.PurePath, optional
+            The file to save the dm-script to, this will be overwritten if it 
+            exists, if not given the file is called "tmp-execdmscript.s" and 
+            will be placed in the same directory as this file, default: None
         """
         self.scripts = DMScriptWrapper.normalizeScripts(scripts)
         self._creation_time_id = str(round(time.time() * 100))
         self.persistent_tag = "python-dm-communication-" + self._creation_time_id
         self.readvars = readvars
-        self.synchronized_readvars = {}
+        self.setvars = setvars
+        self.synchronized_vars = {}
         self.debug = bool(debug)
         self._slash_split_reg = re.compile("(?<!/)/(?!/)")
+
+        # add all setvars to the readvars to allow accessing them after the 
+        # script is executed
+        if isinstance(self.setvars, dict):
+            if not isinstance(self.readvars, dict):
+                self.readvars = {}
+            
+            for key, val in self.setvars.items():
+                if not key in self.readvars:
+                    self.readvars[key] = type(val)
     
     def __del__(self) -> None:
         """Desctruct the object."""
@@ -289,15 +371,15 @@ class DMScriptWrapper:
 
     def __iter__(self) -> typing.Iterator:
         """Get the iterator to iterate over the dm-script variables."""
-        return self.synchronized_readvars.__iter__
+        return self.synchronized_vars.__iter__
 
     def __len__(self) -> int:
         """Get the number of synchronized variables."""
-        return len(self.synchronized_readvars)
+        return len(self.synchronized_vars)
 
     def __contains__(self, var: typing.Any) -> bool:
         """Get whether the `var` is a synchronized dm-script variable."""
-        return var in self.synchronized_readvars
+        return var in self.synchronized_vars
     
     def exec(self) -> bool:
         """Execute the code.
@@ -326,7 +408,8 @@ class DMScriptWrapper:
             "// ",
             "// This code is generated with the exedmscript module."
             "",
-            ""
+            "",
+            self.getSetVarsDMCode()
         ]
         
         for kind, script in self.scripts:
@@ -348,6 +431,27 @@ class DMScriptWrapper:
                 ]
         
         dmscript.append(self.getSyncDMCode())
+        
+        return "\n".join(dmscript)
+    
+    def getSetVarsDMCode(self) -> str:
+        """Get the dm-script code for defining the `setvars`.
+
+        Returns
+        -------
+        str
+            The code to append to the dm-script code
+        """
+
+        if not isinstance(self.setvars, dict):
+            return ""
+
+        dmscript = [
+            "",
+            "// Setting variables from python values"
+        ]
+        for name, val in self.setvars.items():
+            dmscript.append(DMScriptWrapper.getDMCodeForVariable(name, val))
         
         return "\n".join(dmscript)
 
@@ -396,10 +500,9 @@ class DMScriptWrapper:
                     sync_code_tg_name, var_type, var_name
                 )
             else:
-                dm_type = get_dm_type(var_type, for_taggroup=True)
+                py_type = get_python_type(var_type)
 
-                if (dm_type in ("TagGroup", "TagList") or 
-                    var_type in (dict, list, tuple)):
+                if py_type in (dict, list, tuple):
                     # autoguess a TagGroup/TagList
                     if not linearize_functions_added:
                         linearize_functions_added = True
@@ -413,7 +516,8 @@ class DMScriptWrapper:
                     ))
                 else:
                     dmscript.append(sync_code_template.format(
-                        key=var_name, val=var_name, type=dm_type
+                        key=var_name, val=var_name, 
+                        type=get_dm_type(var_type, for_taggroup=True)
                     ))
         
         return "\n".join(dmscript)
@@ -508,9 +612,11 @@ class DMScriptWrapper:
                 )
 
                 if isinstance(var_type, dict):
-                    var_type = "TagGroup"
+                    tg_type = "TagGroup"
                 else:
-                    var_type = "TagList"
+                    tg_type = "TagList"
+                
+                var_type = tg_type
             else:
                 dms = "\n".join((
                     "{scripttype} {var}_{varkey}_{t}{r};",
@@ -518,6 +624,7 @@ class DMScriptWrapper:
                     "{tg}_index = {tg}_tg.TagGroupCreateNewLabeledTag(\"{destpath}\")",
                     "{tg}_tg.TagGroupSetIndexedTagAs{tgtype}({tg}_index, {var}_{varkey}_{t}{r});",
                 ))
+                tg_type = get_dm_type(var_type, for_taggroup=True)
 
             source_path = ":".join(map(
                 lambda x: "[{}]".format(x) if isinstance(x, int) else x,
@@ -538,7 +645,7 @@ class DMScriptWrapper:
             )).format(
                 tg=dm_tg_name, var=var_name, varkey=var_key,
                 scripttype=get_dm_type(var_type, for_taggroup=False),
-                tgtype=get_dm_type(var_type, for_taggroup=True),
+                tgtype=tg_type,
                 srcpath=source_path,
                 destpath=destination_path,
                 t=round(time.time() * 100),
@@ -552,20 +659,21 @@ class DMScriptWrapper:
     def _loadVariablesFromDMScript(self) -> None:
         """Load the variables from the persistent tags to dm-script."""
 
-        self.synchronized_readvars = {}
+        self.synchronized_vars = {}
+        
+        if not isinstance(self.readvars, dict):
+            return
         
         for var_name, var_type in self.readvars.items():
             path = self.persistent_tag + ":" + var_name
             
             var_type = self.readvars[var_name]
-            if isinstance(var_type, str):
-                dm_type = get_dm_type(var_type, for_taggroup=True)
+            if isinstance(var_type, (dict, list, tuple)):
+                py_type = type(var_type)
             else:
-                dm_type = None
+                py_type = get_python_type(var_type)
             
-            if (dm_type in ("TagGroup", "TagList") or 
-                isinstance(var_type, (dict, list, tuple)) or
-                var_type in (dict, list, tuple)):
+            if py_type in (dict, list, tuple):
                 value = None
 
                 # get the paths of all elements added to this group, recursive
@@ -577,18 +685,17 @@ class DMScriptWrapper:
                                     ))
 
                 if success:
-                    tg_keys = tg_keys.split(";")
-
+                    tg_keys = list(filter(lambda x: x != "", tg_keys.split(";")))
+                    
                     for tg_key in tg_keys:
-                        paths = self._slash_split_reg.split(tg_key)
+                        paths = list(filter(lambda x: x != "", 
+                                            self._slash_split_reg.split(tg_key)))
                         
                         for i, path in enumerate(paths):
                             # build the value structure
                             if i == 0:
                                 # set the variables values as the "base"
-                                if (dm_type == "TagGroup" or 
-                                    isinstance(var_type, dict) or
-                                    var_type == dict):
+                                if py_type == dict:
                                     cur_type = "TagGroup"
                                     if value is None:
                                         value = {}
@@ -627,12 +734,12 @@ class DMScriptWrapper:
                                             self.persistent_tag + 
                                             ":{{type}}" + str(cur_path)
                                         ))
-                            
+                                
                                 if cur_type == "TagGroup":
                                     # create a new dict and save it in 
                                     # the current key, then set the
                                     # reference to this new dict
-                                    if isinstance(value_ref[key], dict):
+                                    if not isinstance(value_ref[key], dict):
                                         value_ref[key] = {}
                                     value_ref = value_ref[key]
                                 elif cur_type == "TagList":
@@ -665,9 +772,27 @@ class DMScriptWrapper:
                 )
             
             if success:
-                self.synchronized_readvars[var_name] = value
+                self.synchronized_vars[var_name] = value
+        
+        self.freeAllSyncedVars()
 
     def _getParsedValueFromPersistentTags(self, path, var_type):
+        """Get the value at the `path` from the persistent tags.
+
+        Parameters
+        ----------
+        path : str
+            The path in the persistent tags
+        var_type : str or type
+            The type to get the value as
+        
+        Returns
+        -------
+        bool, any
+            A tuple with success at index 0 and the value (if existing) at 
+            index 1
+        """
+        
         dm_type = get_dm_type(var_type, for_taggroup=True)
         # UserTags are enough but they are not supported in python :(
         # do not save the persistent tags to a variable, this way they do 
@@ -702,10 +827,10 @@ class DMScriptWrapper:
             The variable value
         """
 
-        if var_name not in self.synchronized_readvars:
+        if var_name not in self.synchronized_vars:
             return None
         else:
-            return self.synchronized_readvars[var_name]
+            return self.synchronized_vars[var_name]
 
     def freeAllSyncedVars(self) -> None:
         """Delete all synchronization from the persistent tags.
@@ -722,6 +847,127 @@ class DMScriptWrapper:
                 "GetPersistentTagGroup()." + 
                 "TagGroupDeleteTagWithLabel(\"" + self.persistent_tag + "\");"
             )
+    
+    @staticmethod
+    def getDMCodeForVariable(name: str, value: Convertable):
+        """Create the dm-script code for defining and declaring a variable.
+
+        Parameters
+        ----------
+        name : str
+            The variable name, can only be digits and letters and must not 
+            start with a digit
+        value : int, float, str, boolean, dict, list, tuple or None
+            The value to set
+        
+        Returns
+        -------
+        str
+            The dm-code that defines this variable
+        """
+
+        dmscript = []
+        py_type = type(value)
+        dm_type = get_dm_type(py_type, for_taggroup=False)
+
+        if py_type in (dict, list, tuple):
+            dmscript += DMScriptWrapper._getTagGroupDMCodeForVariable(name, value)
+        else:
+            dmscript.append("{} {} = {};".format(dm_type, name, value))
+        
+        return "\n".join(dmscript)
+    
+    @staticmethod
+    def _getTagGroupDMCodeForVariable(name: str, 
+                                      value: Convertable, 
+                                      prefix: typing.Optional[str]="",
+                                      depth: typing.Optional[int]=0):
+        """Create the dm-script code for defining and declaring a `TagGroup` or
+        a `TagList`.
+
+        Parameters
+        ----------
+        name : str
+            The variable name, can only be digits and letters and must not 
+            start with a digit
+        value : dict, list, tuple
+            The dict, list or tuple to express as a `TagGroup` or `TagList`
+        
+        Returns
+        -------
+        str
+            The dm-code that defines this `TagGroup` or `TagList`
+        """
+        dmscript = []
+        py_type = type(value)
+        dm_type = get_dm_type(py_type, for_taggroup=False)
+
+        # prepare creator function
+        if py_type == dict:
+            creator = "NewTagGroup()"
+            iterator = value.items()
+        else:
+            creator = "NewTagList()"
+            iterator = enumerate(value)
+        
+        # set variable
+        dmscript.append("{} {} = {};".format(dm_type, prefix + name, creator))
+
+        index = None
+        if py_type == dict:
+            # declare the index for TagGroups
+            index = "__exec_dmscript_{}_index".format(name)
+            dmscript.append("number {};".format(index))
+
+        for i, (key, value) in enumerate(iterator):
+            if value is None:
+                # fix none type
+                value_py_type = None
+                value_dm_type = "Number"
+                value = 0
+            else:
+                # get the type of the variable to express
+                value_py_type = type(value)
+                value_dm_type = get_dm_type(value_py_type, for_taggroup=True)
+
+            if value_py_type == str:
+                # add quotes to str values
+                value = "\"{}\"".format(value)
+            elif value_py_type == bool:
+                value = int(value)
+            elif value_py_type in (dict, list, tuple):
+                # current value is a TagGroup or TagList, recursively create 
+                # the TagGroup or the TagList and then add it 
+                dmscript.append("")
+                # add a prefix to (hopefully) prevent name collision, note that
+                # this name gets recursively longer, the prefix is only added
+                # once
+                p = "__exec_dmscript_"
+                n = "{}_tg_{}_{}".format(name, i, depth + 1)
+                dmscript += DMScriptWrapper._getTagGroupDMCodeForVariable(
+                    n, value, p, depth + 1
+                )
+                # rewrite the value to the variable name of the TagGroup or 
+                # TagList that now exists
+                value = p + n
+
+            if py_type in (list, tuple):
+                # add the next index to the list
+                dmscript.append("{}.TagGroupInsertTagAs{}(infinity(), {});".format(
+                    prefix + name, value_dm_type, value
+                ))
+            else:
+                # add the labeled tag and the value
+                dmscript += [
+                    "{} = {}.TagGroupCreateNewLabeledTag(\"{}\");".format(
+                        index, prefix + name, key
+                    ),
+                    "{}.TagGroupSetIndexedTagAs{}({}, {});".format(
+                        prefix + name, value_dm_type, index, value
+                    )
+                ]
+    
+        return dmscript
     
     @staticmethod
     def _getLinearizeTagGroupFunctionsCode():
@@ -773,10 +1019,24 @@ class DMScriptWrapper:
                 if(type == 0){
                     // TagGroup
                     TagGroup value;
+            
+                    // save the available paths for the next function call
+                    if(!linearized.TagGroupDoesTagExist("{{available-paths}}" + var_name)){
+                        number ind = linearized.TagGroupCreateNewLabeledTag("{{available-paths}}" + var_name);
+                        linearized.TagGroupSetIndexedTagAsString(ind, available_paths);
+                    }
+                    else{
+                        linearized.TagGroupSetTagAsString("{{available-paths}}" + var_name, available_paths);
+                    }
                     
                     tg.TagGroupGetIndexedTagAsTagGroup(i, value);
                     __exec_dmscript_linearizeTags(linearized, value, var_name, p);
-                    
+
+                    // there may have been added some paths
+                    if(linearized.TagGroupDoesTagExist("{{available-paths}}" + var_name)){
+                        linearized.TagGroupGetTagAsString("{{available-paths}}" + var_name, available_paths);
+                    }
+                            
                     if(value.TagGroupIsList()){
                         type_name = "TagList";
                     }
@@ -836,7 +1096,7 @@ class DMScriptWrapper:
                     linearized.TagGroupSetIndexedTagAsDouble(index, value);
                     type_name = "Double";
                 }
-                else if(type == 7){
+                else if(type == 8){
                     // tag is a boolean
                     number value
 
