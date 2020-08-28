@@ -112,12 +112,13 @@ TagGroup tl2 = newTagList();
 """
 
 parent = os.path.expanduser("~")
-fs = os.listdir(parent)
-for e in fs:
+home_dirs = []
+for e in os.listdir(parent):
     if os.path.isdir(os.path.join(parent, e)):
         script3 += "tl2.TagGroupInsertTagAsString(infinity(), \"{}\");\n".format(
             str(e).replace("\\", "\\\\").replace("\"", "\\\"")
         )
+        home_dirs.append(e)
 
 script3 += """
 index = tg3.TagGroupCreateNewLabeledTag("files");
@@ -144,7 +145,7 @@ readvars = {
     "tg3": {
         "a": "float",
         "b": float,
-        "files": [str] * len(fs)
+        "files": [str] * len(home_dirs)
     },
     "tl3": "TagList",
     "tl4": [str, int],

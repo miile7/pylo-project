@@ -7,7 +7,6 @@ import types
 import random
 import typing
 import pathlib
-import tempfile
 
 try:
     test_error = ModuleNotFoundError()
@@ -17,14 +16,11 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
-_debug_mode = False
-
 try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
-    if not _debug_mode:
-        raise RuntimeError("This class can onle be used inside the Digital " + 
-                        "Micrograph program by Gatan.")
+    raise RuntimeError("This class can onle be used inside the Digital " + 
+                    "Micrograph program by Gatan.")
     DM = None
 
 _python_dm_type_map = ({
@@ -61,7 +57,8 @@ _python_dm_type_map = ({
 )
 
 def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str, typing.Union[str, pathlib.PurePath]]], 
-                  readvars: typing.Optional[dict]=None):
+                  readvars: typing.Optional[dict]=None,
+                  debug: typing.Optional[bool]=False):
     """Execute the `scripts` and prepare the `vars` for getting their values.
 
     The `scripts` can either be filenames of dm-script files to execute or 
@@ -129,9 +126,8 @@ def exec_dmscript(*scripts: typing.Union[str, pathlib.PurePath, typing.Tuple[str
     str
         The code to append to the dm-script code
     """
-    global _debug_mode
 
-    return DMScriptWrapper(*scripts, readvars=readvars, debug=_debug_mode)
+    return DMScriptWrapper(*scripts, readvars=readvars, debug=debug)
 
 def get_dm_type(datatype: typing.Union[str, type], 
                 for_taggroup: typing.Optional[bool]=False):
@@ -261,11 +257,12 @@ class DMScriptWrapper:
         dmscript = self.getExecDMScriptCode()
         
         if self.debug:
-            f, path = tempfile.mkstemp(text=True)
-            f.write(dmscript)
-            f.close()
-            print("execdmscript: Did not execute script but saved to {} " + 
-                  "because file is running in debug mode.".format(path))
+            path = os.path.join(os.path.dirname(__file__), "tmp-execdmscript.s")
+            with open(path, "w+") as f:
+                f.write(dmscript)
+                f.close()
+                print(("execdmscript: Did not execute script but saved to {} " + 
+                      "because file is running in debug mode.").format(path))
             return True
         else:
             DM.ExecuteScriptString(dmscript)
@@ -401,7 +398,8 @@ class DMScriptWrapper:
             else:
                 dm_type = get_dm_type(var_type, for_taggroup=True)
 
-                if dm_type == "TagGroup" or dm_type == "TagList":
+                if (dm_type in ("TagGroup", "TagList") or 
+                    var_type in (dict, list, tuple)):
                     # autoguess a TagGroup/TagList
                     if not linearize_functions_added:
                         linearize_functions_added = True
@@ -566,7 +564,8 @@ class DMScriptWrapper:
                 dm_type = None
             
             if (dm_type in ("TagGroup", "TagList") or 
-                isinstance(var_type, (dict, list, tuple))):
+                isinstance(var_type, (dict, list, tuple)) or
+                var_type in (dict, list, tuple)):
                 value = None
 
                 # get the paths of all elements added to this group, recursive
@@ -588,7 +587,8 @@ class DMScriptWrapper:
                             if i == 0:
                                 # set the variables values as the "base"
                                 if (dm_type == "TagGroup" or 
-                                    isinstance(var_type, dict)):
+                                    isinstance(var_type, dict) or
+                                    var_type == dict):
                                     cur_type = "TagGroup"
                                     if value is None:
                                         value = {}
@@ -681,7 +681,7 @@ class DMScriptWrapper:
         elif dm_type == "String":
             success, value = DM.GetPersistentTagGroup().GetTagAsString(path)
         else:
-            ValueError("The datatype '{}' is not supported".format(var_type))
+            raise ValueError("The datatype '{}' is not supported".format(var_type))
         
         return success, value
 
