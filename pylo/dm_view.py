@@ -52,6 +52,22 @@ class DMView(AbstractView):
 
         self._rel_path = os.path.dirname(__file__)
 
+    def showHint(self, hint : str) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        """
+        with exec_dmscript("showAlert(msg, 1);", setvars={"msg": hint}):
+            pass
+
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
         """Show the user a hint.
 
@@ -68,11 +84,29 @@ class DMView(AbstractView):
             A text that helps the user to interpret and avoid this error,
             default: None
         """
-        print("Error:", error)
+        msg = ""
+        if isinstance(error, Exception):
+            try:
+                msg = type(error).__name__
+            except:
+                pass
+        
+        if msg == "":
+            msg = "Error"
+            
+        msg += ": " + str(error)
+
+        print(msg)
+        print("  Fix:", how_to_fix)
+
         if isinstance(error, Exception):
             traceback.print_exc()
-        print("  Fix:", how_to_fix)
-        # script = "showAlert(\"{}\", 0);".format(msg)
+
+        if isinstance(how_to_fix, str) and how_to_fix != "":
+            msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
+
+        with exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
+            pass
     
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
