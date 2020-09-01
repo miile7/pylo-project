@@ -189,7 +189,8 @@ class CLIView(AbstractView):
         errors = []
 
         start, start_errors = self.parseStart(
-            controller.microscope.supported_measurement_variables, start, True
+            controller.microscope.supported_measurement_variables, start, 
+            add_defaults=True, parse=False, uncalibrate=True
         )
         for id_ in start:
             v = controller.microscope.getMeasurementVariableById(id_)
@@ -264,11 +265,12 @@ class CLIView(AbstractView):
         # recalculate to uncalibrated values, do another validation because the
         # iteration is there anyway
         start, _ = self.parseStart(
-            controller.microscope.supported_measurement_variables, start, True
+            controller.microscope.supported_measurement_variables, start,
+            add_defaults=True, parse=False, uncalibrate=True
         )
         series, _ = self.parseSeries(
             controller.microscope.supported_measurement_variables, series, 
-            True
+            add_defaults=True, parse=False, uncalibrate=True
         )
 
         if command == True:
@@ -305,7 +307,7 @@ class CLIView(AbstractView):
         series_inputs = []
         series, errors = self.parseSeries(
             controller.microscope.supported_measurement_variables, series, 
-            True
+            add_defaults=True, parse=False, uncalibrate=True
         )
         if series is None:
             return series_inputs, errors

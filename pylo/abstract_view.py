@@ -261,7 +261,9 @@ class AbstractView:
     
     def parseStart(self, measurement_variables: typing.Union[list, dict], 
                    start: typing.Union[dict, None], 
-                   add_defaults: typing.Optional[bool]=True) -> typing.Tuple[typing.Union[dict, None], list]:
+                   add_defaults: typing.Optional[bool]=True,
+                   parse: typing.Optional[bool]=False,
+                   uncalibrate: typing.Optional[bool]=False) -> typing.Tuple[typing.Union[dict, None], list]:
         """Parse the `start`.
 
         Convert all the values for the start setup to uncalibrated values. If 
@@ -280,6 +282,13 @@ class AbstractView:
         add_defaults : bool, optional
             Whether to try adding default values until the series is valid 
             (True) or to return None when the series is invalid (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
         
         Returns
         -------
@@ -295,35 +304,48 @@ class AbstractView:
             measurement_variables = m_vars
 
         errors = []
-        for v in measurement_variables.items():
+        for v, var in measurement_variables.items():
             if not isinstance(start, dict):
                 if not add_defaults:
                     return None, errors
                 else:
                     start = {}
+
             if not v.unique_id in start:
                 if not add_defaults:
                     return None, errors
                 else:
                     start[v.unique_id] = min(max(0, v.min_value), v.max_value)
-            elif start[v.unique_id] > v.max_value:
-                errors.append(("The start value '{}' for '{}' is gerater " + 
-                               "than the maximum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.max_value
-                               ))
-                start[v.unique_id] = v.max_value
-            elif start[v.unique_id] < v.min_value:
-                errors.append(("The start value '{}' for '{}' is less " + 
-                               "than the minimum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.min_value
-                               ))
-                start[v.unique_id] = v.min_value
+            else:
+                if (parse and var.format != None and 
+                    hasattr(var.format, "parse") and callable(var.format.parse)):
+                    start[v.unique_id] = var.format.parse(start[v.unique_id])
+                
+                if uncalibrate:
+                    start[v.unique_id] = var.ensureUncalibratedValue(
+                        start[v.unique_id]
+                    )
+                
+                if start[v.unique_id] > v.max_value:
+                    errors.append(("The start value '{}' for '{}' is gerater " + 
+                                "than the maximum value {}.").format(
+                                    v.unique_id, start[v.unique_id], v.max_value
+                                ))
+                    start[v.unique_id] = v.max_value
+                elif start[v.unique_id] < v.min_value:
+                    errors.append(("The start value '{}' for '{}' is less " + 
+                                "than the minimum value {}.").format(
+                                    v.unique_id, start[v.unique_id], v.min_value
+                                ))
+                    start[v.unique_id] = v.min_value
         
         return start, errors
     
     def parseSeries(self, measurement_variables: typing.Union[list, dict], 
                     series: typing.Union[dict, None], 
                     add_defaults: typing.Optional[bool]=True, 
+                    parse: typing.Optional[bool]=False,
+                    uncalibrate: typing.Optional[bool]=False,
                     path: typing.Optional[list]=[]) -> typing.Tuple[typing.Union[dict, None], typing.List[str]]:
         """Recursively parse the `series`.
 
@@ -344,6 +366,13 @@ class AbstractView:
         add_defaults : bool, optional
             Whether to try adding default values until the series is valid 
             (True) or to return None when the series is invalid (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
         path : list, optional
             The parent 'variable' ids if the `series` is the series in the 
             'on-each-point' index of the parent
@@ -417,18 +446,26 @@ class AbstractView:
                 series[k] = d
                 # errors.append(("The series{} '{}' key is not " + 
                 #                "defined.").format(path_str, k))
-            elif (k == "start" or k == "end") and series[k] < var.min_value:
-                series[k] = var.min_value
-                errors.append(("The series{} '{}' key is less than the " + 
-                               "minimum value of {}.").format(
-                                   path_str, k, var.min_value
-                             ))
-            elif (k == "start" or k == "end") and series[k] > var.max_value:
-                series[k] = var.max_value
-                errors.append(("The series{} '{}' key is greater than the " + 
-                               "maximum value of {}.").format(
-                                   path_str, k, var.max_value
-                             ))
+            else:
+                if (parse and var.format != None and 
+                    hasattr(var.format, "parse") and callable(var.format.parse)):
+                    series[k] = var.format.parse(series[k])
+                
+                if uncalibrate:
+                    series[k] = var.ensureUncalibratedValue(series[k])
+                
+                if (k == "start" or k == "end") and series[k] < var.min_value:
+                    series[k] = var.min_value
+                    errors.append(("The series{} '{}' key is less than the " + 
+                                "minimum value of {}.").format(
+                                    path_str, k, var.min_value
+                                ))
+                elif (k == "start" or k == "end") and series[k] > var.max_value:
+                    series[k] = var.max_value
+                    errors.append(("The series{} '{}' key is greater than the " + 
+                                "maximum value of {}.").format(
+                                    path_str, k, var.max_value
+                                ))
 
         if "on-each-point" in series:
             if not isinstance(series["on-each-point"], dict):
@@ -457,17 +494,12 @@ class AbstractView:
                 # the series["on-each-point"] is invalid
                 on_each_point_series, on_each_point_errors = self.parseSeries(
                     measurement_variables, series["on-each-point"], add_defaults, 
-                    path + [series["variable"]]
+                    path + [series["variable"]], parse, uncalibrate
                 )
                 series["on-each-point"] = on_each_point_series
                 errors += on_each_point_errors
             
             if series["on-each-point"] is None:
                 del series["on-each-point"]
-
-        # convert to uncalibrated values
-        series["start"] = var.ensureUncalibratedValue(series["start"])
-        series["step-width"] = var.ensureUncalibratedValue(series["step-width"])
-        series["end"] = var.ensureUncalibratedValue(series["end"])
         
         return series, errors
