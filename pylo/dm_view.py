@@ -52,6 +52,22 @@ class DMView(AbstractView):
 
         self._rel_path = os.path.dirname(__file__)
 
+    def showHint(self, hint : str) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        """
+        with exec_dmscript("showAlert(msg, 1);", setvars={"msg": hint}):
+            pass
+
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
         """Show the user a hint.
 
