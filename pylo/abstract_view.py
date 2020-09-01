@@ -297,6 +297,7 @@ class AbstractView:
             occurred and the list of errors
         """
 
+        # for keeping the same parameter datatypes, dict is not necessary here
         if not isinstance(measurement_variables, dict):
             m_vars = {}
             for var in measurement_variables:
@@ -304,25 +305,26 @@ class AbstractView:
             measurement_variables = m_vars
 
         errors = []
-        for v, var in measurement_variables.items():
+        for v in measurement_variables.values():
             if not isinstance(start, dict):
                 if not add_defaults:
                     return None, errors
                 else:
                     start = {}
+            
+            if (v.unique_id in start and parse and v.format != None and 
+                callable(v.format)):
+                start[v.unique_id] = v.format(start[v.unique_id])
 
-            if not v.unique_id in start:
+            if (not v.unique_id in start or 
+                not isinstance(start[v.unique_id], (int, float))):
                 if not add_defaults:
                     return None, errors
                 else:
                     start[v.unique_id] = min(max(0, v.min_value), v.max_value)
             else:
-                if (parse and var.format != None and 
-                    hasattr(var.format, "parse") and callable(var.format.parse)):
-                    start[v.unique_id] = var.format.parse(start[v.unique_id])
-                
                 if uncalibrate:
-                    start[v.unique_id] = var.ensureUncalibratedValue(
+                    start[v.unique_id] = v.ensureUncalibratedValue(
                         start[v.unique_id]
                     )
                 
@@ -439,18 +441,18 @@ class AbstractView:
         }
 
         for k, d in keys.items():
+            if (k in series and parse and var.format != None and 
+                callable(var.format)):
+                series[k] = var.format(series[k])
+            
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:
-                    return None
+                    return None, errors
                 
                 series[k] = d
                 # errors.append(("The series{} '{}' key is not " + 
                 #                "defined.").format(path_str, k))
             else:
-                if (parse and var.format != None and 
-                    hasattr(var.format, "parse") and callable(var.format.parse)):
-                    series[k] = var.format.parse(series[k])
-                
                 if uncalibrate:
                     series[k] = var.ensureUncalibratedValue(series[k])
                 

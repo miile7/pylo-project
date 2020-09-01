@@ -81,6 +81,8 @@ class DMView(AbstractView):
         ------
         StopProgram
             When the user clicks the cancel button.
+        RuntimeError
+            When the dialog returns unparsable values
         
         Parameters:
         -----------
@@ -104,6 +106,17 @@ class DMView(AbstractView):
             0b10 | 0b01
         )
 
+        if start is None or series is None:
+            if start is None and series is None:
+                raise RuntimeError("Neither the start nor the series could " + 
+                                   "be created from the dialogs values.")
+            elif start is None:
+                raise RuntimeError("The start could not be created from " + 
+                                   "the dialogs values.")
+            else:
+                raise RuntimeError("The series could not be created from " + 
+                                   "the dialogs values.")
+
         return start, series
     
     def showSettings(self, configuration: "AbstractConfiguration", 
@@ -123,6 +136,8 @@ class DMView(AbstractView):
         ------
         StopProgram
             When the user clicks the cancel button.
+        RuntimeError
+            When the dialog returns unparsable values
         
         Parameters
         ----------
@@ -148,29 +163,14 @@ class DMView(AbstractView):
             0b01
         )
 
+        if config is None:
+            raise RuntimeError("Could not create the configuration from " + 
+                               "the dialogs values.")
+
         return config
     
-    def _escapeCodeString(self, string: str) -> str:
-        """Escape all characters that make problems when they are in a
-        dm-script string.
-
-        Parameters
-        ----------
-        string : str
-            The string to escape
-        
-        Returns
-        -------
-        str
-            The escaped string
-        """
-        return (str(string)
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\t", "\\t"))
-    
-    def _showDialog(self, measurement_variables: typing.Optional[list]=None, 
+    def _showDialog(self, 
+                    measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
@@ -198,15 +198,21 @@ class DMView(AbstractView):
             dialog_startup = "configuration"
         else:
             dialog_startup = "series"
+        
+        if isinstance(measurement_variables, list):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
 
         m_vars = []
         
         # add all measurement variables if there are some
-        if isinstance(measurement_variables, list):
+        if isinstance(measurement_variables, dict):
             var_keys = ("unique_id", "name", "unit", "min_value", "max_value",
                         "start", "end", "step")
             num_keys = ("start", "step", "end", "min_value", "max_value")
-            for var in measurement_variables:
+            for var in measurement_variables.values():
                 m_var = {}
 
                 for name in var_keys:
@@ -272,16 +278,12 @@ class DMView(AbstractView):
                         val = var_type.format(val)
                     
                     try:
-                        default_value = self._escapeCodeString(
-                            configuration.getDefault(group, key)
-                        )
+                        default_value = configuration.getDefault(group, key)
                     except KeyError:
                         default_value = ""
                     
                     try:
-                        description = self._escapeCodeString(
-                            configuration.getDescription(group, key)
-                        )
+                        description = configuration.getDescription(group, key)
                     except KeyError:
                         description = ""
                     
@@ -312,15 +314,29 @@ class DMView(AbstractView):
             except KeyError:
                 success = False
 
-            try:
-                start = script["start"]
-            except KeyError:
-                start = None
+            if isinstance(measurement_variables, dict):
+                try:
+                    start = script["start"]
+                except KeyError:
+                    start = None
+                
+                if start is not None:
+                    start, errors = self.parseStart(
+                        measurement_variables, start, add_defaults=False,
+                        parse=True, uncalibrate=True
+                    )
 
-            try:
-                series = script["series"]
-            except KeyError:
-                series = None
+            if isinstance(measurement_variables, dict):
+                try:
+                    series = script["series"]
+                except KeyError:
+                    series = None
+                
+                if series is not None:
+                    series, errors = self.parseSeries(
+                        measurement_variables, series, add_defaults=False,
+                        parse=True, uncalibrate=True
+                    )
 
             try:
                 config = script["configuration"]
@@ -332,3 +348,4 @@ class DMView(AbstractView):
             return start, series, config
         else:
             raise StopProgram
+        
