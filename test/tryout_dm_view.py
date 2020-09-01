@@ -57,52 +57,81 @@ print("Initializing python environment...");
 
 import pprint
 import importlib
+import traceback
 
-import pylo
-import pylo.microscopes
-import pylo.cameras
+try:
+	import pylo
+	import pylo.microscopes
+	import pylo.cameras
 
-print("Preparing...");
+	print("Preparing...");
 
-pylo.OFFLINE_MODE = True
+	pylo.OFFLINE_MODE = True
 
-pylo = importlib.reload(pylo)
-pylo.microscopes = importlib.reload(pylo.microscopes)
-pylo.cameras = importlib.reload(pylo.cameras)
+	pylo = importlib.reload(pylo)
+	pylo.microscopes = importlib.reload(pylo.microscopes)
+	pylo.cameras = importlib.reload(pylo.cameras)
 
-view = pylo.DMView()
-configuration = pylo.IniConfiguration()
+	view = pylo.DMView()
+	configuration = pylo.IniConfiguration()
 
-# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
-# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
-# configuration.setValue("setup", "camera-class", "PyJEMCamera")
+	# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
+	# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
+	# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
+	# configuration.setValue("setup", "camera-class", "PyJEMCamera")
 
-configuration.setValue("pyjem-camera", "detector-name", "camera")
-configuration.setValue("pyjem-camera", "image-size", 1024)
+	configuration.setValue("pyjem-camera", "detector-name", "camera")
+	configuration.setValue("pyjem-camera", "image-size", 1024)
 
-controller = pylo.Controller(view, configuration)
+	controller = pylo.Controller(view, configuration)
 
-pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
-pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
+	pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
+	pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
 
-controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
-controller.camera = pylo.cameras.PyJEMCamera(controller)
+	controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
+	controller.camera = pylo.cameras.PyJEMCamera(controller)
 
-print("")
-print("= " * 40)
-print("")
-print("Showing an error:")
-view.showError("Test error", "Test fix")
+	tests = [
+		# "error",
+		# "hint",
+		# "create-measurement",
+		"ask-for"
+	]
 
-print("")
-print("= " * 40)
-print("")
-print("Showing a hint:")
-view.showHint("Test hint")
+	if "error" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing an error:")
+		view.showError("Test error", "Test fix")
 
-print("")
-print("= " * 40)
-print("")
-print("Showing create Measurement")
-pprint.pprint(view.showCreateMeasurement(controller))
+	if "hint" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing a hint:")
+		view.showHint("Test hint")
+
+	if "create-measurement" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing create Measurement")
+		pprint.pprint(view.showCreateMeasurement(controller))
+
+	if "ask-for" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Asking for values")
+		inputs = (
+			{"name": "Askval1", "datatype": str, "description": "Type in a str"},
+			{"name": "Askval2", "datatype": int, "description": "Type in an int"},
+			{"name": "Askval3", "datatype": float, "description": "Type in a float"}
+		)
+		pprint.pprint(view.askFor(*inputs))
+
+except Exception as e:
+	print("Exception: ", e)
+	traceback.print_exc()
+	raise e
