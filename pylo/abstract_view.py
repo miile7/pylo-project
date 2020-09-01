@@ -259,7 +259,7 @@ class AbstractView:
         
         return input_dict
     
-    def parseStart(self, controller: "Controller", 
+    def parseStart(self, measurement_variables: typing.Union[list, dict], 
                    start: typing.Union[dict, None], 
                    add_defaults: typing.Optional[bool]=True) -> typing.Tuple[typing.Union[dict, None], list]:
         """Parse the `start`.
@@ -270,8 +270,10 @@ class AbstractView:
 
         Parameters
         ----------
-        controller : Controller
-            The controller
+        measurement_variables : list or dict
+            All the supported measurement variables, either as a list or as a
+            dict where the key is the unique_id and the value is the 
+            `MeasurementVariable` object
         series : dict
             The series dict with the "variable", "start", "step-width", "end" 
             and optionally the "on-each-point" keys
@@ -286,8 +288,14 @@ class AbstractView:
             occurred and the list of errors
         """
 
+        if not isinstance(measurement_variables, dict):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
+
         errors = []
-        for v in controller.microscope.supported_measurement_variables:
+        for v in measurement_variables.items():
             if not isinstance(start, dict):
                 if not add_defaults:
                     return None, errors
@@ -313,7 +321,7 @@ class AbstractView:
         
         return start, errors
     
-    def parseSeries(self, controller: "Controller", 
+    def parseSeries(self, measurement_variables: typing.Union[list, dict], 
                     series: typing.Union[dict, None], 
                     add_defaults: typing.Optional[bool]=True, 
                     path: typing.Optional[list]=[]) -> typing.Tuple[typing.Union[dict, None], typing.List[str]]:
@@ -326,8 +334,10 @@ class AbstractView:
 
         Parameters
         ----------
-        controller : Controller
-            The controller
+        measurement_variables : list or dict
+            All the supported measurement variables, either as a list or as a
+            dict where the key is the unique_id and the value is the 
+            `MeasurementVariable` object
         series : dict
             The series dict with the "variable", "start", "step-width", "end" 
             and optionally the "on-each-point" keys
@@ -347,6 +357,12 @@ class AbstractView:
             The list of error messages
         """
 
+        if not isinstance(measurement_variables, dict):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
+
         if isinstance(path, (list, tuple)):
             path_str = "".join([" in 'on-each-step' of {}".format(p) 
                                 for p in path])
@@ -360,8 +376,7 @@ class AbstractView:
             series = {}
         
         if not "variable" in series or series["variable"] in path:
-            ids = [v.unique_id for v in 
-                   controller.microscope.supported_measurement_variables]
+            ids = list(measurement_variables.keys())
             ids = list(filter(lambda i: i not in path, ids))
 
             if len(ids) == 0:
@@ -381,9 +396,12 @@ class AbstractView:
             else:
                 series["variable"] = ids[0]
         
-        var = controller.microscope.getMeasurementVariableById(
-            series["variable"]
-        )
+        try:
+            var = measurement_variables[series["variable"]]
+        except KeyError as e:
+            msg = ("The measurement variable '{}' does not " + 
+                   "exist.").format(series["variable"])
+            raise KeyError(msg) from e
 
         keys = {
             "start": var.min_value,
@@ -438,7 +456,7 @@ class AbstractView:
                 # note that this can return None too, if add_defaults=False and
                 # the series["on-each-point"] is invalid
                 on_each_point_series, on_each_point_errors = self.parseSeries(
-                    controller, series["on-each-point"], add_defaults, 
+                    measurement_variables, series["on-each-point"], add_defaults, 
                     path + [series["variable"]]
                 )
                 series["on-each-point"] = on_each_point_series
