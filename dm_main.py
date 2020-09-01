@@ -1,5 +1,7 @@
 import DigitalMicrograph as DM
 
+print("Initializing DigitalMicrograph environmnet...");
+
 # the name of the tag is used, this is deleted so it shouldn't matter anyway
 file_tag_name = "__python__file__"
 # the dm-script to execute, double curly brackets are used because of the 
@@ -51,11 +53,17 @@ if __file__ != "":
 	if base_path not in sys.path:
 		sys.path.insert(0, base_path)
 
+print("Initializing python environment...");
+
 import importlib
 
 import pylo
 import pylo.microscopes
 import pylo.cameras
+
+print("Preparing...");
+
+pylo.OFFLINE_MODE = True
 
 pylo = importlib.reload(pylo)
 pylo.microscopes = importlib.reload(pylo.microscopes)
@@ -80,6 +88,8 @@ pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
 controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
 controller.camera = pylo.cameras.PyJEMCamera(controller)
 
+print("Done.");
+print("Starting.");
 controller.startProgramLoop()
 
 # pylo.execute()
