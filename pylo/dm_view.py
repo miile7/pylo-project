@@ -1,5 +1,7 @@
 import os
+import sys
 import typing
+import traceback
 
 try:
     test_error = ModuleNotFoundError()
@@ -12,8 +14,7 @@ except NameError:
 try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
-    raise RuntimeError("This class can onle be used inside Digital Micrograph.")
-    # pass
+    DM = None
 
 from .datatype import Datatype
 from .stop_program import StopProgram
@@ -21,14 +22,57 @@ from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
 from .pylolib import get_datatype_name
-from .pylodmlib import executeDMScript
+
+if DM is not None:
+    # for development only, execdmscript is another module that is developed
+    # separately
+    try:
+        import dev_constants
+
+        if hasattr(dev_constants, "execdmscript_path"):
+            if not dev_constants.execdmscript_path in sys.path:
+                sys.path.insert(0, dev_constants.execdmscript_path)
+            
+            from execdmscript import exec_dmscript
+    except:
+        from .execdmscript import exec_dmscript
+else:
+    def exec_dmscript(*args, **kwargs):
+        raise RuntimeError("This execdmscript can only be imported inside " + 
+                           "the Digital Micrograph program by Gatan.")
 
 class DMView(AbstractView):
     def __init__(self) -> None:
         """Get the view object."""
+        if DM == None:
+            raise RuntimeError("This class can only be used inside the " + 
+                               "Digital Micrograph program by Gatan.")
+            
         super().__init__()
 
         self._rel_path = os.path.dirname(__file__)
+
+    def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
+        """Show the user a hint.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        hint : str
+            The text to show
+        how_to_fix : str, optional
+            A text that helps the user to interpret and avoid this error,
+            default: None
+        """
+        print("Error:", error)
+        if isinstance(error, Exception):
+            traceback.print_exc()
+        print("  Fix:", how_to_fix)
+        # script = "showAlert(\"{}\", 0);".format(msg)
     
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -37,6 +81,8 @@ class DMView(AbstractView):
         ------
         StopProgram
             When the user clicks the cancel button.
+        RuntimeError
+            When the dialog returns unparsable values
         
         Parameters:
         -----------
@@ -60,6 +106,17 @@ class DMView(AbstractView):
             0b10 | 0b01
         )
 
+        if start is None or series is None:
+            if start is None and series is None:
+                raise RuntimeError("Neither the start nor the series could " + 
+                                   "be created from the dialogs values.")
+            elif start is None:
+                raise RuntimeError("The start could not be created from " + 
+                                   "the dialogs values.")
+            else:
+                raise RuntimeError("The series could not be created from " + 
+                                   "the dialogs values.")
+
         return start, series
     
     def showSettings(self, configuration: "AbstractConfiguration", 
@@ -79,6 +136,8 @@ class DMView(AbstractView):
         ------
         StopProgram
             When the user clicks the cancel button.
+        RuntimeError
+            When the dialog returns unparsable values
         
         Parameters
         ----------
@@ -104,29 +163,14 @@ class DMView(AbstractView):
             0b01
         )
 
+        if config is None:
+            raise RuntimeError("Could not create the configuration from " + 
+                               "the dialogs values.")
+
         return config
     
-    def _escapeCodeString(self, string: str) -> str:
-        """Escape all characters that make problems when they are in a
-        dm-script string.
-
-        Parameters
-        ----------
-        string : str
-            The string to escape
-        
-        Returns
-        -------
-        str
-            The escaped string
-        """
-        return (str(string)
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\t", "\\t"))
-    
-    def _showDialog(self, measurement_variables: typing.Optional[list]=None, 
+    def _showDialog(self, 
+                    measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
@@ -142,33 +186,34 @@ class DMView(AbstractView):
         """
 
         path = os.path.join(self._rel_path, "dm_view_dialog.s")
-        sync_vars = {"start": "TagGroup", "series": "TagGroup", 
-                     "configuration": "TagGroup", "success": "Number"}
+        sync_vars = {"start": dict, 
+                     "series": dict, 
+                     "configuration": dict, 
+                     "success": bool}
         libs = (os.path.join(self._rel_path, "pylolib.s"), )
 
         if (dialog_type & 0b01) > 0 and (dialog_type & 0b10) > 0:
-            dialog_str_type = ""
+            dialog_startup = ""
         elif (dialog_type & 0b01) > 0:
-            dialog_str_type = "configuration"
+            dialog_startup = "configuration"
         else:
-            dialog_str_type = "series"
+            dialog_startup = "series"
+        
+        if isinstance(measurement_variables, list):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
 
-        script_prefix = [
-            "TagGroup m_vars = NewTagList();", 
-            "TagGroup config_vars = NewTagGroup();", 
-            "TagGroup tg;", 
-            "TagGroup tg2;", 
-            "number index;",
-            "string dialog_startup = \"{}\";".format(dialog_str_type)
-        ]
+        m_vars = []
         
         # add all measurement variables if there are some
-        if isinstance(measurement_variables, list):
+        if isinstance(measurement_variables, dict):
             var_keys = ("unique_id", "name", "unit", "min_value", "max_value",
                         "start", "end", "step")
             num_keys = ("start", "step", "end", "min_value", "max_value")
-            for var in measurement_variables:
-                script_prefix.append("tg = NewTagGroup();")
+            for var in measurement_variables.values():
+                m_var = {}
 
                 for name in var_keys:
                     if name == "start":
@@ -194,112 +239,68 @@ class DMView(AbstractView):
                     
                     if val == None:
                         val = ""
+                    elif not isinstance(val, (bool, str, float, int)):
+                        val = str(val)
+                    
+                    m_var[name] = val
 
                     if name in num_keys and val != "":
-                        script_prefix += [
-                            "index = tg.TagGroupCreateNewLabeledTag(\"{}\");".format(
-                                self._escapeCodeString(name)
-                            ),
-                            "tg.TagGroupSetIndexedTagAsNumber(index, {});".format(
-                                self._escapeCodeString(val)
-                            )
-                        ]
-
                         if (var.format != None and var.format != str and 
                             hasattr(var.format, "format") and 
                             callable(var.format.format)):
-                            formatted_val = self._escapeCodeString(
+                            m_var["formatted_{}".format(name)] = (
                                 var.format.format(val)
                             )
-                            script_prefix += [
-                                "index = tg.TagGroupCreateNewLabeledTag(\"formatted_{}\");".format(name),
-                                "tg.TagGroupSetIndexedTagAsString(index, \"{}\");".format(formatted_val)
-                            ]
-                    else:
-                        script_prefix += [
-                            "index = tg.TagGroupCreateNewLabeledTag(\"{}\");".format(name),
-                            "tg.TagGroupSetIndexedTagAsString(index, \"{}\");".format(
-                                self._escapeCodeString(val)
-                            )
-                        ]
                 
                 if var.format != None:
-                    script_prefix += [
-                        "index = tg.TagGroupCreateNewLabeledTag(\"format\");",
-                        "tg.TagGroupSetIndexedTagAsString(index, \"{}\");".format(get_datatype_name(var.format))
-                    ]
+                    m_var["format"] = get_datatype_name(var.format)
                 
-                script_prefix.append("m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);")
+                m_vars.append(m_var)
         
+        config_vars = {}
         if isinstance(configuration, AbstractConfiguration):
             for group in configuration.getGroups():
-                script_prefix.append("tg = NewTagGroup();")
+                if (not group in config_vars or not 
+                    isinstance(config_vars[group], dict)):
+                    config_vars[group] = {}
 
                 for key in configuration.getKeys(group):
-                    script_prefix += [
-                        "tg2 = NewTagGroup();"
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"value\");"
-                    ]
-
                     try:
                         val = configuration.getValue(group, key)
                     except KeyError:
                         val = ""
+                    
                     var_type = configuration.getDatatype(group, key)
                     var_type_name = get_datatype_name(var_type)
 
-                    if var_type == int or var_type == float:
-                        if val == "":
-                            val = 0
-                        
-                        script_prefix.append(
-                            "tg2.TagGroupSetIndexedTagAsNumber(index, {});".format(val)
-                        )
-                    else:
-                        if (var_type != str and hasattr(var_type, "format") and 
-                            callable(var_type.format)):
-                            val = var_type.format(val)
-                        val = self._escapeCodeString(val)
-                        
-                        script_prefix.append(
-                            "tg2.TagGroupSetIndexedTagAsString(index, \"{}\");".format(val)
-                        )
+                    if (var_type != str and hasattr(var_type, "format") and 
+                        callable(var_type.format)):
+                        val = var_type.format(val)
                     
                     try:
-                        default_value = self._escapeCodeString(
-                            configuration.getDefault(group, key)
-                        )
+                        default_value = configuration.getDefault(group, key)
                     except KeyError:
                         default_value = ""
+                    
                     try:
-                        description = self._escapeCodeString(
-                            configuration.getDescription(group, key)
-                        )
+                        description = configuration.getDescription(group, key)
                     except KeyError:
                         description = ""
-                        
-                    script_prefix += [
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"default_value\");",
-                        "tg2.TagGroupSetIndexedTagAsString(index, \"{}\");".format(default_value),
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"datatype\");",
-                        "tg2.TagGroupSetIndexedTagAsString(index, \"{}\");".format(var_type_name),
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"description\");",
-                        "tg2.TagGroupSetIndexedTagAsString(index, \"{}\");".format(description),
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"ask_if_not_present\");",
-                        "tg2.TagGroupSetIndexedTagAsBoolean(index, {});".format(int(configuration.getAskIfNotPresent(group, key))),
-                        "index = tg2.TagGroupCreateNewLabeledTag(\"restart_required\");",
-                        "tg2.TagGroupSetIndexedTagAsBoolean(index, {});".format(int(configuration.getRestartRequired(group, key))),
-                        "index = tg.TagGroupCreateNewLabeledTag(\"{}\");".format(self._escapeCodeString(key)),
-                        "tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);"
-                    ]
-                
-                script_prefix += [
-                    "index = config_vars.TagGroupCreateNewLabeledTag(\"{}\");".format(group),
-                    "config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);"
-                ]
+                    
+                    config_vars[group][key] = {
+                        "value": val,
+                        "default_value": default_value,
+                        "datatype": var_type_name,
+                        "description": str(description),
+                        "ask_if_not_present": bool(configuration.getAskIfNotPresent(group, key)),
+                        "restart_required": bool(configuration.getRestartRequired(group, key)),
+                    }
         
-        script_prefix = "\n".join(script_prefix)
-
+        variables = {
+            "m_vars": m_vars,
+            "config_vars": config_vars,
+            "dialog_startup": dialog_startup
+        }
         start = None
         series = None
         config = None
@@ -307,112 +308,44 @@ class DMView(AbstractView):
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
         # and sets the start and series variables
-        with executeDMScript(path, sync_vars, libs, script_prefix) as script:
+        with exec_dmscript(*libs, path, readvars=sync_vars, setvars=variables) as script:
             try:
                 success = bool(script["success"])
             except KeyError:
                 success = False
-            
-            # get the start tag group
+
+            if isinstance(measurement_variables, dict):
+                try:
+                    start = script["start"]
+                except KeyError:
+                    start = None
+                
+                if start is not None:
+                    start, errors = self.parseStart(
+                        measurement_variables, start, add_defaults=False,
+                        parse=True, uncalibrate=True
+                    )
+
+            if isinstance(measurement_variables, dict):
+                try:
+                    series = script["series"]
+                except KeyError:
+                    series = None
+                
+                if series is not None:
+                    series, errors = self.parseSeries(
+                        measurement_variables, series, add_defaults=False,
+                        parse=True, uncalibrate=True
+                    )
+
             try:
-                start_tg = script["start"]
+                config = script["configuration"]
             except KeyError:
-                start_tg = None
-            
-            if start_tg != None and start_tg.IsValid():
-                start = {}
-
-                for var in controller.microscope.supported_measurement_variables:
-                    if start_tg.DoesTagExist(var.unique_id):
-                        s, v = start_tg.GetTagAsString(var.unique_id)
-
-                        if s:
-                            # convert value from formatted to numeric value
-                            if isinstance(var.format, Datatype):
-                                v = var.format.parse(v)
-                            
-                            start[var.unique_id] = var.ensureUncalibratedValue(v)
-            
-            # get the series tag group
-            try:
-                series_tg = script["series"]
-            except KeyError:
-                series_tg = None
-            
-            if series_tg != None and series_tg.IsValid():
-                # convert the series tag group to a dict
-                series = {}
-                series_act = series
-                keys = ("start", "end", "step-width")
-                safety_counter = 0
-                while series_act != None and safety_counter < 1000:
-                    if "variable" not in series_act:
-                        try:
-                            var = controller.microscope.getMeasurementVariableById(series_act["variable"])
-                        except KeyError:
-                            var = None
-                    
-                    if var == None:
-                        # the current variable is invalid, stop parsing
-                        series_act = None
-                        break
-                        
-                    for k in keys:
-                        # go through start, end and step-width and save the 
-                        # values
-                        if series_tg.DoesTagExist(k):
-                            s, v = series_tg.GetTagAsString(k)
-
-                            if s:
-                                # convert value from formatted to numeric value
-                                if isinstance(var.format, Datatype):
-                                    v = var.format.parse(v)
-                                
-                                series_act[k] = var.ensureUncalibratedValue(v)
-                    
-                    # check if there is an on-each-point tag group
-                    if series_tg.DoesTagExist("on-each-point"):
-                        series_act["on-each-point"] = {}
-                        series_act = series_act["on-each-point"]
-                    else:
-                        series_act = None
-                        break
-                    
-                    safety_counter += 1
-
-            # get the configuration tag group
-            try:
-                configuration_tg = script["configuration"]
-            except KeyError:
-                configuration_tg = None
-            
-            if configuration_tg != None and configuration_tg.IsValid():
-                config = {}
-                for i in range(configuration_tg.CountTags()):
-                    group = configuration_tg.GetTagLabel(i)
-                    s, group_tg = configuration_tg.GetTagAsTagGroup(group)
-
-                    if s:
-                        for j in range(group_tg.CountTags()):
-                            key = group_tg.GetTagLabel(j)
-
-                            s, val = group_tg.GetTagAsString(key)
-
-                            if s:
-                                if group not in config:
-                                    config[group] = {}
-                                
-                                try:
-                                    dt = configuration.getDatatype(group, key)
-                                except KeyError:
-                                    dt = str
-                                
-                                if callable(dt):
-                                    val = dt(val)
-                                
-                                config[group][key] = val
+                config = None
         
-        if not success:
-            raise StopProgram
-        else:
+        if success and ((start is not None and series is not None) or 
+           config is not None):
             return start, series, config
+        else:
+            raise StopProgram
+        
