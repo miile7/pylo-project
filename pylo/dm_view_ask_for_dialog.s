@@ -5,7 +5,12 @@ class DMViewAskForDialog : UIFrame{
     /**
      * The values to ask
      */
-    TagGroup values
+    TagGroup values;
+
+    /**
+     * The input boxes
+     */
+    TagGroup inputs;
 
 	/**
 	 * Create the contents of the dialog. 
@@ -25,7 +30,9 @@ class DMViewAskForDialog : UIFrame{
         label.DLGHeight(1);
         dialog_items.DLGAddElement(label);
 
-        TagGroup value_wrapper = DLGCreateGroup();
+        TagGroup wrapper = DLGCreateGroup();
+
+        inputs = NewTagList();
 
         // column widths
         number cw1 = 20; // label column
@@ -94,18 +101,18 @@ class DMViewAskForDialog : UIFrame{
                 line.DLGAddElement(input);
             }
 
+            inputs.TagGroupInsertTagAsTagGroup(i, input);
+
             TagGroup description_label = DLGCreateLabel(description, cw3);
             description_label.DLGHeight(ceil(description.len() / 55));
             description_label.DLGAnchor("East");
             line.DLGAddElement(description_label);
 
-            config_inputs.TagGroupInsertTagAsTagGroup(infinity(), input);
-
             value_wrapper.DLGAddElement(line);
-            group_box.DLGAddElement(value_wrapper);
+            wrapper.DLGAddElement(value_wrapper);
         }
 
-        dialog_items.DLGAddElement(value_wrapper);
+        dialog_items.DLGAddElement(wrapper);
 
 		return dialog_tags;
     }
@@ -139,12 +146,18 @@ class DMViewAskForDialog : UIFrame{
         TagGroup vals = NewTagList();
 
         for(number i = 0; i < values.TagGroupCountTags(); i++){
-            TagGroup input = self.lookupElement("input-" + i);
+            TagGroup input;
+            inputs.TagGroupGetIndexedTagAsTagGroup(i, input);
+
             TagGroup value_settings;
+            values.TagGroupGetIndexedTagAsTagGroup(i, value_settings);
             
             // number index = vals.TagGroupCreateNewLabeledTag("" + i);
+            number index = i;
 
-            values.TagGroupGetIndexedTagAsTagGroup(i, value_settings);
+            string type;
+            value_settings.TagGroupGetTagAsString("datatype", type);
+
             if(type == "int"){
                 number value = input.DLGGetValue();
                 // vals.TagGroupSetIndexedTagAsLong(index, value);
@@ -171,7 +184,7 @@ class DMViewAskForDialog : UIFrame{
     }
 }
 
-object dialog = alloc(DMViewConfigurationDialog).init("Set values -- PyLo", ask_vals, message);
+object dialog = alloc(DMViewAskForDialog).init("Set values -- PyLo", ask_vals, message);
 
 TagGroup values;
 

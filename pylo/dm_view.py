@@ -173,7 +173,7 @@ class DMView(AbstractView):
         }
         
         path = os.path.join(self._rel_path, "dm_view_ask_for_dialog.s")
-        with exec_dmscript(path, readvars=rv, setvars=sv) as script:
+        with exec_dmscript(path, readvars=rv, setvars=sv, debug=False) as script:
             values = script["values"]
 
             if len(values) == len(inputs):
