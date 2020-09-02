@@ -18,6 +18,7 @@ except (ModuleNotFoundError, ImportError) as e:
 
 from .datatype import Datatype
 from .stop_program import StopProgram
+from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
@@ -107,6 +108,79 @@ class DMView(AbstractView):
 
         with exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
             pass
+    
+    def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
+        """Ask for the specific input when the program needs to know something 
+        from the user. 
+        
+        The following indices are supported for the `inputs`:
+        - 'name' : str, required - The name of the input to show
+        - 'datatype' : type - The datatype to allow
+        - 'description' : str - A description what this value is about
+        - 'options' : list or tuple - A list of options to show to the user to 
+          select from
+        - 'allow_custom' : bool - Whether the user may only use the 'options' 
+          (True) or is is allowed to type in custom values too (False), this 
+          value is ignored if there are no 'options' given, default: False
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        inputs : dict
+            A dict with the 'name' key that defines the name to show. Optional
+            additional keys are 'datatype', 'description', 'options' and 
+            'allow_custom'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, default:
+            "Please enter the following values."
+        
+        Returns
+        -------
+        tuple
+            A tuple of values where the value on index 0 is the value for the 
+            `inputs[0]` and so on
+        """
+
+        if not "text" in kwargs:
+            if len(inputs) > 1:
+                kwargs["text"] = "Please enter the following values."
+            else:
+                kwargs["text"] = "Please enter the following value."
+
+        for i, input_definition in enumerate(inputs):
+            if "datatype" in input_definition:
+                if not isinstance(input_definition["datatype"], str):
+                    if hasattr(input_definition["datatype"], "name"):
+                        inputs[i]["datatype"] = input_definition["datatype"].name
+                    elif hasattr(input_definition["datatype"], "__name__"):
+                        inputs[i]["datatype"] = input_definition["datatype"].__name__
+                    else:
+                        inputs[i]["datatype"] = str(input_definition["datatype"])
+
+        rv = {
+            "values": list
+        }
+        sv = {
+            "ask_vals": inputs,
+            "message": kwargs["text"]
+        }
+        
+        path = os.path.join(self._rel_path, "dm_view_ask_for_dialog.s")
+        with exec_dmscript(path, readvars=rv, setvars=sv, debug=False) as script:
+            values = script["values"]
+
+            if len(values) == len(inputs):
+                return values
+            
+        return None
+        
     
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
