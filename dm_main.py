@@ -1,6 +1,6 @@
 import DigitalMicrograph as DM
 
-print("Initializing DigitalMicrograph environmnet...");
+print("Initializing DigitalMicrograph environmnet...")
 
 # the name of the tag is used, this is deleted so it shouldn't matter anyway
 file_tag_name = "__python__file__"
@@ -53,7 +53,7 @@ if __file__ != "":
 	if base_path not in sys.path:
 		sys.path.insert(0, base_path)
 
-print("Initializing python environment...");
+print("Initializing python environment...")
 
 import importlib
 
@@ -61,7 +61,7 @@ import pylo
 import pylo.microscopes
 import pylo.cameras
 
-print("Preparing...");
+print("Preparing...")
 
 pylo.OFFLINE_MODE = True
 
@@ -77,19 +77,20 @@ configuration = pylo.IniConfiguration()
 # configuration.setValue("setup", "camera-module", "pyjem_camera.py")
 # configuration.setValue("setup", "camera-class", "PyJEMCamera")
 
-configuration.setValue("pyjem-camera", "detector-name", "camera")
-configuration.setValue("pyjem-camera", "image-size", 1024)
+# configuration.setValue("pyjem-camera", "detector-name", "camera")
+# configuration.setValue("pyjem-camera", "image-size", 1024)
 
 controller = pylo.Controller(view, configuration)
 
 pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
-pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
+# pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
 
 controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
-controller.camera = pylo.cameras.PyJEMCamera(controller)
+# controller.camera = pylo.cameras.PyJEMCamera(controller)
+controller.camera = pylo.cameras.DummyCamera(controller)
 
-print("Done.");
-print("Starting.");
+print("Done.")
+print("Starting.")
 controller.startProgramLoop()
 
 # pylo.execute()
