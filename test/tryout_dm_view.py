@@ -57,6 +57,7 @@ print("Initializing python environment...");
 
 import pprint
 import time
+import random
 import threading
 import importlib
 import traceback
@@ -96,7 +97,7 @@ try:
 	tests = [
 		# "error",
 		# "hint",
-		"create-measurement",
+		# "create-measurement",
 		# "ask-for",
 		"show-running",
 	]
@@ -145,18 +146,21 @@ try:
 		
 		def updateProgress(view):
 			i = 1
-			while i < view.progress_max:
-				i = min(i + 2 * i, view.progress_max)
+			while i <= view.progress_max:
+				if random.randint(0, 3) == 0:
+					i += random.randint(1, 30)
+				else:
+					i += 1
 				view.progress = i
 				view.print("Setting view.progress = {}".format(i));
-				time.sleep(0.3)
+				time.sleep(0.1)
 		
 		thread = threading.Thread(target=updateProgress, args=(view,))
 		thread.start()
-		# updateProgress(view)
 		
 		view.showRunning()
-		thread.join()
+		view.progress_max = 0
+		print("  Thread stopped.")
 			
 
 except Exception as e:

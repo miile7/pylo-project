@@ -54,12 +54,12 @@ class DMView(AbstractView):
             
         super().__init__()
 
-        # the progress dialog thread
-        self._progress_dialog_thread = None
         # the name to use for the current progress dialog in the persistent tags
         self._progress_dialog_progress_tagname = None
         # the name to use for the current text in the persistent tags
         self._progress_dialog_text_tagname = None
+        # the name to use for the dialogs success
+        self._progress_dialog_success_tagname = None
         # True if the user pressed ok, False if the user cancelled, None if the
         # result is unknown
         self._progress_dialog_success = None
@@ -223,7 +223,7 @@ class DMView(AbstractView):
                              replace_whitespace=False)
         text = ("\n" + inset).join(text)
 
-        self._out += text
+        self._out = text + self._out
         self._updateRunning()
     
     def _createRunningDialog(self) -> None:
@@ -237,20 +237,59 @@ class DMView(AbstractView):
             "max_progress": self.progress_max,
             "progress_tn": self._progress_dialog_progress_tagname,
             "text_tn": self._progress_dialog_text_tagname,
+            "success_tn": self._progress_dialog_success_tagname
         }
         rv = {
             "success": bool
         }
         create_dialog = "\n".join((
             "number success;",
-            "object progress_dialog = alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn);"
+            "object progress_dialog = alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn);"
         ))
-        show_dialog = "success = progress_dialog.pose();"
+        show_dialog = "\n".join((
+            "progress_dialog.display(title);",
+        ))
         # while self.show_running:
         #     print("Displaying dialog")
         #     time.sleep(0.1)
-        with exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
-            self._progress_dialog_success = bool(script["success"])
+        # with exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
+        #     pass
+        with exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False) as script:
+            pass
+    
+    def _observeProgressDialogSuccessThread(self) -> None:
+        """Observe the persistent tag with the name 
+        `DMView._progress_dialog_success_tagname` and set the 
+        `DMView._progress_dialog_success` to the value as soon as the value is 
+        present.
+        """
+
+        while DM is not None and self.show_running:
+            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
+                self._progress_dialog_success_tagname
+            )
+            
+            if s:
+                self._progress_dialog_success = v
+                break
+    
+    def _deleteObservedTags(self) -> None:
+        """Delete all the observed tags."""
+        if DM is not None:
+            if isinstance(self._progress_dialog_progress_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_progress_tagname
+                )
+            
+            if isinstance(self._progress_dialog_text_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_text_tagname
+                )
+            
+            if isinstance(self._progress_dialog_success_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_success_tagname
+                )
         
     def showRunning(self) -> None:
         """Show the progress dialog.
@@ -259,31 +298,40 @@ class DMView(AbstractView):
         function!
         """
 
+        running = self.show_running
         super().showRunning()
         self._updateRunning()
 
-        if not isinstance(self._progress_dialog_thread, threading.Thread):
+        if not running:
+            id_ = int(time.time() * 100)
             self._progress_dialog_progress_tagname = "__pylo_dm_view_progress_{}".format(
-                int(time.time() * 100)
+                id_
             )
             self._progress_dialog_text_tagname = "__pylo_dm_view_text_{}".format(
-                int(time.time() * 100)
+                id_
+            )
+            self._progress_dialog_success_tagname = "__pylo_dm_view_success_{}".format(
+                id_
             )
             self._progress_dialog_success = None
-            # self._progress_dialog_thread = threading.Thread(
-            #     target=self._createRunningDialog
-            # )
-            # self._progress_dialog_thread.start()
+            self._deleteObservedTags()
             self._createRunningDialog()
+        
+        # block the thread until the user pressed ok or cancel
+        self._observeProgressDialogSuccessThread()
+
+        if not self._progress_dialog_success:
+            raise StopProgram()
     
     def hideRunning(self) -> None:
         """Hides the progress dialog."""
+        self._deleteObservedTags()
+
         self._progress_dialog_progress_tagname = None
         self._progress_dialog_text_tagname = None
+        self._progress_dialog_success_tagname = None
+
         self._progress_dialog_success = None
-        if isinstance(self._progress_dialog_thread, threading.Thread):
-            self._progress_dialog_thread.join()
-        self._progress_dialog_thread = None
 
         super().hideRunning()
 
