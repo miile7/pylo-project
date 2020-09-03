@@ -1,6 +1,9 @@
 import os
 import sys
+import time
 import typing
+import textwrap
+import threading
 import traceback
 
 try:
@@ -51,7 +54,21 @@ class DMView(AbstractView):
             
         super().__init__()
 
+        # the name to use for the current progress dialog in the persistent tags
+        self._progress_dialog_progress_tagname = None
+        # the name to use for the current text in the persistent tags
+        self._progress_dialog_text_tagname = None
+        # the name to use for the dialogs success
+        self._progress_dialog_success_tagname = None
+        # True if the user pressed ok, False if the user cancelled, None if the
+        # result is unknown
+        self._progress_dialog_success = None
+        # the path where all the dm_view_*.s files are in
         self._rel_path = os.path.dirname(__file__)
+        # the text that is created vai the print function
+        self._out = ""
+        # the maximum numbers of characters in one line
+        self.line_length = 100
 
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
@@ -180,7 +197,156 @@ class DMView(AbstractView):
                 return values
             
         return None
+
+    def print(self, *values: object, sep: typing.Optional[str]=" ", 
+              end: typing.Optional[str]="\n", inset: typing.Optional[str]="") -> None:
+        """Print a line to the user.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
         
+        Parameters
+        ----------
+        values : str or object
+            The value to print
+        sep : str
+            The separator between two values, default: " "
+        end : str
+            The end character to end a line, default: "\n"
+        inset : str, optional
+            Some characters to print before every line, default: ""
+        """
+        text = inset + sep.join(map(str, values)) + end
+        text = textwrap.wrap(text, self.line_length, drop_whitespace=False,
+                             replace_whitespace=False)
+        text = ("\n" + inset).join(text)
+
+        self._out = text + self._out
+        self._updateRunning()
+    
+    def _createRunningDialog(self) -> None:
+        """Create and show the running dialog in another thread.
+        
+        Note: Make sure to set the `DMView.progress_max` before calling this 
+        function!
+        """
+        path = os.path.join(self._rel_path, "dm_view_progress_dialog.s")
+        sv = {
+            "max_progress": self.progress_max,
+            "progress_tn": self._progress_dialog_progress_tagname,
+            "text_tn": self._progress_dialog_text_tagname,
+            "success_tn": self._progress_dialog_success_tagname
+        }
+        rv = {
+            "success": bool
+        }
+        create_dialog = "\n".join((
+            "number success;",
+            "object progress_dialog = alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn);"
+        ))
+        show_dialog = "\n".join((
+            "progress_dialog.display(title);",
+        ))
+        # while self.show_running:
+        #     print("Displaying dialog")
+        #     time.sleep(0.1)
+        # with exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
+        #     pass
+        with exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False) as script:
+            pass
+    
+    def _observeProgressDialogSuccessThread(self) -> None:
+        """Observe the persistent tag with the name 
+        `DMView._progress_dialog_success_tagname` and set the 
+        `DMView._progress_dialog_success` to the value as soon as the value is 
+        present.
+        """
+
+        while DM is not None and self.show_running:
+            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
+                self._progress_dialog_success_tagname
+            )
+            
+            if s:
+                self._progress_dialog_success = v
+                break
+    
+    def _deleteObservedTags(self) -> None:
+        """Delete all the observed tags."""
+        if DM is not None:
+            if isinstance(self._progress_dialog_progress_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_progress_tagname
+                )
+            
+            if isinstance(self._progress_dialog_text_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_text_tagname
+                )
+            
+            if isinstance(self._progress_dialog_success_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_success_tagname
+                )
+        
+    def showRunning(self) -> None:
+        """Show the progress dialog.
+        
+        Note: Make sure to set the `DMView.progress_max` before calling this 
+        function!
+        """
+
+        running = self.show_running
+        super().showRunning()
+        self._updateRunning()
+
+        if not running:
+            id_ = int(time.time() * 100)
+            self._progress_dialog_progress_tagname = "__pylo_dm_view_progress_{}".format(
+                id_
+            )
+            self._progress_dialog_text_tagname = "__pylo_dm_view_text_{}".format(
+                id_
+            )
+            self._progress_dialog_success_tagname = "__pylo_dm_view_success_{}".format(
+                id_
+            )
+            self._progress_dialog_success = None
+            self._deleteObservedTags()
+            self._createRunningDialog()
+        
+        # block the thread until the user pressed ok or cancel
+        self._observeProgressDialogSuccessThread()
+
+        if not self._progress_dialog_success:
+            raise StopProgram()
+    
+    def hideRunning(self) -> None:
+        """Hides the progress dialog."""
+        self._deleteObservedTags()
+
+        self._progress_dialog_progress_tagname = None
+        self._progress_dialog_text_tagname = None
+        self._progress_dialog_success_tagname = None
+
+        self._progress_dialog_success = None
+
+        super().hideRunning()
+
+    def _updateRunning(self) -> None:
+        """Update the running indicator, the progress has updated."""
+        if DM is not None:
+            if self._progress_dialog_progress_tagname is not None:
+                DM.GetPersistentTagGroup().SetTagAsLong(
+                    self._progress_dialog_progress_tagname, self.progress
+                )
+            
+            if self._progress_dialog_text_tagname is not None:
+                DM.GetPersistentTagGroup().SetTagAsString(
+                    self._progress_dialog_text_tagname, self._out
+                )
     
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.

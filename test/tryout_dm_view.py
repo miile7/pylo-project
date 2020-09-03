@@ -56,6 +56,9 @@ if __file__ != "":
 print("Initializing python environment...");
 
 import pprint
+import time
+import random
+import threading
 import importlib
 import traceback
 
@@ -95,7 +98,8 @@ try:
 		# "error",
 		# "hint",
 		# "create-measurement",
-		"ask-for"
+		# "ask-for",
+		"show-running",
 	]
 
 	if "error" in tests:
@@ -130,6 +134,34 @@ try:
 			{"name": "Askval3", "datatype": float, "description": "Type in a float"}
 		)
 		pprint.pprint(view.askFor(*inputs))
+	
+	if "show-running" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Show running indicator")
+		
+		view.progress = 0;
+		view.progress_max = 987
+		
+		def updateProgress(view):
+			i = 1
+			while i <= view.progress_max:
+				if random.randint(0, 3) == 0:
+					i += random.randint(1, 30)
+				else:
+					i += 1
+				view.progress = i
+				view.print("Setting view.progress = {}".format(i));
+				time.sleep(0.1)
+		
+		thread = threading.Thread(target=updateProgress, args=(view,))
+		thread.start()
+		
+		view.showRunning()
+		view.progress_max = 0
+		print("  Thread stopped.")
+			
 
 except Exception as e:
 	print("Exception: ", e)
