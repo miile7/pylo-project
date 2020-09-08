@@ -49,14 +49,14 @@ class Datatype:
             return value
     
     def format(self, value: typing.Any, format: typing.Optional[str]="") -> str:
-        """Parse the `value`.
+        """Format the `value`.
 
         Parameters
         ----------
         value : any
             The value as the current datatype
         format : str
-            The string format as defined in 
+            The string format without curly brackets as defined in 
             https://docs.python.org/library/string.html#formatspec
         
         Returns

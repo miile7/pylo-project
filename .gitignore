@@ -145,3 +145,9 @@ test/tmp_test_files
 
 # PyJEM files
 PyJEM
+
+# file for launching dm scripts, only used for development
+dm_script_main.s
+
+# some constants that should only be known while development
+dev_constants.py

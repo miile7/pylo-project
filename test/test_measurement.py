@@ -1224,7 +1224,7 @@ class TestMeasurement:
         controller = DummyController()
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-step": {"variable": "lense-current", "start": 0, 
+                  "on-each-point": {"variable": "lense-current", "start": 0, 
                                    "end": 3, "step-width": 0.1}}
 
         steps = pylo.Measurement._parseSeries(controller, start, series)
@@ -1259,9 +1259,9 @@ class TestMeasurement:
         controller = DummyController()
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-step": {"variable": "lense-current", "start": 0, 
+                  "on-each-point": {"variable": "lense-current", "start": 0, 
                                    "end": 3, "step-width": 0.1, 
-                                   "on-each-step": {"variable": "x-tilt", 
+                                   "on-each-point": {"variable": "x-tilt", 
                                                      "start": -20, 
                                                      "end": 20, 
                                                      "step-width": 5}}}
@@ -1323,12 +1323,12 @@ class TestMeasurement:
         controller = DummyController()
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
         series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1,
-                  "on-each-step": {"variable": "x-tilt", "start": -5, "end": 5,
+                  "on-each-point": {"variable": "x-tilt", "start": -5, "end": 5,
                                    "step-width": 5}}
 
-        for key in series["on-each-step"]:
+        for key in series["on-each-point"]:
             invalid_series = copy.deepcopy(series)
-            del invalid_series["on-each-step"][key]
+            del invalid_series["on-each-point"][key]
 
             with pytest.raises(KeyError):
                 pylo.Measurement._parseSeries(controller, start, invalid_series)

@@ -41,6 +41,7 @@ from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
 from .image import Image
+from .dm_view import DMView
 from .cli_view import CLIView
 from .datatype import Datatype
 from .log_thread import LogThread

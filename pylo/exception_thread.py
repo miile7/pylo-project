@@ -18,7 +18,11 @@ class ExceptionThread(threading.Thread):
     
     def run(self, *args, **kwargs):
         """Run the thread."""
+        # print("Starting thread {}.".format(self.ident))
+        
         try:
             super(ExceptionThread, self).run(*args, **kwargs)
         except Exception as e:
             self.exceptions.append(e)
+        
+        # print("Ending thread {}.".format(self.ident))

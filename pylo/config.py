@@ -37,7 +37,7 @@ may want to use False.
 Note that the implementation depends on the microscope class!
 Default: None
 """)
-OFFLINE_MODE = None
+OFFLINE_MODE = True
 
 __config_docs__("TIFF_IMAGE_TAGS_INDEX",
 """The hexadecimal entry for tiff images where to save the tags as a json to

@@ -190,7 +190,7 @@ class PyJEMMicroscope(MicroscopeInterface):
                 min_value=-1, 
                 max_value=1000, 
                 unit="\u03BCm".encode("utf-8"), # micrometer
-                format=int,
+                format=dt_int,
                 # step by one increases the focus (in LOWMag-Mode) by 3 microns
                 calibration=focus_calibration_factor
             ),
@@ -904,6 +904,29 @@ def parse_hex(v):
         return int(v[0], base=16)
     else:
         return int(v, base=16)
+
+def parse_int(v):
+    """Parse the value `v` to an int.
+    
+    This function fixes parsing values like "100.1" to int by rounding.
+
+    Parameters
+    ----------
+    v : int, float, str, any
+        The value to parse
+    
+    Returns
+    -------
+    int
+        The converted int
+    """
+    return int(float(v))
+
+dt_int = Datatype(
+    "int", 
+    lambda v, f: ("{" + f + "}").format(parse_int(v)),
+    parse_int
+)
 
 hex_int = Datatype(
     "hex", 

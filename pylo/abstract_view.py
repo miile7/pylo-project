@@ -67,7 +67,7 @@ class AbstractView:
         -------
         dict, dict
             A dict that defines the start conditions of the measurement where 
-            each`MeasurementVariable`s ids as a key and the value is the start 
+            each `MeasurementVariable`s ids as a key and the value is the start 
             value (value has to be the uncalibrated value)
             Another dict that contains the series with a 'variable', 'start', 
             'end' and 'step-width' key and an optional 'on-each-point' key that 
@@ -259,9 +259,11 @@ class AbstractView:
         
         return input_dict
     
-    def parseStart(self, controller: "Controller", 
+    def parseStart(self, measurement_variables: typing.Union[list, dict], 
                    start: typing.Union[dict, None], 
-                   add_defaults: typing.Optional[bool]=True) -> typing.Tuple[typing.Union[dict, None], list]:
+                   add_defaults: typing.Optional[bool]=True,
+                   parse: typing.Optional[bool]=False,
+                   uncalibrate: typing.Optional[bool]=False) -> typing.Tuple[typing.Union[dict, None], list]:
         """Parse the `start`.
 
         Convert all the values for the start setup to uncalibrated values. If 
@@ -270,14 +272,23 @@ class AbstractView:
 
         Parameters
         ----------
-        controller : Controller
-            The controller
+        measurement_variables : list or dict
+            All the supported measurement variables, either as a list or as a
+            dict where the key is the unique_id and the value is the 
+            `MeasurementVariable` object
         series : dict
             The series dict with the "variable", "start", "step-width", "end" 
             and optionally the "on-each-point" keys
         add_defaults : bool, optional
             Whether to try adding default values until the series is valid 
             (True) or to return None when the series is invalid (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
         
         Returns
         -------
@@ -286,36 +297,57 @@ class AbstractView:
             occurred and the list of errors
         """
 
+        # for keeping the same parameter datatypes, dict is not necessary here
+        if not isinstance(measurement_variables, dict):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
+
         errors = []
-        for v in controller.microscope.supported_measurement_variables:
+        for v in measurement_variables.values():
             if not isinstance(start, dict):
                 if not add_defaults:
                     return None, errors
                 else:
                     start = {}
-            if not v.unique_id in start:
+            
+            if (v.unique_id in start and parse and v.format != None and 
+                callable(v.format)):
+                start[v.unique_id] = v.format(start[v.unique_id])
+
+            if (not v.unique_id in start or 
+                not isinstance(start[v.unique_id], (int, float))):
                 if not add_defaults:
                     return None, errors
                 else:
                     start[v.unique_id] = min(max(0, v.min_value), v.max_value)
-            elif start[v.unique_id] > v.max_value:
-                errors.append(("The start value '{}' for '{}' is gerater " + 
-                               "than the maximum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.max_value
-                               ))
-                start[v.unique_id] = v.max_value
-            elif start[v.unique_id] < v.min_value:
-                errors.append(("The start value '{}' for '{}' is less " + 
-                               "than the minimum value {}.").format(
-                                   v.unique_id, start[v.unique_id], v.min_value
-                               ))
-                start[v.unique_id] = v.min_value
+            else:
+                if uncalibrate:
+                    start[v.unique_id] = v.ensureUncalibratedValue(
+                        start[v.unique_id]
+                    )
+                
+                if start[v.unique_id] > v.max_value:
+                    errors.append(("The start value '{}' for '{}' is gerater " + 
+                                "than the maximum value {}.").format(
+                                    v.unique_id, start[v.unique_id], v.max_value
+                                ))
+                    start[v.unique_id] = v.max_value
+                elif start[v.unique_id] < v.min_value:
+                    errors.append(("The start value '{}' for '{}' is less " + 
+                                "than the minimum value {}.").format(
+                                    v.unique_id, start[v.unique_id], v.min_value
+                                ))
+                    start[v.unique_id] = v.min_value
         
         return start, errors
     
-    def parseSeries(self, controller: "Controller", 
+    def parseSeries(self, measurement_variables: typing.Union[list, dict], 
                     series: typing.Union[dict, None], 
                     add_defaults: typing.Optional[bool]=True, 
+                    parse: typing.Optional[bool]=False,
+                    uncalibrate: typing.Optional[bool]=False,
                     path: typing.Optional[list]=[]) -> typing.Tuple[typing.Union[dict, None], typing.List[str]]:
         """Recursively parse the `series`.
 
@@ -326,14 +358,23 @@ class AbstractView:
 
         Parameters
         ----------
-        controller : Controller
-            The controller
+        measurement_variables : list or dict
+            All the supported measurement variables, either as a list or as a
+            dict where the key is the unique_id and the value is the 
+            `MeasurementVariable` object
         series : dict
             The series dict with the "variable", "start", "step-width", "end" 
             and optionally the "on-each-point" keys
         add_defaults : bool, optional
             Whether to try adding default values until the series is valid 
             (True) or to return None when the series is invalid (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
         path : list, optional
             The parent 'variable' ids if the `series` is the series in the 
             'on-each-point' index of the parent
@@ -347,8 +388,14 @@ class AbstractView:
             The list of error messages
         """
 
+        if not isinstance(measurement_variables, dict):
+            m_vars = {}
+            for var in measurement_variables:
+                m_vars[var.unique_id] = var
+            measurement_variables = m_vars
+
         if isinstance(path, (list, tuple)):
-            path_str = "".join([" in 'on-each-step' of {}".format(p) 
+            path_str = "".join([" in 'on-each-point' of {}".format(p) 
                                 for p in path])
         else:
             path = []
@@ -360,8 +407,7 @@ class AbstractView:
             series = {}
         
         if not "variable" in series or series["variable"] in path:
-            ids = [v.unique_id for v in 
-                   controller.microscope.supported_measurement_variables]
+            ids = list(measurement_variables.keys())
             ids = list(filter(lambda i: i not in path, ids))
 
             if len(ids) == 0:
@@ -381,9 +427,12 @@ class AbstractView:
             else:
                 series["variable"] = ids[0]
         
-        var = controller.microscope.getMeasurementVariableById(
-            series["variable"]
-        )
+        try:
+            var = measurement_variables[series["variable"]]
+        except KeyError as e:
+            msg = ("The measurement variable '{}' does not " + 
+                   "exist.").format(series["variable"])
+            raise KeyError(msg) from e
 
         keys = {
             "start": var.min_value,
@@ -392,25 +441,33 @@ class AbstractView:
         }
 
         for k, d in keys.items():
+            if (k in series and parse and var.format != None and 
+                callable(var.format)):
+                series[k] = var.format(series[k])
+            
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:
-                    return None
+                    return None, errors
                 
                 series[k] = d
                 # errors.append(("The series{} '{}' key is not " + 
                 #                "defined.").format(path_str, k))
-            elif (k == "start" or k == "end") and series[k] < var.min_value:
-                series[k] = var.min_value
-                errors.append(("The series{} '{}' key is less than the " + 
-                               "minimum value of {}.").format(
-                                   path_str, k, var.min_value
-                             ))
-            elif (k == "start" or k == "end") and series[k] > var.max_value:
-                series[k] = var.max_value
-                errors.append(("The series{} '{}' key is greater than the " + 
-                               "maximum value of {}.").format(
-                                   path_str, k, var.max_value
-                             ))
+            else:
+                if uncalibrate:
+                    series[k] = var.ensureUncalibratedValue(series[k])
+                
+                if (k == "start" or k == "end") and series[k] < var.min_value:
+                    series[k] = var.min_value
+                    errors.append(("The series{} '{}' key is less than the " + 
+                                "minimum value of {}.").format(
+                                    path_str, k, var.min_value
+                                ))
+                elif (k == "start" or k == "end") and series[k] > var.max_value:
+                    series[k] = var.max_value
+                    errors.append(("The series{} '{}' key is greater than the " + 
+                                "maximum value of {}.").format(
+                                    path_str, k, var.max_value
+                                ))
 
         if "on-each-point" in series:
             if not isinstance(series["on-each-point"], dict):
@@ -438,18 +495,13 @@ class AbstractView:
                 # note that this can return None too, if add_defaults=False and
                 # the series["on-each-point"] is invalid
                 on_each_point_series, on_each_point_errors = self.parseSeries(
-                    controller, series["on-each-point"], add_defaults, 
-                    path + [series["variable"]]
+                    measurement_variables, series["on-each-point"], add_defaults, 
+                    path + [series["variable"]], parse, uncalibrate
                 )
                 series["on-each-point"] = on_each_point_series
                 errors += on_each_point_errors
             
             if series["on-each-point"] is None:
                 del series["on-each-point"]
-
-        # convert to uncalibrated values
-        series["start"] = var.ensureUncalibratedValue(series["start"])
-        series["step-width"] = var.ensureUncalibratedValue(series["step-width"])
-        series["end"] = var.ensureUncalibratedValue(series["end"])
         
         return series, errors
