@@ -359,8 +359,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         
         self._action_lock.release()
     
-    def setInLorenzMode(self, lorenz_mode : bool) -> None:
-        """Set the microscope to be in lorenz mode.
+    def setInLorentzMode(self, lorentz_mode : bool) -> None:
+        """Set the microscope to be in lorentz mode.
 
         This sets the probe mode to *TEM* and the function mode to *LowMAG*. It
         disables the objective lense (OL fine and coarse) and sets them to 0.
@@ -374,8 +374,8 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         Parameters
         ----------
-        lorenz_mode : bool
-            Whether the microscope should be in lorenz mode or not
+        lorentz_mode : bool
+            Whether the microscope should be in lorentz mode or not
         """
 
         # make sure only this function is currently using the microscope,
@@ -386,7 +386,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # if self._stage.GetHolderStts() == 0:
         #     raise IOError("The holder is not inserted.")
 
-        if lorenz_mode:
+        if lorentz_mode:
             # select TEM mode
             self._eos.SelectProbMode(PROBE_MODE_TEM)
             # select low mag mode, this is the most important step because this
@@ -415,8 +415,8 @@ class PyJEMMicroscope(MicroscopeInterface):
         # let other functions access the microscope
         self._action_lock.release()
     
-    def getInLorenzMode(self) -> bool:
-        """Get whether the microscope is in the lorenz mode.
+    def getInLorentzMode(self) -> bool:
+        """Get whether the microscope is in the lorentz mode.
 
         This will return true if the objective fine and coarse lenses are 
         switched to free lense control and their current is 0.
@@ -438,7 +438,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         if isinstance(function_mode, (list, tuple)):
             function_mode = function_mode[0]
         
-        lorenz_mode = (
+        lorentz_mode = (
             probe_mode == PROBE_MODE_TEM and 
             function_mode == FUNCTION_MODE_TEM_LowMAG
         )
@@ -446,7 +446,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # let other functions access the microscope
         self._action_lock.release()
 
-        return lorenz_mode
+        return lorentz_mode
     
     def setMeasurementVariableValue(self, id_: str, value: float) -> None:
         """Set the measurement variable defined by its id to the given value in
@@ -754,19 +754,19 @@ class PyJEMMicroscope(MicroscopeInterface):
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
 
-        The safe state will set the microscope not to be in lorenz mode anymore.
+        The safe state will set the microscope not to be in lorentz mode anymore.
         In addition the stage is driven to its origin, with resolving the tilt 
         in all axes.
         
         This function blocks the `PyJEMMicroscope::_action_lock`.
         """
 
-        # reset the lorenz mode
-        self.setInLorenzMode(False)
+        # reset the lorentz mode
+        self.setInLorentzMode(False)
 
-        # lock the microscope after the lorenz mode, otherwise there is a 
+        # lock the microscope after the lorentz mode, otherwise there is a 
         # deadlock (this function blocks the lock, 
-        # PyJEMMicroscope::setInLorenzMode() waits for the lock)
+        # PyJEMMicroscope::setInLorentzMode() waits for the lock)
         self._action_lock.acquire()
 
         # close the beam valve

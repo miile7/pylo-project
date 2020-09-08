@@ -962,7 +962,7 @@ class DMViewDialog : UIFrame{
         description_line.DLGFill("X");
 
         // description text
-        string description = "Create a new measurememt series to measure probes in the lorenz mode ";
+        string description = "Create a new measurememt series to measure probes in the lorentz mode ";
         description += "(low mag mode). Select the start properties. The series defines over which ";
         description += "variables the series will be done. On each series point there can be ";
         description += "another series."
@@ -1761,12 +1761,12 @@ class DMViewDialog : UIFrame{
 // index = tg2.TagGroupCreateNewLabeledTag("datatype");
 // tg2.TagGroupSetIndexedTagAsString(index, "float");
 // index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "The relaxation time in seconds to wait after the microscope is switched to lorenz mode. Use 0 or negative values to ignore");
+// tg2.TagGroupSetIndexedTagAsString(index, "The relaxation time in seconds to wait after the microscope is switched to lorentz mode. Use 0 or negative values to ignore");
 // index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
 // tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
 // index = tg2.TagGroupCreateNewLabeledTag("restart_required");
 // tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("relaxation-time-lorenz-mode");
+// index = tg.TagGroupCreateNewLabeledTag("relaxation-time-lorentz-mode");
 // tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
 // string path = GetApplicationDirectory("auto_save", 1)
@@ -1788,7 +1788,7 @@ class DMViewDialog : UIFrame{
 
 // tg2 = NewTagGroup();
 // index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsString(index, "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4");
+// tg2.TagGroupSetIndexedTagAsString(index, "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4");
 // index = tg2.TagGroupCreateNewLabeledTag("default_value");
 // tg2.TagGroupSetIndexedTagAsString(index, "");
 // index = tg2.TagGroupCreateNewLabeledTag("datatype");

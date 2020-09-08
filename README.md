@@ -1,6 +1,6 @@
 # PyLo
 
-A Python script for measuring magnetic domains, in particular Skyrmions, in the Lorenz 
+A Python script for measuring magnetic domains, in particular Skyrmions, in the Lorentz 
 Mode with transmission electron microscopes. 
 
 The software is written for the JEOL NeoArm F200 with Gatan as the displaying software. It 

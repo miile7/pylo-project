@@ -89,7 +89,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
             pylo.MeasurementVariable("x-tilt", "Tilt (x direction)", -35, 35, "deg")
         ]
 
-        self.is_in_lorenz_mode = False
+        self.is_in_lorentz_mode = False
         self.is_in_safe_state = False
 
         self.focus = 0
@@ -128,7 +128,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
             raise KeyError("The measurement variable {} does not exist.".format(id_))
             
         self.currently_setting_measurement_variable = None
-        self.currently_setting_lorenz_mode = False
+        self.currently_setting_lorentz_mode = False
 
     def getMeasurementVariableValue(self, id_):
         sleepRandomTime()
@@ -142,26 +142,26 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         else:
             raise KeyError("The measurement variable {} does not exist.".format(id_))
     
-    def setInLorenzMode(self, lorenz_mode):
-        self.currently_setting_lorenz_mode = True
+    def setInLorentzMode(self, lorentz_mode):
+        self.currently_setting_lorentz_mode = True
         sleepRandomTime()
 
-        if lorenz_mode:
+        if lorentz_mode:
             self.is_in_safe_state = False
         
-        self.is_in_lorenz_mode = lorenz_mode
-        self.currently_setting_lorenz_mode = False
+        self.is_in_lorentz_mode = lorentz_mode
+        self.currently_setting_lorentz_mode = False
     
-    def getInLorenzMode(self):
+    def getInLorentzMode(self):
         sleepRandomTime()
 
-        return self.is_in_lorenz_mode
+        return self.is_in_lorentz_mode
     
     def resetToSafeState(self):
         sleepRandomTime()
         
         # wait for other actions to finish
-        while (self.currently_setting_lorenz_mode or 
+        while (self.currently_setting_lorentz_mode or 
                self.currently_setting_measurement_variable is not None):
             time.sleep(0.01)
         
@@ -404,7 +404,7 @@ class PerformedMeasurement:
         pylo.after_record.append(self.after_record_handler)
         pylo.measurement_ready.append(self.measurement_ready_handler)
 
-        pylo.microscope_ready.append(self.check_if_microscope_in_lorenz_mode)
+        pylo.microscope_ready.append(self.check_if_microscope_in_lorentz_mode)
         pylo.after_record.append(self.prepare_names_handler)
         pylo.after_record.append(self.every_step_visited_handler)
 
@@ -477,8 +477,8 @@ class PerformedMeasurement:
         except ValueError:
             pass
     
-    def check_if_microscope_in_lorenz_mode(self):
-        assert self.controller.microscope.is_in_lorenz_mode
+    def check_if_microscope_in_lorentz_mode(self):
+        assert self.controller.microscope.is_in_lorentz_mode
     
 performed_measurement_obj = None
 
@@ -953,9 +953,9 @@ class TestMeasurement:
         perf_measurement.measurement.stop()
 
     @pytest.mark.slow()
-    def test_stop_stops_while_setting_lorenz_mode(self):
+    def test_stop_stops_while_setting_lorentz_mode(self):
         """Test whether a stop call stops the microscope while it is setting
-        the lorenz mode."""
+        the lorentz mode."""
         # make the sleep time (=time the microscope and camera take to perform
         # their action) big enough so the stop call is somewhere inbetween
         operation_time = 2
@@ -970,7 +970,7 @@ class TestMeasurement:
         # start the measurement in this thread
         performed_measurement.measurement.start()
         
-        # make sure only the lorenz mode is set (this is not breakable) and
+        # make sure only the lorentz mode is set (this is not breakable) and
         # then the function exits and give some buffer (10%)
         assert time.time() <= (performed_measurement.start_time + 
                                operation_time * 1.1)
@@ -1007,7 +1007,7 @@ class TestMeasurement:
         # start the measurement in this thread
         performed_measurement.measurement.start()
         
-        # make sure only the lorenz mode is set (one operation time) and the 
+        # make sure only the lorentz mode is set (one operation time) and the 
         # measurement variable is set (another operation time) and give some 
         # buffer (10%)
         assert time.time() <= (performed_measurement.start_time + 

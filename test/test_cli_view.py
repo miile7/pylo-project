@@ -103,10 +103,10 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.supports_parallel_measurement_variable_setting = False
         self.values = {}
 
-    def setInLorenzMode(self, lorenz_mode):
+    def setInLorentzMode(self, lorentz_mode):
         pass
 
-    def getInLorenzMode(self):
+    def getInLorentzMode(self):
         return True
     
     def setMeasurementVariableValue(self, id_, value):

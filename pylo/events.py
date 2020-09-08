@@ -39,7 +39,7 @@ __event_docs__("series_ready",
 series_ready = Event()
 
 __event_docs__("microscope_ready", 
-"""Fired when the microscope is in lorenz mode the measurement is right about 
+"""Fired when the microscope is in lorentz mode the measurement is right about 
 starting""")
 microscope_ready = Event()
 

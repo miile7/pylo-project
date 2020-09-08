@@ -1,4 +1,4 @@
-"""A python module to do magnetic measuremnets in the Lorenz-Mode with TEMs.
+"""A python module to do magnetic measuremnets in the Lorentz-Mode with TEMs.
 
 This provides both, the GUI and the backend for measuring. Multiple GUIs are 
 offered together with various cameras and TEM implementations.
