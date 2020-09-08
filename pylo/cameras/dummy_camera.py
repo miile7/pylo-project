@@ -51,3 +51,6 @@ class DummyCamera(CameraInterface):
                 image_tags[chr(i + 65)] = "Test value {}".format(i)
         
         return Image(image_data, image_tags)
+    
+    def resetToSafeState(self) -> None:
+        pass

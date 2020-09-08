@@ -60,6 +60,8 @@ class DMView(AbstractView):
         self._progress_dialog_text_tagname = None
         # the name to use for the dialogs success
         self._progress_dialog_success_tagname = None
+        # the name to use for killing the progress dialog
+        self._progress_dialog_kill_tagname = None
         # True if the user pressed ok, False if the user cancelled, None if the
         # result is unknown
         self._progress_dialog_success = None
@@ -223,9 +225,33 @@ class DMView(AbstractView):
                              replace_whitespace=False)
         text = ("\n" + inset).join(text)
 
-        self._out = text + self._out
+        self._out += text
+        # self._out = text + self._out
         self._updateRunning()
     
+    def _createKillDialog(self) -> None:
+        """A dialog that shows the kill button only."""
+
+        id_ = int(time.time() * 100)
+        dmscript = "\n".join((
+            "class handler_{} : UIFrame {{".format(id_),
+            "void killTaks(object self){",
+            "if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(self._progress_dialog_kill_tagname),
+            "GetPersistentTagGroup().TagGroupCreateNewLabeledTag(\"{}\");".format(self._progress_dialog_kill_tagname),
+            "}",
+            "GetPersistentTagGroup().TagGroupSetTagAsBoolean(\"{}\", 1);".format(self._progress_dialog_kill_tagname),
+            "}",
+            "}",
+            "TagGroup Dialog = DLGCreateDialog(\"Kill task\");",
+            "TagGroup kill_button = DLGCreatePushButton(\"Kill Task\", \"killTaks\");",
+            "Dialog.DLGAddElement(kill_button);",
+            "object kill_dialog = alloc(handler_{}).init(Dialog)".format(id_),
+            "kill_dialog.display(\"Kill task\");",
+        ))
+
+        with exec_dmscript(dmscript, debug=False):
+            pass
+
     def _createRunningDialog(self) -> None:
         """Create and show the running dialog in another thread.
         
@@ -254,7 +280,7 @@ class DMView(AbstractView):
         #     time.sleep(0.1)
         # with exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
         #     pass
-        with exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False) as script:
+        with exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False):
             pass
     
     def _observeProgressDialogSuccessThread(self) -> None:
@@ -271,6 +297,13 @@ class DMView(AbstractView):
             
             if s:
                 self._progress_dialog_success = v
+                break
+                
+            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
+                self._progress_dialog_kill_tagname
+            )
+
+            if s and v:
                 break
     
     def _deleteObservedTags(self) -> None:
@@ -313,8 +346,12 @@ class DMView(AbstractView):
             self._progress_dialog_success_tagname = "__pylo_dm_view_success_{}".format(
                 id_
             )
+            self._progress_dialog_kill_tagname = "__pylo_dm_view_kill_{}".format(
+                id_
+            )
             self._progress_dialog_success = None
             self._deleteObservedTags()
+            # self._createKillDialog()
             self._createRunningDialog()
         
         # block the thread until the user pressed ok or cancel
