@@ -442,7 +442,7 @@ class Measurement:
 
             # stop log thread
             if isinstance(self._log_thread, LogThread):
-                self._log_thread.stop()
+                self._log_thread.finishAndStop()
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()

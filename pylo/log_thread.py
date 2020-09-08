@@ -39,6 +39,7 @@ class LogThread(ExceptionThread):
         self.queue = queue.Queue()
         self.log_path = log_path
         self.running = False
+        self._finish = False
 
         log_dir = os.path.dirname(self.log_path)
         if not os.path.exists(log_dir):
@@ -55,32 +56,46 @@ class LogThread(ExceptionThread):
         """
 
         self.running = True
+        self._finish = False
         
         while self.running:
             if not self.queue.empty():
-                # open file
-                try:
-                    log_file = open(self.log_path, "a", newline="")
-                except OSError as error:
-                    self.exceptions.append(error)
-                    self.running = False
+                if not self._writeQueueToLog():
                     break
-                    
-                # initialize writer
-                log_writer = csv.writer(
-                    log_file, delimiter=",", quotechar="\"", 
-                    quoting=csv.QUOTE_MINIMAL
-                )
-                
-                # write all new rows
-                while not self.queue.empty():
-                    cells = self.queue.get()
-                    log_writer.writerow(cells)
-                
-                # close the files
-                log_file.close()
             
             time.sleep(0.01)
+    
+    def _writeQueueToLog(self):
+        """Write the current queue to the log file."""
+
+        # open file
+        try:
+            log_file = open(self.log_path, "a", newline="")
+        except OSError as error:
+            self.exceptions.append(error)
+            self.running = False
+            return False
+            
+        # initialize writer
+        log_writer = csv.writer(
+            log_file, delimiter=",", quotechar="\"", 
+            quoting=csv.QUOTE_MINIMAL
+        )
+        
+        # write all new rows
+        while not self.queue.empty():
+            cells = self.queue.get()
+            log_writer.writerow(cells)
+        
+        # close the files
+        log_file.close()
+        
+        return True
+        
+    def finishAndStop(self):
+        """Finish the current queue and then stop the execution."""
+        self._writeQueueToLog()
+        self.stop()
     
     def stop(self):
         """Stop the thread loop."""
