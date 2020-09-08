@@ -1094,5 +1094,8 @@ class TestCLIView:
     def test_parse_series(self, cliview, controller, series, expected_series, add_defaults):
         """Test the parse series function."""
 
-        series, errors = cliview.parseSeries(controller, series, add_defaults)
+        series, errors = cliview.parseSeries(
+            controller.microscope.supported_measurement_variables, series, 
+            add_defaults
+        )
         assert series == expected_series
