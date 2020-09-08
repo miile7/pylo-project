@@ -11,7 +11,7 @@ import pylo
 
 ###############################################################################
 ###                                                                         ###
-###         Change only this for testing a different microscope             ###
+###         Change only this for testing a different configuration          ###
 ###                                                                         ###
 ###############################################################################
 
