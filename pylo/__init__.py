@@ -51,6 +51,7 @@ from .stop_program import StopProgram
 from .abstract_view import AbstractView
 from .exception_thread import ExceptionThread
 from .blocked_function import BlockedFunction
+from .dm_configuration import DMConfiguration
 from .ini_configuration import IniConfiguration
 from .vulnerable_machine import VulnerableMachine
 from .measurement_variable import MeasurementVariable
