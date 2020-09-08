@@ -24,6 +24,11 @@ class ProgressDialog : UIFrame{
 	number progress_max;
 
 	/**
+	 * The progress of the last time before updating
+	 */
+	number last_progress;
+
+	/**
 	 * The id of the task that observes the tags to get the last value
 	 */
 	number update_task;
@@ -83,7 +88,7 @@ class ProgressDialog : UIFrame{
 		if(cancelled){
 			return;
 		}
-		
+
 		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
 			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
 		}
@@ -119,11 +124,32 @@ class ProgressDialog : UIFrame{
 					self._done();
 				}
 				
-				self.DLGSetProgress("progress_bar", progress / progress_max);
-				progress_label.DLGTitle(progress + "/" + progress_max);
+				// check if the dialog is initialized already, if not the progress_bar does not 
+				// exist and DLGSetProgress() will raise an error which warns that the element
+				// does not exist which will crash the dialog, note that this function is started 
+				// before the dialog is initialized
+				TagGroup p = self.lookupElement("progress_bar");
+				if(p.TagGroupIsValid()){
+					// if(floor(progress) == last_progress){
+					// 	// fake some progress, otherwise the textbox does not update
+					// 	number x = progress - floor(progress) + 0.5
+					// 	progress = floor(progress) + 0.5 - 1/x;
+					// }
+					self.DLGSetProgress("progress_bar", progress / progress_max);
+					progress_label.DLGTitle(floor(progress) + "/" + progress_max);
+					last_progress = progress
+				}
 			}
 			if(GetPersistentTagGroup().TagGroupGetTagAsString(text_tagname, text)){
-				self.SetTextElementData("textbox", text)
+				// check if the dialog is initialized already, if not the textbox does not 
+				// exist and SetTextElementData() will raise an error which warns that the element
+				// does not exist which will crash the dialog, note that this function is started 
+				// before the dialog is initialized
+				TagGroup t = self.lookupElement("textbox");
+				if(t.TagGroupIsValid()){
+					self.SetTextElementData("textbox", text);
+					t.DLGInvalid(1);
+				}
 			}
 			self.validateView();
 		}
@@ -151,6 +177,7 @@ class ProgressDialog : UIFrame{
 		success_tagname = succ_tagname;
 		done = 0;
 		cancelled = 0;
+		last_progress = 0;
 		
         TagGroup dialog_items;
         TagGroup dialog = DLGCreateDialog(title, dialog_items);
