@@ -26,9 +26,8 @@ script = ("\n".join((
 DM.ExecuteScriptString(script)
 
 # read from the global tags to get the value to the python script
-global_tags = DM.GetPersistentTagGroup()
-if global_tags.IsValid():
-    s, __file__ = global_tags.GetTagAsString(file_tag_name);
+if DM.GetPersistentTagGroup():
+    s, __file__ = DM.GetPersistentTagGroup().GetTagAsString(file_tag_name);
     if s:
         # delete the created tag again
         DM.ExecuteScriptString(
