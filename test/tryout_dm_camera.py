@@ -63,6 +63,7 @@ try:
 
 	view = pylo.CLIView()
 	configuration = pylo.AbstractConfiguration()
+	pylo.cameras.DMCamera.defineConfigurationOptions(configuration)
 
 	controller = pylo.Controller(view, configuration)
 
