@@ -395,7 +395,7 @@ class AbstractView:
             measurement_variables = m_vars
 
         if isinstance(path, (list, tuple)):
-            path_str = "".join([" in 'on-each-step' of {}".format(p) 
+            path_str = "".join([" in 'on-each-point' of {}".format(p) 
                                 for p in path])
         else:
             path = []

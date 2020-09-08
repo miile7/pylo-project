@@ -202,7 +202,7 @@ class ProgressDialog : UIFrame{
         dialog_items.DLGAddElement(progress_group);
         
         textbox = DLGCreateTextBox(100, 10, 65535);
-		textbox.DLGIdentifier("textbox")
+		textbox.DLGIdentifier("textbox");
         dialog_items.DLGAddElement(textbox);
         
 		if(GetPersistentTagGroup().TagGroupDoesTagExist(progress_tagname)){
