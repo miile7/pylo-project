@@ -32,14 +32,18 @@ if DM is not None:
     # separately
     try:
         import dev_constants
+        load_from_dev = True
+    except (ModuleNotFoundError, ImportError) as e:
+        load_from_dev = False
 
+    if load_from_dev:
         if hasattr(dev_constants, "execdmscript_path"):
             if not dev_constants.execdmscript_path in sys.path:
                 sys.path.insert(0, dev_constants.execdmscript_path)
             
             from execdmscript import exec_dmscript
-    except:
-        from .execdmscript import exec_dmscript
+    else:
+        from execdmscript import exec_dmscript
 else:
     def exec_dmscript(*args, **kwargs):
         raise RuntimeError("This execdmscript can only be imported inside " + 

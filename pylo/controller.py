@@ -226,6 +226,16 @@ class Controller:
         Note that if the configuration returns None, this is interpreted as a 
         missing value. Also if the default is None.
 
+        Example:
+        ```python
+        v1, v2, v3 = controller.getConfigurationValuesOrAsk(
+            ("configuration-group", "configuration-key-1"),
+            ("configuration-group", "configuration-key-2"),
+            ("configuration-group-2", "configuration-key"),
+            save_if_not_exists=True, fallback_default=True
+        )
+        ```
+
         Parameters
         ----------
         config_lookup : list of tuples

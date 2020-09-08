@@ -108,3 +108,52 @@ __config_docs__("DM_CONFIGURATION_PERSISTENT_TAG_NAME",
 Default: "pylo"
 """)
 DM_CONFIGURATION_PERSISTENT_TAG_NAME = "pylo"
+
+__config_docs__("DEFAULT_DM_CAMERA_EXPOSURE_TIME",
+"""The exposure time of the camera in seconds.
+Default: 0.1
+""")
+DEFAULT_DM_CAMERA_EXPOSURE_TIME = 0.1
+
+__config_docs__("DEFAULT_DM_CAMERA_BINNING_X",
+"""The hardware binning of pixels in x direction.
+Default: 1
+""")
+DEFAULT_DM_CAMERA_BINNING_X = 1
+
+__config_docs__("DEFAULT_DM_CAMERA_BINNING_Y",
+"""The hardware binning of pixels in y direction.
+Default: 1
+""")
+DEFAULT_DM_CAMERA_BINNING_Y = 1
+
+__config_docs__("DEFAULT_DM_PROCESS_LEVEL",
+"""The process level, use 1 for 'unprocessed', 2 for 'dark subtracted' and 3 
+for 'gain normalized'.
+Default: 1
+""")
+DEFAULT_DM_PROCESS_LEVEL = 1
+
+__config_docs__("DEFAULT_DM_CCD_READOUT_AREA_TOP",
+"""The top coordinate of the CCD readout area.
+Default: 0
+""")
+DEFAULT_DM_CCD_READOUT_AREA_TOP = 0
+
+__config_docs__("DEFAULT_DM_CCD_READOUT_AREA_RIGHT",
+"""The right coordinate of the CCD readout area.
+Default: 4096
+""")
+DEFAULT_DM_CCD_READOUT_AREA_RIGHT = 4096
+
+__config_docs__("DEFAULT_DM_CCD_READOUT_AREA_BOTTOM",
+"""The bottom coordinate of the CCD readout area.
+Default: 4096
+""")
+DEFAULT_DM_CCD_READOUT_AREA_BOTTOM = 4096
+
+__config_docs__("DEFAULT_DM_CCD_READOUT_AREA_LEFT",
+"""The left coordinate of the CCD readout area.
+Default: 0
+""")
+DEFAULT_DM_CCD_READOUT_AREA_LEFT = 0
