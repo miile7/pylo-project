@@ -106,14 +106,14 @@ class DMCamera(CameraInterface):
         """
 
         # import as late as possible to allow changes by extensions
-        from .config import DEFAULT_DM_CAMERA_EXPOSURE_TIME
-        from .config import DEFAULT_DM_CAMERA_BINNING_X
-        from .config import DEFAULT_DM_CAMERA_BINNING_Y
-        from .config import DEFAULT_DM_PROCESS_LEVEL
-        from .config import DEFAULT_DM_CCD_READOUT_AREA_TOP
-        from .config import DEFAULT_DM_CCD_READOUT_AREA_RIGHT
-        from .config import DEFAULT_DM_CCD_READOUT_AREA_BOTTOM
-        from .config import DEFAULT_DM_CCD_READOUT_AREA_LEFT
+        from ..config import DEFAULT_DM_CAMERA_EXPOSURE_TIME
+        from ..config import DEFAULT_DM_CAMERA_BINNING_X
+        from ..config import DEFAULT_DM_CAMERA_BINNING_Y
+        from ..config import DEFAULT_DM_PROCESS_LEVEL
+        from ..config import DEFAULT_DM_CCD_READOUT_AREA_TOP
+        from ..config import DEFAULT_DM_CCD_READOUT_AREA_RIGHT
+        from ..config import DEFAULT_DM_CCD_READOUT_AREA_BOTTOM
+        from ..config import DEFAULT_DM_CCD_READOUT_AREA_LEFT
         
         # the exposure time
         configuration.addConfigurationOption(
