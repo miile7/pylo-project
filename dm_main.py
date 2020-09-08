@@ -55,42 +55,52 @@ if __file__ != "":
 
 print("Initializing python environment...")
 
-import importlib
+import traceback
 
-import pylo
-import pylo.microscopes
-import pylo.cameras
+try:
+	import importlib
 
-print("Preparing...")
+	import pylo
+	import pylo.microscopes
+	import pylo.cameras
 
-pylo.OFFLINE_MODE = True
+	print("Preparing...")
 
-pylo = importlib.reload(pylo)
-pylo.microscopes = importlib.reload(pylo.microscopes)
-pylo.cameras = importlib.reload(pylo.cameras)
+	pylo.OFFLINE_MODE = True
 
-view = pylo.DMView()
-configuration = pylo.IniConfiguration()
+	pylo = importlib.reload(pylo)
+	pylo.microscopes = importlib.reload(pylo.microscopes)
+	pylo.cameras = importlib.reload(pylo.cameras)
 
-# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
-# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
-# configuration.setValue("setup", "camera-class", "PyJEMCamera")
+	view = pylo.DMView()
+	configuration = pylo.IniConfiguration()
 
-# configuration.setValue("pyjem-camera", "detector-name", "camera")
-# configuration.setValue("pyjem-camera", "image-size", 1024)
+	# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
+	# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
+	# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
+	# configuration.setValue("setup", "camera-class", "PyJEMCamera")
 
-controller = pylo.Controller(view, configuration)
+	# configuration.setValue("pyjem-camera", "detector-name", "camera")
+	# configuration.setValue("pyjem-camera", "image-size", 1024)
 
-pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
-# pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
+	controller = pylo.Controller(view, configuration)
 
-controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
-# controller.camera = pylo.cameras.PyJEMCamera(controller)
-controller.camera = pylo.cameras.DummyCamera(controller)
+	pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
+	# pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
 
-print("Done.")
-print("Starting.")
-controller.startProgramLoop()
+	# controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
+	controller.microscope = pylo.microscopes.DummyMicroscope(controller)
+	# controller.camera = pylo.cameras.PyJEMCamera(controller)
+	controller.camera = pylo.cameras.DummyCamera(controller)
 
-# pylo.execute()
+	print("Done.")
+	print("Starting.")
+	controller.startProgramLoop()
+
+	# pylo.execute()
+
+except Exception as e:
+	# dm-script error messages are very bad, use this for getting the error text and the 
+	# correct traceback
+	print("Exception: ", e)
+	traceback.print_exc()
