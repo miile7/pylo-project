@@ -35,6 +35,8 @@ PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
 - [PIL (Pillow)](https://python-pillow.org/) 
   ([pip](https://pypi.org/project/Pillow/), 
   [conda](https://anaconda.org/anaconda/pillow))
+- [execdmscript](https://github.com/miile7/execdmscript)
+  ([pip](https://pypi.org/project/execdmscript/))
 
 ### General
 
