@@ -102,3 +102,9 @@ lorenz mode and before starting the measurement.
 Default: 10
 """)
 DEFAULT_RELAXATION_TIME = 0
+
+__config_docs__("DM_CONFIGURATION_PERSISTENT_TAG_NAME",
+"""The tag name in the persistent tags to use to save all the settings in.
+Default: "pylo"
+""")
+DM_CONFIGURATION_PERSISTENT_TAG_NAME = "pylo"
