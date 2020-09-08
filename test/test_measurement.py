@@ -251,6 +251,12 @@ class DummyView(pylo.AbstractView):
             raise error
         else:
             raise Exception(error)
+    
+    def _updateRunning(self):
+        pass
+
+    def print(self, *inputs, sep=" ", end="\n", inset=""):
+        print(*inputs, sep=sep, end=end)
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -859,7 +865,7 @@ class TestMeasurement:
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
-    def check_measurement_is_stopped(self, perf_measurement, check_files=True):
+    def check_measurement_is_stopped(self, perf_measurement, check_files=False):
         """Check if the given measurement is stopped at any time, check if 
         there are no files created if `check_files` is True."""
 
