@@ -77,6 +77,9 @@ class DummyView(pylo.AbstractView):
             {"variable": "measurement-var", "start": 0, "end": 1, "step-width": 1}
         )
     
+    def _updateRunning(self):
+        pass
+    
     def askFor(self, *inputs):
         self.inputs = inputs
 
@@ -122,15 +125,26 @@ class DummyView(pylo.AbstractView):
     
     def showError(self, error, how_to_fix=None):
         self.error_log.append((error, how_to_fix))
+        if isinstance(error, Exception):
+            name = error.__class__.__name__
+        else:
+            name = "Error"
+
         print("DummyView::showError() is called.")
-        print("\tError: {}".format(error))
+        print("\t{}: {}".format(name, error))
         print("\tFix: {}".format(how_to_fix))
         
         # display errors, if they are inteded use pytest.raises()
         if isinstance(error, Exception):
+            import traceback
+            traceback.print_exc()
+
             raise DummyViewShowsError("{}".format(error)).with_traceback(error.__traceback__)
         else:
             raise DummyViewShowsError(error)
+    
+    def print(self, *inputs, sep=" ", end="\n", inset=""):
+        print(*inputs, sep=sep, end=end)
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
@@ -142,6 +156,9 @@ class DummyConfiguration(pylo.AbstractConfiguration):
     
     def loadConfiguration(self):
         self.clear()
+    
+    def saveConfiguration(self):
+        pass
     
     def clear(self):
         self.request_log = []

@@ -674,7 +674,7 @@ class Controller:
                 return
             except Exception as e:
                 try:
-                    self.view.showError("An exception occurred: {}".format(e))
+                    self.view.showError(e)
                 except StopProgram:
                     self.stopProgramLoop()
                     return
