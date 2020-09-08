@@ -156,16 +156,16 @@ if __name__ == "__main__":
 
     test_log = []
 
-    # test setting lorenz mode
+    # test setting lorentz mode
     # mini_cli.prnt("")
-    # mini_cli.prnt("Setting to lorenz mode...", end=" ")
+    # mini_cli.prnt("Setting to lorentz mode...", end=" ")
     # t = time.time()
-    # microscope.setInLorenzMode(True)
+    # microscope.setInLorentzMode(True)
     # mini_cli.prnt("Done. (took {:.3f}s)".format(time.time() - t))
 
-    # s = mini_cli.input_yn("Please confirm: Is the microscope in lorenz mode?", 
+    # s = mini_cli.input_yn("Please confirm: Is the microscope in lorentz mode?", 
     #                       lines_before=0, inset=0, add_inset=tabc)
-    # test_log.append(("Switch to lorenz mode", s))
+    # test_log.append(("Switch to lorentz mode", s))
     
     select = None
     logging = False
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     while True:
         controls = {
             "g": "toggling log ({})".format(logging),
-            "z": "toggling lorenz mode ({})".format(microscope.getInLorenzMode()),
+            "z": "toggling lorentz mode ({})".format(microscope.getInLorentzMode()),
             "c": "current state test ({})".format("not set" if current_state is None else "set"),
             "s": "setting to safe state",
             "e": "setting to EMERGENCY state"
@@ -226,25 +226,25 @@ if __name__ == "__main__":
                     mini_cli.prnt("Logging is switched off.")
             elif select == "z":
                 mini_cli.prnt("")
-                mini_cli.prnt("Now testing toggling of the lorenz mode.")
+                mini_cli.prnt("Now testing toggling of the lorentz mode.")
             
                 value = mini_cli.input_yn(
-                    "Do you want to set the TEM into lorenz mode?",
-                    "Activate lorenz mode?", 
+                    "Do you want to set the TEM into lorentz mode?",
+                    "Activate lorentz mode?", 
                     lines_before=0, inset=0, add_inset=tabc, 
                     add_choices={"s": None}
                 )
 
                 if value is not None:
                     if value:
-                        mini_cli.prnt("Setting microscope to lorenz mode...")
-                        msg = "Is the microscope in lorenz mode?"
+                        mini_cli.prnt("Setting microscope to lorentz mode...")
+                        msg = "Is the microscope in lorentz mode?"
                     else:
-                        mini_cli.prnt("Ending lorenz mode...")
-                        msg = "Is the microscope NOT in lorenz mode anymore?"
+                        mini_cli.prnt("Ending lorentz mode...")
+                        msg = "Is the microscope NOT in lorentz mode anymore?"
                     
                     t = time.time()
-                    microscope.setInLorenzMode(value)
+                    microscope.setInLorentzMode(value)
                     mini_cli.prnt("Done. (took {:.3f}s)".format(time.time() - t))
 
                     if logging:

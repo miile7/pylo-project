@@ -24,26 +24,26 @@ class MicroscopeInterface(VulnerableMachine):
         self.supports_parallel_measurement_variable_setting = True
         self.controller = controller
 
-    def setInLorenzMode(self, lorenz_mode: bool) -> None:
-        """Set whether the microscope should now be in lorenz mode or not.
+    def setInLorentzMode(self, lorentz_mode: bool) -> None:
+        """Set whether the microscope should now be in lorentz mode or not.
 
         This is typically done by switching off the lenses that are close to 
         the speciemen and changing the focus.
 
         Parameters
         ----------
-        lorenz_mode : boolean
-            Whether to put the microscope in lorenz mode or not
+        lorentz_mode : boolean
+            Whether to put the microscope in lorentz mode or not
         """
         raise NotImplementedError()
 
-    def getInLorenzMode(self) -> bool:
-        """Get whether the microscope is currently in lorenz mode or not.
+    def getInLorentzMode(self) -> bool:
+        """Get whether the microscope is currently in lorentz mode or not.
 
         Returns
         -------
         boolean
-            Whether the microscope is in lorenz mode or not
+            Whether the microscope is in lorentz mode or not
         """
         raise NotImplementedError()
 

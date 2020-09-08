@@ -20,17 +20,17 @@ class TestMicroscopeInterface:
             pylo.MeasurementVariable("test-var-3", "Test Variable 3", min_value=1)
         )
 
-    def test_error_is_thrown_set_lorenz_mode(self):
-        """Test if the setInLorenzMode() function raises a 
+    def test_error_is_thrown_set_lorentz_mode(self):
+        """Test if the setInLorentzMode() function raises a 
         NotImplementedError."""
         with pytest.raises(NotImplementedError):
-            self.microscope.setInLorenzMode(True)
+            self.microscope.setInLorentzMode(True)
         
-    def test_error_is_thrown_get_lorenz_mode(self):
-        """Test if the getInLorenzMode() function raises a 
+    def test_error_is_thrown_get_lorentz_mode(self):
+        """Test if the getInLorentzMode() function raises a 
         NotImplementedError."""
         with pytest.raises(NotImplementedError):
-            self.microscope.getInLorenzMode()
+            self.microscope.getInLorentzMode()
         
     def test_error_is_thrown_set_measurement_variable(self):
         """Test if the setMeasurementVariableValue() function raises a 

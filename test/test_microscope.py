@@ -47,14 +47,14 @@ microscopes = (
 
 class TestPyJEMMicroscope:
     @pytest.mark.parametrize("microscope", microscopes)
-    def test_lorenz_mode(self, microscope):
-        """Test if the lorenz mode works."""
+    def test_lorentz_mode(self, microscope):
+        """Test if the lorentz mode works."""
 
         microscope = microscope()
 
-        microscope.setInLorenzMode(True)
+        microscope.setInLorentzMode(True)
 
-        assert microscope.getInLorenzMode()
+        assert microscope.getInLorentzMode()
     
     @pytest.mark.parametrize("microscope", microscopes)
     def test_measurement_variables(self, microscope):

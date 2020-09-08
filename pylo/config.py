@@ -53,10 +53,10 @@ DEFAULT_SAVE_DIRECTORY = os.path.join(os.path.expanduser("~"), "pylo", "measurem
 
 __config_docs__("DEFAULT_SAVE_FILE_NAME",
 """The name to use for each file if the user does not change it
-Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4" 
+Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4" 
     (Needs DM-extension for the file extension, use .tif otherwise)
 """)
-DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorenz-measurement.dm4"
+DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4"
 
 __config_docs__("DEFAULT_LOG_PATH",
 """The default path to save the log to.
@@ -98,7 +98,7 @@ DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT = False
 
 __config_docs__("DEFAULT_RELAXATION_TIME",
 """The time in seconds to wait after the microscope has been set to the 
-lorenz mode and before starting the measurement.
+lorentz mode and before starting the measurement.
 Default: 10
 """)
 DEFAULT_RELAXATION_TIME = 0

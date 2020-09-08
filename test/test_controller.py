@@ -189,7 +189,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
             )
         ]
     
-    def setInLorenzMode(self, lorenz_mode):
+    def setInLorentzMode(self, lorentz_mode):
         pass
     
     def setMeasurementVariableValue(self, id_, value):

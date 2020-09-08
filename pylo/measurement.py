@@ -51,7 +51,7 @@ class Measurement:
         finished
     relaxation_time : float
         The relaxation time in seconds to wait after the microscope has been 
-        set to lorenz mode
+        set to lorentz mode
     name_format : str
         The file name how to save the images (including the extension, 
         supported are all the extensions provided by the `CameraInterface`),
@@ -127,11 +127,11 @@ class Measurement:
         self.camera_safe_after = (self.camera_safe_after == True)
 
         # prepare the relaxation time to wait before continuing after the 
-        # measurement is set to the lorenz mode
+        # measurement is set to the lorentz mode
         try:
             self.relaxation_time = self.controller.configuration.getValue(
                 CONFIG_MEASUREMENT_GROUP,
-                "relaxation-time-lorenz-mode"
+                "relaxation-time-lorentz-mode"
             )
         except KeyError:
             self.relaxation_time = None
@@ -263,7 +263,7 @@ class Measurement:
         Fired Events
         ------------
         microscope_ready
-            Fired when the microscope is in lorenz mode the measurement is 
+            Fired when the microscope is in lorentz mode the measurement is 
             right about starting
         before_record
             Fired before setting the microscope to the the next measurement 
@@ -291,9 +291,9 @@ class Measurement:
             )
 
         try:
-            # set to lorenz mode
+            # set to lorentz mode
             self.controller.view.print("Setting to lorentz mode...")
-            self.controller.microscope.setInLorenzMode(True)
+            self.controller.microscope.setInLorentzMode(True)
         
             if (isinstance(self.relaxation_time, (int, float)) and 
                 self.relaxation_time > 0):
@@ -882,11 +882,11 @@ class Measurement:
         
         # add whether a relaxation time after the lornez mode is activated
         configuration.addConfigurationOption(
-            CONFIG_MEASUREMENT_GROUP, "relaxation-time-lorenz-mode", 
+            CONFIG_MEASUREMENT_GROUP, "relaxation-time-lorentz-mode", 
             datatype=float, 
             default_value=DEFAULT_RELAXATION_TIME, 
             description="The relaxation time in seconds to wait after the " + 
-            "microscope is switched to lorenz mode. Use 0 or negative values " + 
+            "microscope is switched to lorentz mode. Use 0 or negative values " + 
             "to ignore."
         )
         
