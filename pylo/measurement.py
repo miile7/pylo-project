@@ -672,7 +672,7 @@ class Measurement:
             the current series does.
         error_path : tuple, optional
             This is for internal use only. It holds the variable names of the 
-            parent series if the current parse series is in the 'on-each-step'
+            parent series if the current parse series is in the 'on-each-point'
             index of another series
         
         Returns
@@ -735,7 +735,7 @@ class Measurement:
             the current series does.
         error_path : tuple, optional
             This is for internal use only. It holds the variable names of the 
-            parent series if the current parse series is in the 'on-each-step'
+            parent series if the current parse series is in the 'on-each-point'
             index of another series
         
         Returns
@@ -749,7 +749,7 @@ class Measurement:
 
         steps = []
         if isinstance(error_path, (list, tuple)):
-            error_str = "".join([" in 'on-each-step' of {}".format(p) 
+            error_str = "".join([" in 'on-each-point' of {}".format(p) 
                                   for p in error_path])
         else:
             error_path = []
@@ -853,10 +853,9 @@ class Measurement:
             step = start_dict.copy()
             step[series["variable"]] = v
 
-            if "on-each-step" in series:
-                
+            if "on-each-point" in series:
                 steps += Measurement._parseSeries(controller, step, 
-                                                  series["on-each-step"],
+                                                  series["on-each-point"],
                                                   error_path)
             else:
                 steps.append(step)
