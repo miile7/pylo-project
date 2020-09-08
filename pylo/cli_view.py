@@ -33,7 +33,7 @@ class CLIView(AbstractView):
         self.line_length = 79
         try:
             l = os.get_terminal_size().columns
-        except OSError:
+        except (OSError, ValueError):
             l = self.line_length
             pass
         if l < self.line_length:
