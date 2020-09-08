@@ -544,7 +544,10 @@ class DMView(AbstractView):
                     except KeyError:
                         val = ""
                     
-                    var_type = configuration.getDatatype(group, key)
+                    try:
+                        var_type = configuration.getDatatype(group, key)
+                    except KeyError:
+                        var_type = str
                     var_type_name = get_datatype_name(var_type)
 
                     if (var_type != str and hasattr(var_type, "format") and 
@@ -561,13 +564,23 @@ class DMView(AbstractView):
                     except KeyError:
                         description = ""
                     
+                    try:
+                        ask_if_not_present = configuration.getAskIfNotPresent(group, key)
+                    except KeyError:
+                        ask_if_not_present = False
+                    
+                    try:
+                        restart_required = configuration.getRestartRequired(group, key)
+                    except KeyError:
+                        restart_required = False
+                    
                     config_vars[group][key] = {
                         "value": val,
                         "default_value": default_value,
                         "datatype": var_type_name,
                         "description": str(description),
-                        "ask_if_not_present": bool(configuration.getAskIfNotPresent(group, key)),
-                        "restart_required": bool(configuration.getRestartRequired(group, key)),
+                        "ask_if_not_present": ask_if_not_present,
+                        "restart_required": restart_required,
                     }
         
         variables = {
