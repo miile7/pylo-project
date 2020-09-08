@@ -622,6 +622,8 @@ class Controller:
                 target=self.measurement.start
             )
             self._measurement_thread.start()
+            self.view.progress_max = len(self.measurement.steps)
+            self.view.showRunning()
             
         except StopProgram:
             self.stopProgramLoop()

@@ -274,6 +274,12 @@ class Measurement:
         measurement_ready
             Fired when the measurement has fully finished
         """
+        # self.controller.view.progres_max = len(self.steps)
+        self.controller.view.print("Starting measurement...")
+        self.controller.view.print(
+            "Saving all images to {}.".format(self.save_dir), inset="  "
+        )
+
         self.running = True
         self._image_save_threads = []
 
@@ -286,6 +292,7 @@ class Measurement:
 
         try:
             # set to lorenz mode
+            self.controller.view.print("Setting to lorentz mode...")
             self.controller.microscope.setInLorenzMode(True)
         
             if (isinstance(self.relaxation_time, (int, float)) and 
@@ -306,6 +313,7 @@ class Measurement:
             
             # trigger microscope ready event
             microscope_ready()
+            self.controller.view.print("Done.")
 
             for self._step_index, step in enumerate(self.steps):
                 # start going through steps
@@ -327,6 +335,11 @@ class Measurement:
                     # add the values to reach to the current log
                     self.addToLog(step, "Targetting values", "", 
                                   datetime.datetime.now().isoformat())
+
+                step_descr = ", ".join(["{}: {}".format(k, v) for k, v in step.items()])  
+                self.controller.view.print("Approaching step {}: {}.".format(
+                    self._step_index, step_descr
+                ))
 
                 for variable_name in step:
                     # set each measurement variable
@@ -358,10 +371,13 @@ class Measurement:
                         for error in thread.exceptions:
                             raise error
                 
+                self.controller.view.print("Done.", inset="  ")
+                
                 if not self.running:
                     # stop() is called
                     return
                 
+                self.controller.view.print("Recording image...", inset="  ")
                 # record measurement
                 self.current_image = self.controller.camera.recordImage()
                 name = self.formatName()
@@ -399,7 +415,12 @@ class Measurement:
                 )
                 thread.start()
                 self._image_save_threads.append(thread)
-            
+                self.controller.view.print("Saving image as {}...".format(name), 
+                                           inset="  ")
+                self.controller.view.progress = self._step_index + 1
+
+            self.controller.view.print("Done with measurement.")
+
             reset_threads = []
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly, do this while waiting
@@ -410,12 +431,14 @@ class Measurement:
                 )
                 thread.start()
                 reset_threads.append(thread)
+                self.controller.view.print("Setting microscope to safe state...")
             if self.camera_safe_after:
                 thread = ExceptionThread(
                     target=self.controller.camera.resetToSafeState
                 )
                 thread.start()
                 reset_threads.append(thread)
+                self.controller.view.print("Setting camera to safe state...")
 
             # stop log thread
             if isinstance(self._log_thread, LogThread):
@@ -423,6 +446,7 @@ class Measurement:
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
+            self.controller.view.print("Waiting for saving images...")
 
             # wait for all machine reset threads to finish
             for thread in reset_threads:
@@ -431,6 +455,8 @@ class Measurement:
                 if len(thread.exceptions):
                     for error in thread.exceptions:
                         raise error
+
+            self.controller.view.print("Everything done, finished.")
 
             # reset everything to the state before measuring
             self.running = False
