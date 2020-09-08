@@ -5,7 +5,6 @@ import configparser
 
 from .pylolib import path_like
 from .pylolib import get_datatype_name
-from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
 class IniConfiguration(AbstractConfiguration):
