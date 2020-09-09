@@ -54,8 +54,6 @@ if __file__ != "":
 
 print("Initializing python environment...")
 
-import traceback
-
 try:
 	import importlib
 
@@ -64,42 +62,22 @@ try:
 	import pylo.cameras
 
 	print("Preparing...")
-
-	pylo.OFFLINE_MODE = True
-
-	pylo = importlib.reload(pylo)
-	pylo.microscopes = importlib.reload(pylo.microscopes)
-	pylo.cameras = importlib.reload(pylo.cameras)
+	# pylo.OFFLINE_MODE = True
 
 	view = pylo.DMView()
-	configuration = pylo.IniConfiguration()
+	configuration = pylo.DMConfiguration()
 
-	# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
-	# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-	# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
-	# configuration.setValue("setup", "camera-class", "PyJEMCamera")
-
-	# configuration.setValue("pyjem-camera", "detector-name", "camera")
-	# configuration.setValue("pyjem-camera", "image-size", 1024)
-
-	controller = pylo.Controller(view, configuration)
-
-	pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
-	# pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
-
-	# controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
-	controller.microscope = pylo.microscopes.DummyMicroscope(controller)
-	# controller.camera = pylo.cameras.PyJEMCamera(controller)
-	controller.camera = pylo.cameras.DummyCamera(controller)
-
+	configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
+	configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
+	configuration.setValue("setup", "camera-module", "dm_camera.py")
+	configuration.setValue("setup", "camera-class", "DMCamera")
 	print("Done.")
-	print("Starting.")
-	controller.startProgramLoop()
 
-	# pylo.execute()
-
+	print("Starting...")
+	pylo.execute(view, configuration)
 except Exception as e:
-	# dm-script error messages are very bad, use this for getting the error text and the 
-	# correct traceback
-	print("Exception: ", e)
+	# dm-script error messages are very bad, use this for getting the error 
+	# text and the correct traceback
+	print("{}: ".format(e.__class__.__name__), e)
+	import traceback
 	traceback.print_exc()
