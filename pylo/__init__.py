@@ -60,8 +60,25 @@ from .abstract_configuration import AbstractConfiguration
 
 controller = None
 
-def get_controller() -> Controller:
+import typing
+
+def get_controller(view: typing.Optional[AbstractView]=None,
+                   configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
     """Get the current instance of the controller.
+
+    The `view` and the `configuration` are ignored if the controller exists 
+    already.
+
+    Parameter
+    ---------
+    view : AbstractView
+        The view to use for handling user inputs and displaying the measurement
+        status, if not given the `config.VIEW` will be used instead, default:
+        None
+    configuration : AbstractConfiguration
+        The configuration that defines how values are saved persistently, if 
+        not given the `config.CONFIGURATION` will be used instead, 
+        default: None
 
     Returns
     -------
@@ -71,12 +88,27 @@ def get_controller() -> Controller:
 
     global controller
     if controller is None or not isinstance(controller, Controller):
-        controller = Controller()
+        controller = Controller(view, configuration)
     
     return controller
 
-def setup() -> Controller:
+def setup(view: typing.Optional[AbstractView]=None,
+          configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
     """Create the setup for the measurement.
+
+    The `view` and the `configuration` are ignored if the controller exists 
+    already.
+
+    Parameter
+    ---------
+    view : AbstractView
+        The view to use for handling user inputs and displaying the measurement
+        status, if not given the `config.VIEW` will be used instead, default:
+        None
+    configuration : AbstractConfiguration
+        The configuration that defines how values are saved persistently, if 
+        not given the `config.CONFIGURATION` will be used instead, 
+        default: None
     
     Returns
     -------
@@ -84,14 +116,26 @@ def setup() -> Controller:
         The current controller
     """
     
-    return get_controller()
+    return get_controller(view, configuration)
 
-def start() -> Controller:
+def start(view: typing.Optional[AbstractView]=None,
+          configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
     """Start the measurement.
 
     The measurement is started in another thread, so it will run in the 
     background. To wait for the measurement to finish use the `execute()`
     function.
+
+    Parameter
+    ---------
+    view : AbstractView
+        The view to use for handling user inputs and displaying the measurement
+        status, if not given the `config.VIEW` will be used instead, default:
+        None
+    configuration : AbstractConfiguration
+        The configuration that defines how values are saved persistently, if 
+        not given the `config.CONFIGURATION` will be used instead, 
+        default: None
     
     Returns
     -------
@@ -99,16 +143,28 @@ def start() -> Controller:
         The current controller
     """
     
-    controller = setup()
+    controller = setup(view, configuration)
     controller.startProgramLoop()
 
     return controller
 
-def execute() -> Controller:
+def execute(view: typing.Optional[AbstractView]=None,
+            configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
     """Start the measurement and wait until it has finished.
 
     To execute the measurement in another thread without waiting for it to 
     finish use the `start()` function.
+
+    Parameter
+    ---------
+    view : AbstractView
+        The view to use for handling user inputs and displaying the measurement
+        status, if not given the `config.VIEW` will be used instead, default:
+        None
+    configuration : AbstractConfiguration
+        The configuration that defines how values are saved persistently, if 
+        not given the `config.CONFIGURATION` will be used instead, 
+        default: None
     
     Returns
     -------
@@ -116,7 +172,7 @@ def execute() -> Controller:
         The current controller
     """
 
-    controller = start()
+    controller = start(view, configuration)
     controller.waitForProgram()
 
     return controller
