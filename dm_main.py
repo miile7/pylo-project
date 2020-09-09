@@ -55,21 +55,21 @@ if __file__ != "":
 print("Initializing python environment...")
 
 try:
-	import importlib
-
 	import pylo
-	import pylo.microscopes
-	import pylo.cameras
 
 	print("Preparing...")
 	# pylo.OFFLINE_MODE = True
 
+	# create view and configuration, both using the DM environmnent
 	view = pylo.DMView()
 	configuration = pylo.DMConfiguration()
 
-	configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
+	# set the microscope to use the PyJEM microscope
+	configuration.setValue("setup", "microscope-module", "pylo.microscopes")
 	configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-	configuration.setValue("setup", "camera-module", "dm_camera.py")
+
+	# use the DMCamera as the camera
+	configuration.setValue("setup", "camera-module", "pylo.cameras")
 	configuration.setValue("setup", "camera-class", "DMCamera")
 	print("Done.")
 
