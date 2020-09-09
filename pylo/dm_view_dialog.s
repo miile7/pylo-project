@@ -1227,7 +1227,7 @@ class DMViewDialog : UIFrame{
 
             number remaining_rows = max_rows - row_counter
             number group_rows = ceil(group_values.TagGroupCountTags() / max_cols);
-            if(remaining_rows < group_rows && group_rows < max_rows && (remaining_rows < 3 || group_rows - remaining_rows < 3)){
+            if(page_counter > 0 && remaining_rows < group_rows && group_rows < max_rows && (remaining_rows < 3 || group_rows - remaining_rows < 3)){
                 // required rows (group_rows) do not all fit in the current tab, create a new tab
                 // if
                 // 1. The group can fit on one page
@@ -1248,6 +1248,8 @@ class DMViewDialog : UIFrame{
             if(max_cols > 1){
                 group_box.DLGTableLayout(max_cols, min(group_rows, remaining_rows), 0);
             }
+
+            result("Page " + page_counter + ", groups: " + group_values.TagGroupCountTags() + "\n")
 
             for(number j = 0; j < group_values.TagGroupCountTags(); j++){
                 string key = group_values.TagGroupGetTagLabel(j);
@@ -1326,6 +1328,16 @@ class DMViewDialog : UIFrame{
                 row_counter++;
 
                 if(row_counter > max_rows){
+                    tab.DLGAddElement(group_box);
+
+                    group_box = DLGCreateBox(group);
+                    group_box.DLGExpand("X");
+                    group_box.DLGFill("X");
+                    group_box.DLGAnchor("West");
+                    if(max_cols > 1){
+                        group_box.DLGTableLayout(max_cols, min(group_rows, remaining_rows), 0);
+                    }
+
                     row_counter = 0;
                     page_counter++;
                     tabs.DLGAddTab(tab);
@@ -1336,7 +1348,9 @@ class DMViewDialog : UIFrame{
                 }
             }
 
-            tab.DLGAddElement(group_box);
+            if(row_counter > 0){
+                tab.DLGAddElement(group_box);
+            }
         }
         
         tabs.DLGAddTab(tab);
