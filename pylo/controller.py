@@ -45,7 +45,8 @@ import_dirs = {
     "current working directory": os.getcwd()
 }
 for v in import_dirs.values():
-    sys.path.append(v)
+    if not v in sys.path:
+        sys.path.append(v)
 
 CONFIG_SETUP_GROUP = "setup"
 
@@ -203,8 +204,10 @@ class Controller:
             for ext in extensions:
                 if module_name.endswith(ext):
                     module_name = module_name[:-1*len(ext)]
+            
+            print("Controller._dynamicGetClass():", module_name, class_name, sys.path, "\n")
 
-            module = importlib.import_module(module_name)
+            module = importlib.import_module(module_name, "pylo")
             class_ = getattr(module, class_name)
 
             if not isinstance(class_, type):
@@ -634,7 +637,7 @@ class Controller:
             self._measurement_thread.start()
             self.view.progress_max = len(self.measurement.steps)
             self.view.showRunning()
-            
+
         except StopProgram:
             self.stopProgramLoop()
             return
