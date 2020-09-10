@@ -10,6 +10,58 @@ from .exception_thread import ExceptionThread
 # from .config import PROGRAM_NAME
 # from .config import TIFF_IMAGE_TAGS_INDEX
 
+def _export_image_object_to_jpg(file_path: str, image: "Image") -> None:
+    """Save the given image object to the given file_path as a JPG file.
+
+    The if the file already exists, it will be overwritten silently. If the 
+    parent directory doesn't exist, or any error occurres, an Exception will be
+    raised.
+
+    Note that this function does not save the tags!
+
+    Parameters:
+    -----------
+    file_path : str
+        The path of the file to save to including the file name and the
+        extension, if the path already exists, it will silently be 
+        overwritten
+    image : Image
+        The image object to save
+    """
+
+    # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
+    # mode defines whether RGB, RGBA, Grayscale, ... is used
+    save_img = PILImage.fromarray(image.image_data, mode="L")
+    save_img.save(file_path, format="jpeg", quality=100, optimize=False)
+
+def _export_image_object_to_tiff(file_path: str, image: "Image") -> None:
+    """Save the given image object to the given file_path as a TIFF file.
+
+    The if the file already exists, it will be overwritten silently. If the 
+    parent directory doesn't exist, or any error occurres, an Exception will be
+    raised.
+
+    Parameters:
+    -----------
+    file_path : str
+        The path of the file to save to including the file name and the
+        extension, if the path already exists, it will silently be 
+        overwritten
+    image : Image
+        The image object to save
+    """
+
+    # import as late as possible to allow changes by extensions
+    from .config import PROGRAM_NAME
+    from .config import TIFF_IMAGE_TAGS_INDEX
+
+    # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
+    # mode defines whether RGB, RGBA, Grayscale, ... is used
+    save_img = PILImage.fromarray(image.image_data, mode="L")
+    save_img.save(file_path, format="tiff", 
+                  # write tags as image description
+                  tiffinfo={TIFF_IMAGE_TAGS_INDEX: json.dumps(image.tags)}, 
+                  compression="raw", software=PROGRAM_NAME)
 
 class Image:
     """This class represents an image.
@@ -29,6 +81,12 @@ class Image:
         (that should be overwritten if necessary), the second is the Image 
         object
     """
+    export_extensions = {
+        "jpg": _export_image_object_to_jpg,
+        "jpeg": _export_image_object_to_jpg,
+        "tif": _export_image_object_to_tiff,
+        "tiff": _export_image_object_to_tiff
+    }
 
     def __init__(self, image_data: typing.Any, tags: typing.Optional[dict]={}) -> None:
         """Create an image.
@@ -45,12 +103,6 @@ class Image:
 
         self.image_data = np.array(image_data, dtype=np.uint8)
         self.tags = tags
-        self.export_extensions = {
-            "jpg": _export_image_object_to_jpg,
-            "jpeg": _export_image_object_to_jpg,
-            "tif": _export_image_object_to_tiff,
-            "tiff": _export_image_object_to_tiff
-        }
     
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
@@ -58,7 +110,7 @@ class Image:
         """Save the image to the given file_path.
 
         Note that the saving is done in another thread. The thread will be 
-        returned.
+        started and then returned.
 
         Raises
         ------
@@ -93,7 +145,7 @@ class Image:
         Returns
         -------
         ExceptionThread
-            The thread that is currently saving
+            The thread that is currently saving, the thread has started already
         """
 
         file_path = os.path.abspath(file_path)
@@ -139,56 +191,3 @@ class Image:
             raise TypeError(
                 "The file extension {} is not supported.".format(file_type)
             )
-
-def _export_image_object_to_jpg(file_path: str, image: Image) -> None:
-    """Save the given image object to the given file_path as a JPG file.
-
-    The if the file already exists, it will be overwritten silently. If the 
-    parent directory doesn't exist, or any error occurres, an Exception will be
-    raised.
-
-    Note that this function does not save the tags!
-
-    Parameters:
-    -----------
-        file_path : str
-            The path of the file to save to including the file name and the
-            extension, if the path already exists, it will silently be 
-            overwritten
-        image : Image
-            The image object to save
-    """
-
-    # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
-    # mode defines whether RGB, RGBA, Grayscale, ... is used
-    save_img = PILImage.fromarray(image.image_data, mode="L")
-    save_img.save(file_path, format="jpeg", quality=100, optimize=False)
-
-def _export_image_object_to_tiff(file_path: str, image: Image) -> None:
-    """Save the given image object to the given file_path as a TIFF file.
-
-    The if the file already exists, it will be overwritten silently. If the 
-    parent directory doesn't exist, or any error occurres, an Exception will be
-    raised.
-
-    Parameters:
-    -----------
-        file_path : str
-            The path of the file to save to including the file name and the
-            extension, if the path already exists, it will silently be 
-            overwritten
-        image : Image
-            The image object to save
-    """
-
-    # import as late as possible to allow changes by extensions
-    from .config import PROGRAM_NAME
-    from .config import TIFF_IMAGE_TAGS_INDEX
-
-    # https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.fromarray,
-    # mode defines whether RGB, RGBA, Grayscale, ... is used
-    save_img = PILImage.fromarray(image.image_data, mode="L")
-    save_img.save(file_path, format="tiff", 
-                  # write tags as image description
-                  tiffinfo={TIFF_IMAGE_TAGS_INDEX: json.dumps(image.tags)}, 
-                  compression="raw", software=PROGRAM_NAME)
