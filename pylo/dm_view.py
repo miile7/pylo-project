@@ -171,38 +171,23 @@ class DMView(AbstractView):
             `inputs[0]` and so on
         """
 
-        if not "text" in kwargs:
+        if "text" not in kwargs:
             if len(inputs) > 1:
-                kwargs["text"] = "Please enter the following values."
+                kwargs["text"] = "Please enter the following values"
             else:
-                kwargs["text"] = "Please enter the following value."
-
-        for i, input_definition in enumerate(inputs):
-            if "datatype" in input_definition:
-                if not isinstance(input_definition["datatype"], str):
-                    if hasattr(input_definition["datatype"], "name"):
-                        inputs[i]["datatype"] = input_definition["datatype"].name
-                    elif hasattr(input_definition["datatype"], "__name__"):
-                        inputs[i]["datatype"] = input_definition["datatype"].__name__
-                    else:
-                        inputs[i]["datatype"] = str(input_definition["datatype"])
-
-        rv = {
-            "values": list
-        }
-        sv = {
-            "ask_vals": inputs,
-            "message": kwargs["text"]
-        }
+                kwargs["text"] = "Please enter the value"
         
-        path = os.path.join(self._rel_path, "dm_view_ask_for_dialog.s")
-        with exec_dmscript(path, readvars=rv, setvars=sv, debug=False) as script:
-            values = script["values"]
+        results = self._showDialog(
+            ask_for_values=inputs, 
+            ask_for_msg=kwargs["text"],
+            dialog_type=0b100
+        )
 
-            if len(values) == len(inputs):
-                return values
-            
-        return None
+        if len(results) <= 3 or results[3] is None:
+            raise RuntimeError("Could not create the resulting ask values from " + 
+                               "the dialogs values.")
+
+        return results[3]
 
     def print(self, *values: object, sep: typing.Optional[str]=" ", 
               end: typing.Optional[str]="\n", inset: typing.Optional[str]="") -> None:
@@ -415,11 +400,21 @@ class DMView(AbstractView):
             'end' and 'step-width' key and an optional 'on-each-point' key that 
             may contain another series (value has to be the uncalibrated value)
         """
-        start, series, config = self._showDialog(
-            controller.microscope.supported_measurement_variables,
-            controller.configuration,
-            0b10 | 0b01
+        results = self._showDialog(
+            measurement_variables=controller.microscope.supported_measurement_variables,
+            configuration=controller.configuration,
+            dialog_type=0b10 | 0b01
         )
+
+        if len(results) > 0:
+            start = results[0]
+        else:
+            start = None
+        
+        if len(results) > 1:
+            series = results[1]
+        else:
+            series = None
 
         if start is None or series is None:
             if start is None and series is None:
@@ -472,21 +467,19 @@ class DMView(AbstractView):
             value
         """
 
-        start, series, config = self._showDialog(
-            None,
-            configuration,
-            0b01
-        )
+        results = self._showDialog(configuration=configuration, dialog_type=0b01)
 
-        if config is None:
+        if len(results) <= 2 or results[2] is None:
             raise RuntimeError("Could not create the configuration from " + 
                                "the dialogs values.")
 
-        return config
+        return results[2]
     
     def _showDialog(self, 
                     measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
+                    ask_for_values: typing.Optional[typing.Sequence[AskInput]]=None,
+                    ask_for_msg: typing.Optional[str]="",
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
 
@@ -498,12 +491,14 @@ class DMView(AbstractView):
             - `0b10` for showing the series dialog
             - `0b01 | 0b10 = 0b11` for showing the series dialog but the user 
               can switch to the configuration dialog and back
+            - `0b100` for showing the ask for dialog
         """
 
         path = os.path.join(self._rel_path, "dm_view_dialog.s")
         sync_vars = {"start": dict, 
                      "series": dict, 
                      "configuration": dict, 
+                     "ask_for": list,
                      "success": bool}
         libs = (os.path.join(self._rel_path, "pylolib.s"), )
 
@@ -511,6 +506,8 @@ class DMView(AbstractView):
             dialog_startup = ""
         elif (dialog_type & 0b01) > 0:
             dialog_startup = "configuration"
+        elif (dialog_type & 0b100) > 0:
+            dialog_startup = "ask_for"
         else:
             dialog_startup = "series"
         
@@ -624,14 +621,33 @@ class DMView(AbstractView):
                         "restart_required": restart_required,
                     }
         
+        ask_vals = []
+        if isinstance(ask_for_values, (tuple, list)):
+            for input_definition in ask_for_values:
+                if "datatype" in input_definition:
+                    if not isinstance(input_definition["datatype"], str):
+                        if hasattr(input_definition["datatype"], "name"):
+                            input_definition["datatype"] = input_definition["datatype"].name
+                        elif hasattr(input_definition["datatype"], "__name__"):
+                            input_definition["datatype"] = input_definition["datatype"].__name__
+                        else:
+                            input_definition["datatype"] = str(input_definition["datatype"])
+                else:
+                    input_definition["datatype"] = "string"
+            
+                ask_vals.append(input_definition)
+
         variables = {
             "m_vars": m_vars,
             "config_vars": config_vars,
+            "ask_vals": ask_vals,
+            "message": ask_for_msg,
             "dialog_startup": dialog_startup
         }
         start = None
         series = None
         config = None
+        ask_for_values = None
         success = None
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
@@ -670,10 +686,15 @@ class DMView(AbstractView):
                 config = script["configuration"]
             except KeyError:
                 config = None
+            
+            try:
+                ask_for_values = script["ask_for"]
+            except KeyError:
+                ask_for_values = None
         
         if success and ((start is not None and series is not None) or 
-           config is not None):
-            return start, series, config
+           config is not None or ask_for_values is not None):
+            return start, series, config, ask_for_values
         else:
             raise StopProgram
         

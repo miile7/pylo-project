@@ -57,7 +57,7 @@ print("Initializing python environment...")
 try:
 	import pylo
 	# from pylo import dm_image_dm4_support
-	import plyo.dm_image_dm4_support
+	import pylo.dm_image_dm4_support
 
 	print("Preparing...")
 	# pylo.OFFLINE_MODE = True

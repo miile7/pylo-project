@@ -97,7 +97,8 @@ try:
 		# "error",
 		# "hint",
 		# "create-measurement",
-		# "ask-for",
+		# "show-settings",
+		"ask-for",
 		"show-running",
 	]
 
@@ -121,6 +122,13 @@ try:
 		print("")
 		print("Showing create Measurement")
 		pprint.pprint(view.showCreateMeasurement(controller))
+
+	if "show-settings" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing Settings")
+		pprint.pprint(view.showSettings(configuration))
 
 	if "ask-for" in tests:
 		print("")

@@ -65,6 +65,16 @@ class DMViewDialog : UIFrame{
     TagGroup config_inputs;
 
     /**
+     * The values to ask
+     */
+    TagGroup ask_for_values;
+
+    /**
+     * The input boxes
+     */
+    TagGroup ask_for_inputs;
+
+    /**
      * The panels for the series settings and the configuration settings.
      */
     TagGroup panel_list;
@@ -73,6 +83,11 @@ class DMViewDialog : UIFrame{
      * Whether the user is allowed to switch between the series and the settings panel.
      */
     number allow_panel_change;
+
+    /**
+     * The mode, this can be "configuration", "series" or "ask_for"
+     */
+    string display_mode;
 
     /**
      * Returns the measurement variable of the given `index`.
@@ -990,9 +1005,6 @@ class DMViewDialog : UIFrame{
         error_box.DLGAddElement(error_display);
         wrapper.DLGAddElement(error_box);
 
-        // save all start value input boxes in a group
-        start_value_inputboxes = NewTagGroup();
-
         // the number of variables to show in one row
         number max_cols = 2;
         number max_rows = ceil(measurement_variables.TagGroupCountTags() / max_cols);
@@ -1071,14 +1083,6 @@ class DMViewDialog : UIFrame{
         lower_wrapper.DLGAddElement(input_line);
         lower_wrapper.DLGExpand("X");
         lower_wrapper.DLGFill("X");
-
-        // item lists
-        series_selectboxes = NewTagList();
-        limit_displays = NewTagList();
-        start_inputboxes = NewTagList();
-        step_inputboxes = NewTagList();
-        end_inputboxes = NewTagList();
-        on_each_labels = NewTagList();
 
         // add measurement variable rows
         for(number i = 0; i < c ; i++){
@@ -1160,6 +1164,88 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+    * Create an input line for a dialog. The line contains the label, the input and the description.
+    *
+    * @param value_definition
+    *      A `TagGroup` that defines the value input line
+    * @param input
+    *      The reference to save the input field to
+    *
+    * @return 
+    *      The dialog group that represents the input line
+    */
+    TagGroup createValueInputLine(object self, TagGroup value_definition, TagGroup &input){
+        // column widths
+        number cw1 = 20; // label column
+        number cw2 = 40; // value column
+        number cw3 = 60; // description column
+
+        string description;
+        string type;
+        string name;
+        value_definition.TagGroupGetTagAsString("description", description);
+        value_definition.TagGroupGetTagAsString("datatype", type);
+        value_definition.TagGroupGetTagAsString("name", name);
+
+        TagGroup value_wrapper = DLGCreateGroup();
+
+        TagGroup line = DLGCreateGroup();
+        line.DLGTableLayout(3, 1, 0);
+        line.DLGExpand("X");
+        line.DLGAnchor("East");
+        line.DLGFill("X");
+
+        if(type != "boolean"){
+            TagGroup label = DLGCreateLabel(name, cw1);
+            label.DLGAnchor("North");
+            line.DLGAddElement(label);
+        }
+
+        if(type == "int"){
+            number value;
+            value_definition.TagGroupGetTagAsLong("value", value);
+            input = DLGCreateIntegerField(round(value), cw2);
+        }
+        else if(type == "float"){
+            number value;
+            value_definition.TagGroupGetTagAsFloat("value", value);
+            input = DLGCreateRealField(value, cw2, 4);
+        }
+        else if(type == "boolean"){
+            number value;
+            value_definition.TagGroupGetTagAsBoolean("value", value);
+            input = DLGCreateCheckBox(name, value != 0 ? 1 : 0);
+            input.DLGAnchor("East");
+
+            TagGroup inner_line_wrapper = DLGCreateGroup();
+            // inner_line_wrapper.DLGWidth(cw1 + cw2);
+            inner_line_wrapper.DLGAddElement(input);
+            inner_line_wrapper.DLGAnchor("East");
+            inner_line_wrapper.DLGSide("Right");
+            line.DLGAddElement(inner_line_wrapper);
+        }
+        else{
+            string value;
+            value_definition.TagGroupGetTagAsString("value", value);
+            input = DLGCreateStringField(value, cw2);
+        }
+
+        if(type != "boolean"){
+            input.DLGAnchor("North");
+            line.DLGAddElement(input);
+        }
+
+        TagGroup description_label = DLGCreateLabel(description, cw3);
+        description_label.DLGHeight(ceil(description.len() / 55));
+        description_label.DLGAnchor("East");
+        line.DLGAddElement(description_label);
+
+        value_wrapper.DLGAddElement(line);
+
+        return value_wrapper;
+    }
+
+    /**
      * Create the content for the configuration panel.
      *
      * @return
@@ -1199,17 +1285,9 @@ class DMViewDialog : UIFrame{
         // error_box.DLGAddElement(error_display);
         // wrapper.DLGAddElement(error_box);
 
-        // save all start value input boxes in a group
-        config_inputs = NewTagList();
-
         // the number of variables to show in one row
         number max_cols = 1;
         number max_rows = 7;
-
-        // column widths
-        number cw1 = 20; // label column
-        number cw2 = 40; // value column
-        number cw3 = 60; // value column
 
         TagGroup tabs = DLGCreateTabList();
         tabs.DLGExpand("X");
@@ -1255,71 +1333,17 @@ class DMViewDialog : UIFrame{
                 TagGroup value_settings;
                 group_values.TagGroupGetTagAsTagGroup(key, value_settings);
 
-                string description;
-                string type;
-                value_settings.TagGroupGetTagAsString("description", description);
-                value_settings.TagGroupGetTagAsString("datatype", type);
-
-                TagGroup value_wrapper = DLGCreateGroup();
-
-                TagGroup line = DLGCreateGroup();
-                line.DLGTableLayout(3, 1, 0);
-                line.DLGExpand("X");
-                line.DLGAnchor("East");
-                line.DLGFill("X");
-
-                if(type != "boolean"){
-                    TagGroup label = DLGCreateLabel(key, cw1);
-                    label.DLGAnchor("North");
-                    line.DLGAddElement(label);
+                if(!value_settings.TagGroupDoesTagExist("name")){
+                    value_settings.TagGroupCreateNewLabeledTag("name");
+                    value_settings.TagGroupSetTagAsString("name", key);
                 }
 
                 TagGroup input;
-                if(type == "int"){
-                    number value;
-                    value_settings.TagGroupGetTagAsLong("value", value);
-                    input = DLGCreateIntegerField(round(value), cw2);
-                }
-                else if(type == "float"){
-                    number value;
-                    value_settings.TagGroupGetTagAsFloat("value", value);
-                    input = DLGCreateRealField(value, cw2, 4);
-                }
-                else if(type == "boolean"){
-
-                    number value;
-                    value_settings.TagGroupGetTagAsBoolean("value", value);
-                    input = DLGCreateCheckBox(key, value != 0 ? 1 : 0);
-                    input.DLGAnchor("East");
-
-                    TagGroup inner_line_wrapper = DLGCreateGroup();
-                    // inner_line_wrapper.DLGWidth(cw1 + cw2);
-                    inner_line_wrapper.DLGAddElement(input);
-                    inner_line_wrapper.DLGAnchor("East");
-                    inner_line_wrapper.DLGSide("Right");
-                    line.DLGAddElement(inner_line_wrapper);
-                }
-                else{
-                    string value;
-                    value_settings.TagGroupGetTagAsString("value", value);
-                    input = DLGCreateStringField(value, cw2);
-                }
+                TagGroup value_wrapper = self.createValueInputLine(value_settings, input);
 
                 input.DLGIdentifier(group + "/" + key + "/" + counter);
-
-                if(type != "boolean"){
-                    input.DLGAnchor("North");
-                    line.DLGAddElement(input);
-                }
-
-                TagGroup description_label = DLGCreateLabel(description, cw3);
-                description_label.DLGHeight(ceil(description.len() / 55));
-                description_label.DLGAnchor("East");
-                line.DLGAddElement(description_label);
-
                 config_inputs.TagGroupInsertTagAsTagGroup(infinity(), input);
 
-                value_wrapper.DLGAddElement(line);
                 group_box.DLGAddElement(value_wrapper);
                 counter++;
 
@@ -1367,6 +1391,44 @@ class DMViewDialog : UIFrame{
     }
 
 	/**
+	 * Create the contents for the ask-for dialog. 
+     *
+     * @param msg
+     *      The message to show
+	 *
+	 * @return
+	 *		The dialogs contents as a TagGroup for initializing an
+	 *		UIFrame
+	 */
+	TagGroup _createAskForContent(object self, string msg){
+        TagGroup outer_wrapper = DLGCreateGroup();
+
+        TagGroup label = DLGCreateLabel(msg, 130);
+        label.DLGHeight(1);
+        outer_wrapper.DLGAddElement(label);
+
+        TagGroup wrapper = DLGCreateGroup();
+
+        
+        for(number i = 0; i < ask_for_values.TagGroupCountTags(); i++){
+            TagGroup value_settings;
+            ask_for_values.TagGroupGetIndexedTagAsTagGroup(i, value_settings);
+            
+            TagGroup input;
+            TagGroup value_wrapper = self.createValueInputLine(value_settings, input);
+
+            input.DLGIdentifier("ask_for_input-" + i);
+            ask_for_inputs.TagGroupInsertTagAsTagGroup(i, input);
+
+            wrapper.DLGAddElement(value_wrapper);
+        }
+
+        outer_wrapper.DLGAddElement(wrapper);
+
+		return outer_wrapper;
+    }
+
+	/**
 	 * Create the contents of the dialog. 
      *
      * @param title
@@ -1390,15 +1452,41 @@ class DMViewDialog : UIFrame{
         // panel_list.DLGAddPanel(series_panel);
         // panel_list.DLGAddPanel(configuration_panel);
 
-        TagGroup series_panel = DLGCreateTab("Create series");
-        series_panel.DLGAddElement(self._createSeriesSetupContent());
+        // input boxes for the ask-for panel
+        ask_for_inputs = NewTagList();
 
-        TagGroup configuration_panel = DLGCreateTab("Settings");
-        configuration_panel.DLGAddElement(self._createConfigurationContent());
+        // input boxes for the configuration panel
+        config_inputs = NewTagList();
 
-        panel_list = DLGCreateTabList(0);
-        panel_list.DLGAddTab(series_panel);
-        panel_list.DLGAddTab(configuration_panel);
+        // input boxes for the series panel
+        series_selectboxes = NewTagList();
+        limit_displays = NewTagList();
+        start_inputboxes = NewTagList();
+        step_inputboxes = NewTagList();
+        end_inputboxes = NewTagList();
+        on_each_labels = NewTagList();
+
+        // input boxes for the series panel
+        start_value_inputboxes = NewTagGroup();
+
+        if(display_mode == "ask_for"){
+            panel_list = DLGCreatePanelList();
+
+            TagGroup ask_for_panel = DLGCreatePanel();
+            ask_for_panel.DLGAddElement(self._createAskForContent(message));
+            panel_list.DLGAddTab(ask_for_panel);
+        }
+        else{
+            panel_list = DLGCreateTabList(0);
+
+            TagGroup series_panel = DLGCreateTab("Create series");
+            series_panel.DLGAddElement(self._createSeriesSetupContent());
+            panel_list.DLGAddTab(series_panel);
+
+            TagGroup configuration_panel = DLGCreateTab("Settings");
+            configuration_panel.DLGAddElement(self._createConfigurationContent());
+            panel_list.DLGAddTab(configuration_panel);
+        }
         
         // Tabs do not work as a direct child of the dialog items, so probably panels don't too, 
         // therefore create a warpper 
@@ -1423,9 +1511,12 @@ class DMViewDialog : UIFrame{
      * @return
      *      The dialog
      */
-	object init(object self, string title, TagGroup measurement_vars, TagGroup configuration_vars){
+	object init(object self, string startup, string title, TagGroup measurement_vars, TagGroup configuration_vars, TagGroup ask_vals, String msg){
         measurement_variables = measurement_vars;
         configuration = configuration_vars;
+        ask_for_values = ask_vals;
+        display_mode = startup;
+        message = msg
         allow_panel_change = 1;
 		self.super.init(self._createContent(title));
         
@@ -1605,6 +1696,54 @@ class DMViewDialog : UIFrame{
         }
 
         return config_vars;
+    }
+
+    /**
+     * Get the ask for values as a `TagGroup`.
+     *
+     * @return
+     *      The values `TagGroup`
+     */
+    TagGroup getAskForValues(object self){
+        // TagGroup vals = NewTagGroup();
+        TagGroup vals = NewTagList();
+
+        for(number i = 0; i < ask_for_values.TagGroupCountTags(); i++){
+            TagGroup input;
+            ask_for_inputs.TagGroupGetIndexedTagAsTagGroup(i, input);
+
+            TagGroup value_settings;
+            ask_for_values.TagGroupGetIndexedTagAsTagGroup(i, value_settings);
+            
+            // number index = vals.TagGroupCreateNewLabeledTag("" + i);
+            number index = i;
+
+            string type;
+            value_settings.TagGroupGetTagAsString("datatype", type);
+
+            if(type == "int"){
+                number value = input.DLGGetValue();
+                // vals.TagGroupSetIndexedTagAsLong(index, value);
+                vals.TagGroupInsertTagAsLong(index, value);
+            }
+            else if(type == "float"){
+                number value = input.DLGGetValue();
+                // vals.TagGroupSetIndexedTagAsFloat(index, value);
+                vals.TagGroupInsertTagAsFloat(index, value);
+            }
+            else if(type == "boolean"){
+                number value = input.DLGGetValue();
+                // vals.TagGroupSetIndexedTagAsBoolean(index, value);
+                vals.TagGroupInsertTagAsBoolean(index, value);
+            }
+            else{
+                string value = input.DLGGetStringValue();
+                // vals.TagGroupSetIndexedTagAsString(index, value);
+                vals.TagGroupInsertTagAsString(index, value);
+            }
+        }
+
+        return vals;
     }
 }
 
@@ -1823,11 +1962,12 @@ class DMViewDialog : UIFrame{
 // string dialog_startup = "series"; 
 string title = "PyLo";
 
-object dialog = alloc(DMViewDialog).init(title, m_vars, config_vars);
+object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, config_vars, ask_vals, message);
 
 TagGroup start;
 TagGroup series;
 TagGroup configuration;
+TagGroup ask_for;
 number success;
 
 if(dialog_startup == "series"){
@@ -1844,4 +1984,5 @@ if(success){
     start = dialog.getStart();
     series = dialog.getSeries();
     configuration = dialog.getConfiguration();
+    ask_for = dialog.getAskForValues();
 }

@@ -1,5 +1,7 @@
 import typing
 
+from .datatype import Datatype
+
 Savable = typing.Union[str, int, float, bool, None]
 
 class AbstractConfiguration:
@@ -128,7 +130,7 @@ class AbstractConfiguration:
 
         Keyword Args
         ------------
-        datatype : type, optional
+        datatype : type or Datatype, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
@@ -177,7 +179,7 @@ class AbstractConfiguration:
 
         Keyword Args
         ------------
-        datatype : type, optional
+        datatype : type or Datatype, optional
             Any valid type, this is used for defining this value so it can be 
             asked and saved by the view, if given this will overwite the 
             datatype if it exists already, if it does not exist and is not 
@@ -208,7 +210,7 @@ class AbstractConfiguration:
             self.configuration[group][key]["value"] = []
 
         supported_args = {
-            "datatype": type,
+            "datatype": (type, Datatype),
             "default_value": typing.Any,
             "ask_if_not_present": bool,
             "description": str,
@@ -419,7 +421,7 @@ class AbstractConfiguration:
         except KeyError:
             raise
     
-    def getDatatype(self, group: str, key: str) -> type:
+    def getDatatype(self, group: str, key: str) -> typing.Union[type, Datatype]:
         """Get the datatype for the group and key.
 
         Raises
