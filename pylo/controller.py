@@ -204,8 +204,6 @@ class Controller:
             for ext in extensions:
                 if module_name.endswith(ext):
                     module_name = module_name[:-1*len(ext)]
-            
-            print("Controller._dynamicGetClass():", module_name, class_name, sys.path, "\n")
 
             module = importlib.import_module(module_name, "pylo")
             class_ = getattr(module, class_name)

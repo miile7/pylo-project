@@ -1249,8 +1249,6 @@ class DMViewDialog : UIFrame{
                 group_box.DLGTableLayout(max_cols, min(group_rows, remaining_rows), 0);
             }
 
-            result("Page " + page_counter + ", groups: " + group_values.TagGroupCountTags() + "\n")
-
             for(number j = 0; j < group_values.TagGroupCountTags(); j++){
                 string key = group_values.TagGroupGetTagLabel(j);
 
