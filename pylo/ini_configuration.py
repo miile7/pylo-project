@@ -5,6 +5,7 @@ import configparser
 
 from .pylolib import path_like
 from .pylolib import get_datatype_name
+from .datatype import Datatype
 from .abstract_configuration import AbstractConfiguration
 
 class IniConfiguration(AbstractConfiguration):
@@ -58,7 +59,17 @@ class IniConfiguration(AbstractConfiguration):
 
         for section in config.sections():
             for key in config[section]:
-                self.setValue(section, key, config[section][key])
+                value = config[section][key]
+
+                try:
+                    datatype = self.getDatatype(section, key)
+                except KeyError:
+                    datatype = None
+                
+                if callable(datatype):
+                    value = datatype(value)
+
+                self.setValue(section, key, value)
     
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
@@ -78,11 +89,12 @@ class IniConfiguration(AbstractConfiguration):
                         pass
                     
                     try:
+                        datatype = self.getDatatype(group, key)
                         comment.append("Type: '{}'".format(
-                            get_datatype_name(self.getDatatype(group, key))
+                            get_datatype_name(datatype)
                         ))
                     except KeyError:
-                        pass
+                        datatype = str
 
                     try:
                         comment.append("Default: '{}'".format(self.getDefault(group, key)))
@@ -105,6 +117,8 @@ class IniConfiguration(AbstractConfiguration):
                         val = "yes"
                     elif isinstance(val, bool) and val == False:
                         val = "no"
+                    elif isinstance(datatype, Datatype):
+                        val = datatype.format(val)
                     
                     # save the value, adding new line for better looks
                     config[group][key] = str(val) + "\n"
