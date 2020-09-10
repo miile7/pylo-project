@@ -100,8 +100,14 @@ try:
     print("Checking:")
     # check the values
     for group, key, value, args in example_data:
-        print("Value for", group, "and", key, "is equal:", 
-              configuration.getValue(group, key) == value)
+        equal = configuration.getValue(group, key) == value
+        print("Value for", group, "and", key, "is equal:", equal)
+        assert equal
+    
+    print("")
+    print("")
+    print("=" * 80)
+    print("All tests successfully")
 
 except Exception as e:
     # dm-script error messages are very bad, use this for getting the error text and the 
