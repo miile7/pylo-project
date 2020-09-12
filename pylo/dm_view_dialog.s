@@ -90,6 +90,12 @@ class DMViewDialog : UIFrame{
     string display_mode;
 
     /**
+     * The map to get which file path button sets which input field, identifier of the button is 
+     * the key, the value is the input dialog TagGroup.
+     */
+    TagGroup path_button_input_map;
+
+    /**
      * Returns the measurement variable of the given `index`.
      *
      * @param index
@@ -647,6 +653,60 @@ class DMViewDialog : UIFrame{
         }
 
         return valid;
+    }
+
+    /**
+     * The callback when a dir path button is clicked.
+     */
+    void selectPathCallback(object self){
+        for(number i = 0; i < path_button_input_map.TagGroupCountTags(); i++){
+            string button_identifier = path_button_input_map.TagGroupGetTagLabel(i);
+
+            TagGroup button = self.lookupElement(button_identifier);
+
+            if(button.TagGroupIsValid()){
+                if(button.DLGGetValue() == 1){
+                    // this button is clicked
+
+                    // remove clicked status
+                    button.DLGValue(0);
+
+                    // the type
+                    string type = button.DLGGetTitle();
+
+                    // get the input and the corresponding start value
+                    TagGroup input;
+                    string start_path = "";
+                    if(path_button_input_map.TagGroupGetTagAsTagGroup(button_identifier, input)){
+                        start_path = input.DLGGetStringValue();
+                    }
+
+                    // input is empty
+                    if(start_path == ""){
+                        start_path = GetApplicationDirectory(0, 1);
+
+                        if(type == "filepath"){
+                            start_path = start_path.PathConcatenate("file.dat");
+                        }
+                    }
+                    
+                    // show the dialog
+                    string target_path;
+                    number success;
+
+                    if(type == "dirpath"){
+                        success = GetDirectoryDialog(self.getFrameWindow(), "Select a directory", "Select a directory", start_path, target_path);
+                    }
+                    else{
+                        success = SaveAsDialog(self.getFrameWindow(), "Save as", start_path, target_path);
+                    }
+
+                    if(success && input.TagGroupIsValid()){
+                        input.DLGValue(target_path);
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -1224,13 +1284,51 @@ class DMViewDialog : UIFrame{
             inner_line_wrapper.DLGSide("Right");
             line.DLGAddElement(inner_line_wrapper);
         }
+        else if(type == "dirpath" || type == "filepath"){
+            string value;
+            value_definition.TagGroupGetTagAsString("value", value);
+
+            TagGroup inner_line_wrapper = DLGCreateGroup();
+            inner_line_wrapper.DLGTableLayout(2, 1, 0);
+
+            input = DLGCreateStringField(value, cw2 - 5);
+            input.DLGAnchor("West");
+            input.DLGSide("Left");
+            inner_line_wrapper.DLGAddElement(input);
+
+            number s = 24;
+            string icon_path = __file__.PathExtractDirectory(0).PathConcatenate("icons");
+            if(type == "dirpath"){
+                icon_path = icon_path.PathConcatenate("directory-icon-" + s + ".tiff")
+            }
+            else{
+                icon_path = icon_path.PathConcatenate("file-icon-" + s + ".tiff")
+            }
+            rgbimage button_img := OpenImage(icon_path);
+
+            String button_identifier = "path_button_" + path_button_input_map.TagGroupCountTags();
+            TagGroup button = DLGCreateDualStateBevelButton(button_identifier, button_img, button_img, "selectPathCallback");
+            button.DLGTitle(type);
+            button.DLGIdentifier(button_identifier);
+            button.DLGAnchor("East");
+            button.DLGSide("Right");
+            inner_line_wrapper.DLGAddElement(button);
+
+            // save the link between the button and the input
+            if(!path_button_input_map.TagGroupDoesTagExist(button_identifier)){
+                path_button_input_map.TagGroupCreateNewLabeledTag(button_identifier);
+            }
+            path_button_input_map.TagGroupSetTagAsTagGroup(button_identifier, input);
+
+            line.DLGAddElement(inner_line_wrapper);
+        }
         else{
             string value;
             value_definition.TagGroupGetTagAsString("value", value);
             input = DLGCreateStringField(value, cw2);
         }
 
-        if(type != "boolean"){
+        if(type != "boolean" && type != "dirpath" && type != "filepath"){
             input.DLGAnchor("North");
             line.DLGAddElement(input);
         }
@@ -1442,15 +1540,8 @@ class DMViewDialog : UIFrame{
 		TagGroup dialog_items;
 		TagGroup dialog_tags = DLGCreateDialog(title, dialog_items);
 
-        // TagGroup series_panel = DLGCreatePanel();
-        // series_panel.DLGAddElement(self._createSeriesSetupContent());
-
-        // TagGroup configuration_panel = DLGCreatePanel();
-        // configuration_panel.DLGAddElement(self._createConfigurationContent());
-
-        // panel_list = DLGCreatePanelList(0);
-        // panel_list.DLGAddPanel(series_panel);
-        // panel_list.DLGAddPanel(configuration_panel);
+        // the map for finding the input for the file path buttons
+        path_button_input_map = NewTagGroup();
 
         // input boxes for the ask-for panel
         ask_for_inputs = NewTagList();
@@ -1960,6 +2051,7 @@ class DMViewDialog : UIFrame{
 // TagGroup m_vars = NewTagList();
 // TagGroup config_vars = NewTagList();
 // string dialog_startup = "series"; 
+// string __file__ = getApplicationDirectory(0, 1);
 string title = "PyLo";
 
 object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, config_vars, ask_vals, message);
