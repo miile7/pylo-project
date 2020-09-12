@@ -9,6 +9,14 @@ class Datatype:
     def __init__(self, name: str, format: callable, parse: typing.Optional[callable]=None) -> None:
         """Create a new datatype.
 
+        Example:
+        -------
+        ```python
+        >>> Datatype("string", 
+        ...          lambda v, f: ("{" + f + "}").format(v), 
+        ...          lambda x: str(x))
+        ```
+
         Parameters
         ----------
         name :  str
