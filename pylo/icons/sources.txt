@@ -1,0 +1,2 @@
+directory-icon  https://www.iconfinder.com/icons/298771/directory_file_icon
+file-icon   https://www.iconfinder.com/icons/298777/file_text_icon
