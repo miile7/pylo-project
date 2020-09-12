@@ -96,10 +96,10 @@ try:
 	tests = [
 		# "error",
 		# "hint",
-		# "create-measurement",
+		"create-measurement",
 		# "show-settings",
-		"ask-for",
-		"show-running",
+		# "ask-for",
+		# "show-running",
 	]
 
 	if "error" in tests:
