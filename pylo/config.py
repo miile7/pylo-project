@@ -115,7 +115,7 @@ __config_docs__("DEFAULT_DM_CAMERA_EXPOSURE_TIME",
 """The exposure time of the camera in seconds.
 Default: 0.1
 """)
-DEFAULT_DM_CAMERA_EXPOSURE_TIME = 0.1
+DEFAULT_DM_CAMERA_EXPOSURE_TIME = 0.5
 
 __config_docs__("DEFAULT_DM_CAMERA_BINNING_X",
 """The hardware binning of pixels in x direction.
@@ -134,7 +134,7 @@ __config_docs__("DEFAULT_DM_PROCESS_LEVEL",
 for 'gain normalized'.
 Default: 1
 """)
-DEFAULT_DM_PROCESS_LEVEL = 1
+DEFAULT_DM_PROCESS_LEVEL = 3
 
 __config_docs__("DEFAULT_DM_CCD_READOUT_AREA_TOP",
 """The top coordinate of the CCD readout area.
