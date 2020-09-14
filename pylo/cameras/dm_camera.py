@@ -37,6 +37,9 @@ class DMCamera(CameraInterface):
         The area on the ccd chip to use as the image, index 0 is the top 
         coordinate, index 1 the right, index 2 the bottom and index 3 the 
         left coordinate
+    show_images : bool, optional
+        Whether to show all recorded images in a new workspace or not, 
+        default: False
     """
 
     def __init__(self, controller: "Controller") -> None:
@@ -48,8 +51,9 @@ class DMCamera(CameraInterface):
             The controller
         """
 
-        (self.exposure_time, self.binning_x, self.binning_y, self.process_level, 
-            *self.ccd_area) = controller.getConfigurationValuesOrAsk(
+        (self.show_images, self.exposure_time, self.binning_x, self.binning_y, 
+            self.process_level, *self.ccd_area) = controller.getConfigurationValuesOrAsk(
+            (CONFIG_DM_CAMERA_GROUP, "show-images"),
             (CONFIG_DM_CAMERA_GROUP, "exposure-time"),
             (CONFIG_DM_CAMERA_GROUP, "binning-x"),
             (CONFIG_DM_CAMERA_GROUP, "binning-y"),
@@ -71,9 +75,13 @@ class DMCamera(CameraInterface):
                         "bottom": self.ccd_area[2], "left": self.ccd_area[3]}
         }
 
-        if DM is not None:
+        from ..config import OFFLINE_MODE
+
+        if DM is not None and not OFFLINE_MODE:
             self.camera = DM.GetActiveCamera()
             self.camera.PrepareForAcquire()
+        else:
+            self.camera = None
     
     def recordImage(self) -> "Image":
         """Get the image of the current camera.
@@ -85,10 +93,18 @@ class DMCamera(CameraInterface):
         """
         
         image_tags = copy.deepcopy(self.tags)
-        image_data = self.camera.AcquireImage(
+        image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
-            self.ccd_area[2], self.ccd_area[1]).GetNumArray()
+            self.ccd_area[2], self.ccd_area[1])
+        
+        image_data = image.GetNumArray()
+
+        if self.show_images:
+            image.ShowImage()
+        else:
+            # remove the reference to free the memory
+            del image
 
         return Image(image_data, image_tags)
     
@@ -106,6 +122,7 @@ class DMCamera(CameraInterface):
         """
 
         # import as late as possible to allow changes by extensions
+        from ..config import DEFAULT_DM_SHOW_IMAGES
         from ..config import DEFAULT_DM_CAMERA_EXPOSURE_TIME
         from ..config import DEFAULT_DM_CAMERA_BINNING_X
         from ..config import DEFAULT_DM_CAMERA_BINNING_Y
@@ -114,6 +131,14 @@ class DMCamera(CameraInterface):
         from ..config import DEFAULT_DM_CCD_READOUT_AREA_RIGHT
         from ..config import DEFAULT_DM_CCD_READOUT_AREA_BOTTOM
         from ..config import DEFAULT_DM_CCD_READOUT_AREA_LEFT
+
+        configuration.addConfigurationOption(
+            DEFAULT_DM_SHOW_IMAGES, "show-images", 
+            datatype=bool, 
+            default_value=DEFAULT_DM_SHOW_IMAGES, 
+            description="Whether to show all acquired images (in a new " + 
+            "workspace) or not, they will be saved to a file in both cases."
+        )
         
         # the exposure time
         configuration.addConfigurationOption(
