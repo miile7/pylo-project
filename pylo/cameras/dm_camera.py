@@ -2,6 +2,8 @@ import copy
 
 import numpy as np
 
+import execdmscript
+
 try:
     test_error = ModuleNotFoundError()
 except NameError:
@@ -82,6 +84,8 @@ class DMCamera(CameraInterface):
             self.camera.PrepareForAcquire()
         else:
             self.camera = None
+        
+        self._workspace_id = None
     
     def recordImage(self) -> "Image":
         """Get the image of the current camera.
@@ -93,6 +97,7 @@ class DMCamera(CameraInterface):
         """
         
         image_tags = copy.deepcopy(self.tags)
+
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
@@ -101,6 +106,7 @@ class DMCamera(CameraInterface):
         image_data = image.GetNumArray()
 
         if self.show_images:
+            self.createAndShowWorkspace()
             image.ShowImage()
         else:
             # remove the reference to free the memory
@@ -110,6 +116,19 @@ class DMCamera(CameraInterface):
     
     def resetToSafeState(self) -> None:
         pass
+    
+    def createAndShowWorkspace(self) -> None:
+        from ..config import PROGRAM_NAME
+
+        if self._workspace_id is None:
+            dmscript = "\n".join((
+                "number wsid = WorkspaceAdd(0);",
+                "WorkspaceSetName(wsid, \"{}\");".format(PROGRAM_NAME),
+                "WorkspaceSetActive(wsid);"
+            ))
+
+            with execdmscript.exec_dmscript(dmscript, readvars={"wsid": int}) as script:
+                self._workspace_id = script["wsid"]
 
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
