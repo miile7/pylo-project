@@ -77,6 +77,7 @@ try:
 
 	print("Starting...")
 	pylo.execute(view, configuration)
+	print("Exiting.")
 except Exception as e:
 	# dm-script error messages are very bad, use this for getting the error 
 	# text and the correct traceback
