@@ -1,8 +1,9 @@
+import sys
 import copy
+import math
+import typing
 
 import numpy as np
-
-import execdmscript
 
 try:
     test_error = ModuleNotFoundError()
@@ -17,8 +18,26 @@ try:
 except (ModuleNotFoundError, ImportError) as e:
     DM = None
 
+if DM is not None:
+    # for development only, execdmscript is another module that is developed
+    # separately
+    try:
+        import dev_constants
+        load_from_dev = True
+    except (ModuleNotFoundError, ImportError) as e:
+        load_from_dev = False
+
+    if load_from_dev:
+        if hasattr(dev_constants, "execdmscript_path"):
+            if not dev_constants.execdmscript_path in sys.path:
+                sys.path.insert(0, dev_constants.execdmscript_path)
+            
+    import execdmscript
+else:
+    raise ModuleNotFoundError("Could not load module execdmscript.")
+
 from .camera_interface import CameraInterface
-from ..image import Image
+from ..dm_image import DMImage
 
 CONFIG_DM_CAMERA_GROUP = "dm-camera"
 
@@ -45,7 +64,7 @@ class DMCamera(CameraInterface):
     """
 
     def __init__(self, controller: "Controller") -> None:
-        """Create a new camera interface object.
+        """Create a new dm camera object.
         
         Parameters
         ----------
@@ -85,50 +104,63 @@ class DMCamera(CameraInterface):
         else:
             self.camera = None
         
+        # the workspace id to show the images in if they should be displayed
         self._workspace_id = None
+        if self.show_images:
+            self._createNewWorkspace()
     
-    def recordImage(self) -> "Image":
+    def recordImage(self) -> "DMImage":
         """Get the image of the current camera.
 
         Returns
         -------
-        Image
+        DMImage
             The image object
         """
         
-        image_tags = copy.deepcopy(self.tags)
+        camera_tags = {"camera": copy.deepcopy(self.tags)}
 
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
             self.ccd_area[2], self.ccd_area[1])
         
-        image_data = image.GetNumArray()
+        image = DMImage.fromDMPyImageObject(image, camera_tags)
+        image.show_image = self.show_images
+        image.workspace_id = self._workspace_id
 
-        if self.show_images:
-            self.createAndShowWorkspace()
-            image.ShowImage()
-        else:
-            # remove the reference to free the memory
-            del image
-
-        return Image(image_data, image_tags)
+        return image
     
     def resetToSafeState(self) -> None:
         pass
     
-    def createAndShowWorkspace(self) -> None:
+    def _createNewWorkspace(self, activate: typing.Optional[bool]=True) -> None:
+        """Create a new workspace and save the workspace id.
+        
+        Parameters
+        ----------
+        activate : bool, optional
+            Whether to set the new workspace as the active one, default: True
+        """
+
         from ..config import PROGRAM_NAME
 
-        if self._workspace_id is None:
-            dmscript = "\n".join((
-                "number wsid = WorkspaceAdd(0);",
-                "WorkspaceSetName(wsid, \"{}\");".format(PROGRAM_NAME),
-                "WorkspaceSetActive(wsid);"
-            ))
+        dmscript = [
+            "number wsid = WorkspaceAdd(0);",
+            "WorkspaceSetName(wsid, \"{}\");".format(PROGRAM_NAME),
+        ]
 
-            with execdmscript.exec_dmscript(dmscript, readvars={"wsid": int}) as script:
-                self._workspace_id = script["wsid"]
+        if activate:
+            dmscript.append("WorkspaceSetActive(wsid);")
+        
+        dmscript = "\n".join(dmscript)
+
+        readvars = {
+            "wsid": int
+        }
+
+        with execdmscript.exec_dmscript(dmscript, readvars=readvars) as script:
+            self._workspace_id = script["wsid"]
 
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
