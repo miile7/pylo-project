@@ -62,7 +62,6 @@ import numpy as np
 
 try:
     import pylo
-    import pylo.dm_image_dm4_support
     
     def remove_dirs(directories=None):
         """Remove all given directories recursively with files inside."""
@@ -128,7 +127,6 @@ try:
     tmp_path = os.path.join(test_root, "tmp-test-dm4-image-{}".format(int(time.time() * 100)))
     os.makedirs(tmp_path, exist_ok=True)
 
-    image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
     tags = {
         "Test tag": "Test",
         "Test tag 2": 100,
@@ -146,63 +144,166 @@ try:
         ]
     }
 
-    print("")
-    print("= " * 40)
-    print("")
-    print("Testing saving image:")
-    start_time = time.time()
-    image = pylo.Image(image_data, tags)
-    img_path = os.path.join(tmp_path, "test-image.dm4")
+    tests = [
+        "save",
+        "show",
+        "multi-image-layout",
+        "from-pyimage",
+        "to-pyimage"
+    ]
 
-    thread = image.saveTo(img_path)
-    thread.join()
-    
-    if len(thread.exceptions) > 0:
-        for e in thread.exceptions:
-            raise e
+    if "save" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing saving image:")
+        image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+        start_time = time.time()
+        image = pylo.DMImage(image_data, tags)
+        img_path = os.path.join(tmp_path, "test-image.dm4")
 
-    file_exists = os.path.isfile(img_path)
-    print("File exists: ", file_exists)
-    assert file_exists
+        thread = image.saveTo(img_path)
+        thread.join()
+        
+        if len(thread.exceptions) > 0:
+            for e in thread.exceptions:
+                raise e
 
-    file_new = os.path.getmtime(img_path) >= start_time
-    print("File is created after the start time: ", file_new)
-    assert file_new
+        file_exists = os.path.isfile(img_path)
+        print("File exists: ", file_exists)
+        assert file_exists
 
-    img = DM.OpenImage(img_path)
-    data_correct = (img.GetNumArray() == image_data).all()
-    print("The data is correct: ", data_correct)
-    assert data_correct
+        file_new = os.path.getmtime(img_path) >= start_time
+        print("File is created after the start time: ", file_new)
+        assert file_new
 
-    print("Checking tags:")
-    recursive_test_image_tags(img, tags)
-    
-    print("")
-    print("= " * 40)
-    print("")
-    print("Testing overwriting image:")
-	
-    overwrite_start_time = time.time()
-    tags = {"Overwriting": True}
-    image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
-    image = pylo.Image(image_data, tags)
+        img = DM.OpenImage(img_path)
+        data_correct = (img.GetNumArray() == image_data).all()
+        print("The data is correct: ", data_correct)
+        assert data_correct
 
-    thread = image.saveTo(img_path)
-    thread.join()
-    
-    if len(thread.exceptions) > 0:
-        for e in thread.exceptions:
-            raise e
+        print("Checking tags:")
+        recursive_test_image_tags(img, tags)
+        
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing overwriting image:")
+        
+        overwrite_start_time = time.time()
+        tags = {"Overwriting": True}
+        image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+        image = pylo.DMImage(image_data, tags)
 
-    file_exists = os.path.isfile(img_path)
-    print("File exists: ", file_exists)
-    assert file_exists
+        # comparing times is only for making sure that the file is a NEW file
+        # so waiting here does not make the test worse but deals with some 
+        # small OS time issues
+        time.sleep(0.1)
 
-    file_new = os.path.getmtime(img_path) >= overwrite_start_time
-    print("File is created after the start time: ", file_new)
-    assert file_new
+        thread = image.saveTo(img_path)
+        thread.join()
+        
+        if len(thread.exceptions) > 0:
+            for e in thread.exceptions:
+                raise e
 
-    del img
+        file_exists = os.path.isfile(img_path)
+        print("File exists: ", file_exists)
+        assert file_exists
+
+        file_new = os.path.getmtime(img_path) >= overwrite_start_time
+        print("File is created after the start time: ", file_new)
+        assert file_new
+
+        del img
+
+    if "show" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing showing image:")
+        image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+        image = pylo.DMImage(image_data, tags)
+
+        name = "test-name"
+        image.show(name)
+        time.sleep(0.3)
+        img = DM.GetFrontImage()
+
+        displays = img.CountImageDisplays() == 1
+        print("Front image has exactly one display: ", displays)
+        assert displays
+
+        equal = np.all(img.GetNumArray() == image.image_data)
+        print("Shown image is equal to front image: ", equal)
+        assert equal
+
+        name_correct = img.GetName() == name
+        print("Name is correct: ", name_correct)
+        assert name_correct
+
+        # get the current image document, there should only be one and close it
+        doc = img.GetOrCreateImageDocument()
+        doc.Close(False)
+
+        del doc
+        del img
+
+    if "multi-image-layout" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Showing layout for multiple images, this is NOT a test")
+
+        tags = {}
+        image_count = 10
+        image_docs = []
+        for i in range(image_count):  
+            image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+            image = pylo.DMImage(image_data, tags)
+            image_docs.append(image.show(name))
+        
+        time.sleep(1.5)
+
+        for doc in image_docs:
+            doc.Close(False)
+            del doc
+        
+        del image_docs
+
+    if "from-pyimage" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing create from DM.Py_Image:")
+        image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+        img = DM.CreateImage(image_data)
+        image = pylo.DMImage.fromDMPyImageObject(img)
+        
+        equal = np.all(image.image_data == img.GetNumArray())
+        print("Image pixel data are equal: ", equal)
+        assert equal
+
+        print("Checking tags:")
+        recursive_test_image_tags(img, image.tags)
+
+        del img
+        del image
+
+    if "to-pyimage" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing converting to DM.Py_Image:")
+        image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
+        image = pylo.DMImage(image_data)
+        img = image.getDMPyImageObject()
+        
+        equal = np.all(image_data == img.GetNumArray())
+        print("Image pixel data are equal: ", equal)
+        assert equal
+
+        del img
 
     print("")
     print("")

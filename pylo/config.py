@@ -111,6 +111,19 @@ Default: "pylo"
 """)
 DM_CONFIGURATION_PERSISTENT_TAG_NAME = "pylo"
 
+__config_docs__("DEFAULT_DM_SHOW_IMAGES",
+"""Whether to show recorded images after acquire or not.
+Default: False
+""")
+DEFAULT_DM_SHOW_IMAGES = False
+
+__config_docs__("DEFAULT_DM_SHOW_IMAGES_ROW_COUNT",
+"""The number of rows of images if the `DEFAULT_DM_SHOW_IMAGES` is True, the 
+columns will be calculated automatically.
+Default: 2
+""")
+DEFAULT_DM_SHOW_IMAGES_ROW_COUNT = 2
+
 __config_docs__("DEFAULT_DM_CAMERA_EXPOSURE_TIME",
 """The exposure time of the camera in seconds.
 Default: 0.1

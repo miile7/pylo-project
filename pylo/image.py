@@ -104,6 +104,33 @@ class Image:
         self.image_data = np.array(image_data, dtype=np.uint8)
         self.tags = tags
     
+    def _executeSave(self, file_type: str, file_path: str) -> None:
+        """Execute the save.
+
+        Raises
+        ------
+        ValueError
+            When the file_type is not supported
+
+        Parameters
+        ----------
+        file_type : str
+            The file type, this is the extension that defines the save type in
+            lower case only
+        file_path : str
+            The file path to save the image to (including the extension), 
+            existing files will be silently overwritten
+        """
+
+        if (file_type in self.export_extensions and 
+            callable(self.export_extensions[file_type])):
+            self.export_extensions[file_type](file_path, self)
+        else:
+            raise ValueError(
+                "The file extension {} is not supported.".format(file_type)
+            )
+        
+    
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
                file_type: typing.Optional[str]=None) -> ExceptionThread:
@@ -139,7 +166,7 @@ class Image:
             None or 'auto' for automatic detection, the file_paths extension 
             will be used, this can be used to change the file type to something
             else that the extension if the file_path, this can be any key of 
-            the Image.export_extensions, this is case-insensitive, 
+            the `Image.export_extensions`, this is case-insensitive, 
             default: None
         
         Returns
@@ -177,16 +204,10 @@ class Image:
             
             file_type = file_type.lower()
 
-            if (file_type in self.export_extensions and 
-                callable(self.export_extensions[file_type])):
-                thread = ExceptionThread(target=self.export_extensions[file_type], 
-                                          args=(file_path, self))
-                thread.start()
-                return thread
-            else:
-                raise ValueError(
-                    "The file extension {} is not supported.".format(file_type)
-                )
+            thread = ExceptionThread(target=self._executeSave, 
+                                     args=(file_type, file_path))
+            thread.start()
+            return thread
         else:
             raise TypeError(
                 "The file extension {} is not supported.".format(file_type)
