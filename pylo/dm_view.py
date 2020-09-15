@@ -41,13 +41,9 @@ if DM is not None:
             if not dev_constants.execdmscript_path in sys.path:
                 sys.path.insert(0, dev_constants.execdmscript_path)
             
-            from execdmscript import exec_dmscript
-    else:
-        from execdmscript import exec_dmscript
+    import execdmscript
 else:
-    def exec_dmscript(*args, **kwargs):
-        raise RuntimeError("This execdmscript can only be imported inside " + 
-                           "the Digital Micrograph program by Gatan.")
+    raise ModuleNotFoundError("Could not load module execdmscript.")
 
 class DMView(AbstractView):
     def __init__(self) -> None:
@@ -89,7 +85,7 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with exec_dmscript("showAlert(msg, 1);", setvars={"msg": hint}):
+        with execdmscript.exec_dmscript("showAlert(msg, 1);", setvars={"msg": hint}):
             pass
 
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
@@ -129,7 +125,7 @@ class DMView(AbstractView):
         if isinstance(how_to_fix, str) and how_to_fix != "":
             msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
 
-        with exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
+        with execdmscript.exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
             pass
     
     def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
@@ -238,7 +234,7 @@ class DMView(AbstractView):
             "kill_dialog.display(\"Kill task\");",
         ))
 
-        with exec_dmscript(dmscript, debug=False):
+        with execdmscript.exec_dmscript(dmscript, debug=False):
             pass
 
     def _createRunningDialog(self) -> None:
@@ -267,9 +263,9 @@ class DMView(AbstractView):
         # while self.show_running:
         #     print("Displaying dialog")
         #     time.sleep(0.1)
-        # with exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
+        # with execdmscript.exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
         #     pass
-        with exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False):
+        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False):
             pass
     
     def _observeProgressDialogSuccessThread(self) -> None:
@@ -652,7 +648,7 @@ class DMView(AbstractView):
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
         # and sets the start and series variables
-        with exec_dmscript(*libs, path, readvars=sync_vars, setvars=variables) as script:
+        with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, setvars=variables) as script:
             try:
                 success = bool(script["success"])
             except KeyError:
