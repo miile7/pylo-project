@@ -1,3 +1,3 @@
 from .pyjem_microscope import PyJEMMicroscope
-from .dummy_microscope import DummyMicroscope
+from .pyjem_test_microscope import PyJEMTestMicroscope
 from .microscope_interface import MicroscopeInterface
