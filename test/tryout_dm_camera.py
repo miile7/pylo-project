@@ -67,7 +67,9 @@ try:
 
 	controller = pylo.Controller(view, configuration)
 
+	# camera = pylo.cameras.DMTestCamera(controller)
 	camera = pylo.cameras.DMCamera(controller)
+	camera.show_images = True
 	img = camera.recordImage()
 
 	plt.imshow(img.image_data)

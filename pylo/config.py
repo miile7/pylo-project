@@ -111,11 +111,24 @@ Default: "pylo"
 """)
 DM_CONFIGURATION_PERSISTENT_TAG_NAME = "pylo"
 
+__config_docs__("DEFAULT_DM_SHOW_IMAGES",
+"""Whether to show recorded images after acquire or not.
+Default: False
+""")
+DEFAULT_DM_SHOW_IMAGES = False
+
+__config_docs__("DEFAULT_DM_SHOW_IMAGES_ROW_COUNT",
+"""The number of rows of images if the `DEFAULT_DM_SHOW_IMAGES` is True, the 
+columns will be calculated automatically.
+Default: 2
+""")
+DEFAULT_DM_SHOW_IMAGES_ROW_COUNT = 2
+
 __config_docs__("DEFAULT_DM_CAMERA_EXPOSURE_TIME",
 """The exposure time of the camera in seconds.
 Default: 0.1
 """)
-DEFAULT_DM_CAMERA_EXPOSURE_TIME = 0.1
+DEFAULT_DM_CAMERA_EXPOSURE_TIME = 0.5
 
 __config_docs__("DEFAULT_DM_CAMERA_BINNING_X",
 """The hardware binning of pixels in x direction.
@@ -134,7 +147,7 @@ __config_docs__("DEFAULT_DM_PROCESS_LEVEL",
 for 'gain normalized'.
 Default: 1
 """)
-DEFAULT_DM_PROCESS_LEVEL = 1
+DEFAULT_DM_PROCESS_LEVEL = 3
 
 __config_docs__("DEFAULT_DM_CCD_READOUT_AREA_TOP",
 """The top coordinate of the CCD readout area.
