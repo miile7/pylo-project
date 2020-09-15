@@ -1,7 +1,8 @@
 import os
 import sys
-import inspect
+import time
 import typing
+import inspect
 import importlib
 import threading
 
@@ -112,6 +113,7 @@ class Controller:
         self.camera = None
         self.measurement = None
         self._measurement_thread = None
+        self._running_thread = None
     
     def _dynamicCreateClass(self, class_: type, 
                             constructor_args: typing.Optional[typing.Sequence]=None) -> object:
@@ -630,17 +632,22 @@ class Controller:
             series_ready()
 
             self._measurement_thread = ExceptionThread(
-                target=self.measurement.start
+                target=self.measurement.start, name="measurement"
             )
             self._measurement_thread.start()
-            self.view.progress_max = len(self.measurement.steps)
-            self.view.showRunning()
 
+            self.view.progress_max = len(self.measurement.steps)
+            
+            self._running_thread = ExceptionThread(
+                target=self.view.showRunning, name="running"
+            )
+            self._running_thread.start()
         except StopProgram:
             self.stopProgramLoop()
             return
         except Exception as e:
             try:
+                self.view.show_running = False
                 self.view.showError(e)
             except StopProgram:
                 self.stopProgramLoop()
@@ -662,26 +669,46 @@ class Controller:
             program loop is not started
         """
 
-        if (isinstance(self._measurement_thread, threading.Thread) and 
-            self._measurement_thread.is_alive()):
-            try:
-                self._measurement_thread.join()
+        not_running = False
 
-                if len(self._measurement_thread.exceptions):
+        try:
+            # while ((isinstance(self._measurement_thread, threading.Thread) and 
+            #         self._measurement_thread.is_alive()) or 
+            #        (isinstance(self._running_thread, threading.Thread) and 
+            #         self._running_thread.is_alive())):
+            while self.measurement.running:
+                if (isinstance(self._measurement_thread, ExceptionThread) and 
+                    len(self._measurement_thread.exceptions) > 0):
                     for error in self._measurement_thread.exceptions:
                         raise error
-            except StopProgram:
+
+                if (isinstance(self._running_thread, ExceptionThread) and 
+                    len(self._running_thread.exceptions) > 0):
+                    for error in self._running_thread.exceptions:
+                        raise error
+                
+                time.sleep(0.05)
+            
+            # finished
+            stop_program = True
+        except StopProgram:
+            stop_program = True
+        except Exception as e:
+            try:
+                # stop before the error, mostly the view raises the python 
+                # error too so the program would not end then
                 self.stopProgramLoop()
-                return
-            except Exception as e:
-                try:
-                    self.view.showError(e)
-                except StopProgram:
-                    self.stopProgramLoop()
-                    return
-        elif raise_error_when_not_started:
+                self.view.showError(e)
+            except StopProgram:
+                stop_program = True
+        
+        self.stopProgramLoop()
+
+        if stop_program:
+            return
+        elif not_running and raise_error_when_not_started:
             raise RuntimeError("Cannot wait for the program if the program " + 
-                               "is not started or has already finished.")
+                            "is not started or has already finished.")
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
@@ -692,10 +719,16 @@ class Controller:
         if isinstance(self.measurement, Measurement) and self.measurement.running:
             self.measurement.stop()
 
-            if isinstance(self._measurement_thread, ExceptionThread):
-                self._measurement_thread.join()
+        if isinstance(self.view, AbstractView):
+            self.view.show_running = False
+
+        if isinstance(self._measurement_thread, ExceptionThread):
+            self._measurement_thread.join()
+        
+        if isinstance(self._running_thread, ExceptionThread):
+            self._running_thread.join()
             
-            self.measurement.waitForAllImageSavings()
+        self.measurement.waitForAllImageSavings()
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""

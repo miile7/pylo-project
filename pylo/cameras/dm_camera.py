@@ -184,7 +184,7 @@ class DMCamera(CameraInterface):
         from ..config import DEFAULT_DM_CCD_READOUT_AREA_LEFT
 
         configuration.addConfigurationOption(
-            DEFAULT_DM_SHOW_IMAGES, "show-images", 
+            CONFIG_DM_CAMERA_GROUP, "show-images", 
             datatype=bool, 
             default_value=DEFAULT_DM_SHOW_IMAGES, 
             description="Whether to show all acquired images (in a new " + 

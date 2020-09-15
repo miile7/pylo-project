@@ -56,8 +56,6 @@ print("Initializing python environment...")
 
 try:
 	import pylo
-	# from pylo import dm_image_dm4_support
-	import pylo.dm_image_dm4_support
 
 	print("Preparing...")
 	# pylo.OFFLINE_MODE = True
@@ -76,7 +74,14 @@ try:
 	print("Done.")
 
 	print("Starting...")
+
+	# redirect all print() calls to the debug window
+	DM.SetOutputTo(2)
 	pylo.execute(view, configuration)
+	# set everything back to the results window
+	DM.SetOutputTo(0)
+
+	print("Done with everything.")
 	print("Exiting.")
 except Exception as e:
 	# dm-script error messages are very bad, use this for getting the error 

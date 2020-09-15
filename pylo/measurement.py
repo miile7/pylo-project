@@ -354,7 +354,10 @@ class Measurement:
                         # set parallel
                         thread = ExceptionThread(
                             target=self.controller.microscope.setMeasurementVariableValue,
-                            args=(variable_name, step[variable_name])
+                            args=(variable_name, step[variable_name]),
+                            name="microscope variable {} in step {}".format(
+                                variable_name, self._step_index
+                            )
                         )
                         thread.start()
                         measurement_variable_threads.append(thread)
@@ -410,12 +413,12 @@ class Measurement:
                     # stop() is called, maybe by after_record() event handler
                     return
                 
-                # save the image parallel to working on
-                thread = ExceptionThread(
-                    target=self.current_image.saveTo,
-                    args=(os.path.join(self.save_dir, name), )
+                # save the image parallel to working on, saveTo() funciton
+                # returns a running thread
+                thread = self.current_image.saveTo(
+                    os.path.join(self.save_dir, name), overwrite=True, 
+                    create_directories=True
                 )
-                thread.start()
                 self._image_save_threads.append(thread)
                 self.controller.view.print("Saving image as {}...".format(name), 
                                            inset="  ")
@@ -429,14 +432,16 @@ class Measurement:
             # for the save threads to finish
             if self.microscope_safe_after:
                 thread = ExceptionThread(
-                    target=self.controller.microscope.resetToSafeState
+                    target=self.controller.microscope.resetToSafeState,
+                    name="reset microscope to safe state"
                 )
                 thread.start()
                 reset_threads.append(thread)
                 self.controller.view.print("Setting microscope to safe state...")
             if self.camera_safe_after:
                 thread = ExceptionThread(
-                    target=self.controller.camera.resetToSafeState
+                    target=self.controller.camera.resetToSafeState,
+                    name="reset camera to safe state"
                 )
                 thread.start()
                 reset_threads.append(thread)

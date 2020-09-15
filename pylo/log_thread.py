@@ -45,7 +45,7 @@ class LogThread(ExceptionThread):
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, 0o660)
         
-        super().__init__()
+        super().__init__(name="log")
 
     def run(self):
         """Run the thread.

@@ -205,7 +205,8 @@ class Image:
             file_type = file_type.lower()
 
             thread = ExceptionThread(target=self._executeSave, 
-                                     args=(file_type, file_path))
+                                     args=(file_type, file_path),
+                                     name="save {}".format(os.path.basename(file_path)))
             thread.start()
             return thread
         else:

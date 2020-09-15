@@ -17,7 +17,7 @@ except (ModuleNotFoundError, ImportError) as e:
 
 from .dm_camera import DMCamera
 
-class __DMDummyCamera:
+class _DMDummyCamera:
     def PrepareForAcquire(self):
         pass
     
@@ -26,9 +26,12 @@ class __DMDummyCamera:
                      ccd_area_bottom=4096, ccd_area_right=4096):
         
         time.sleep(exposure_time)
-        data = np.random.random(((ccd_area_right - ccd_area_left) / binning_x,
-                                 (ccd_area_bottom - ccd_area_top) / binning_y))
-        return DM.CreateImage(data)
+        data = np.random.random(((ccd_area_right - ccd_area_left) // binning_x,
+                                 (ccd_area_bottom - ccd_area_top) // binning_y))
+        time.sleep(0.1)
+        img = DM.CreateImage(data)
+        time.sleep(0.1)
+        return img
 
 class DMTestCamera(DMCamera):
     def __init__(self, controller: "Controller") -> None:
@@ -41,4 +44,8 @@ class DMTestCamera(DMCamera):
         """
 
         super(DMTestCamera, self).__init__(controller)
-        self.camera = __DMDummyCamera()
+        self.camera = _DMDummyCamera()
+    
+    @staticmethod
+    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
+        DMCamera.defineConfigurationOptions(configuration)
