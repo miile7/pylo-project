@@ -37,7 +37,7 @@ may want to use False.
 Note that the implementation depends on the microscope class!
 Default: None
 """)
-OFFLINE_MODE = True
+OFFLINE_MODE = None
 
 __config_docs__("MAX_LOOP_COUNT",
 """The number of times the user is asked for the input, this is for avoiding

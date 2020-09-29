@@ -676,6 +676,8 @@ class Controller:
         else:
             running = False
         
+        exceptions = False
+
         # wait until the measurement has started, this is only for fixing
         # synchronizing problems because this funciton is started before the 
         # measurement thread is fully started
@@ -683,25 +685,27 @@ class Controller:
             start_time = time.time()
 
             # wait until the measurement is running
-            while time.time() < start_time + MEASUREMENT_START_TIMEOUT:
-                if self.measurement.running:
-                    break
-
+            while (not self.measurement.running and 
+                   time.time() < start_time + MEASUREMENT_START_TIMEOUT):
                 time.sleep(MEASUREMENT_START_TIMEOUT / 10)
             
             if not self.measurement.running:
-                raise RuntimeError("The measurement was told to start by the " + 
-                                   "controller but when the controller is " + 
-                                   "waiting for the measurement to end, the " + 
-                                   "measurement still has not started. This " + 
-                                   "can be because of a too short " + 
-                                   "measurement timeout. If changing the " + 
-                                   "maximum time does not help, this is " + 
-                                   "a fatal error caused by a big internal " + 
-                                   "problem.")
+                if (isinstance(self._measurement_thread, ExceptionThread) and 
+                    len(self._measurement_thread.exceptions) > 0):
+                    exceptions = True
+                else:
+                    raise RuntimeError("The measurement was told to start by the " + 
+                                    "controller but when the controller is " + 
+                                    "waiting for the measurement to end, the " + 
+                                    "measurement still has not started. This " + 
+                                    "can be because of a too short " + 
+                                    "measurement timeout. If changing the " + 
+                                    "maximum time does not help, this is " + 
+                                    "a fatal error caused by a big internal " + 
+                                    "problem.")
 
         try:
-            while running and self.measurement.running:
+            while (running and self.measurement.running) or exceptions:
                 if (isinstance(self._measurement_thread, ExceptionThread) and 
                     len(self._measurement_thread.exceptions) > 0):
                     for error in self._measurement_thread.exceptions:

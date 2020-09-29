@@ -29,7 +29,13 @@ class ExceptionThread(threading.Thread):
         except Exception as e:
             self.exceptions.append(e)
         
+        if len(self.exceptions) > 0:
+            e = ", ".join(["{}: {}".format(type(e), e) for e in self.exceptions])
+            e = " with {} exceptions: {}".format(len(self.exceptions), e)
+        else:
+            e = "."
+        
         ExceptionThread.thread_count -= 1
-        print("Ending thread {} (#{}), {} active threads.".format(
-            self.name, self.ident, threading.active_count() - 1
+        print("Ending thread {} (#{}), {} active threads{}".format(
+            self.name, self.ident, threading.active_count() - 1, e
         ))
