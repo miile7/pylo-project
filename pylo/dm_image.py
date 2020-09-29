@@ -261,7 +261,6 @@ class DMImage(Image):
 
         if isinstance(name, str):
             image_doc.SetName(name)
-            print("Setting name", name)
         
         return image_doc
     

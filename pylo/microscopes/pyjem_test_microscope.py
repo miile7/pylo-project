@@ -32,3 +32,7 @@ class PyJEMTestMicroscope(PyJEMMicroscope):
         # fake some hardware duration time
         time.sleep(random.random() * 2)
         super().setMeasurementVariableValue(id_, value)
+    
+    @staticmethod
+    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
+        PyJEMMicroscope.defineConfigurationOptions(configuration)

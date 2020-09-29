@@ -47,7 +47,40 @@ def format_value(datatype: typing.Union[type, Datatype, list, tuple], value: typ
         return "{}".format(value)
 
 def get_datatype_name(datatype: typing.Union[type, Datatype, list, tuple]) -> str:
-    """Get the name representation for the `datatype`.
+    """Get the datatype name to identify the datatype
+
+    Parameters
+    ----------
+    datatype : type, Datatype, list or tuple
+        The datatype
+    
+    Returns
+    -------
+    str
+        The datatype name
+    """
+
+    if datatype == int:
+        type_name = "int"
+    elif datatype == float:
+        type_name = "float"
+    elif datatype == bool:
+        type_name = "boolean"
+    elif datatype == str:
+        type_name = "string"
+    elif isinstance(datatype, (list, tuple)):
+        type_name = "list"
+    elif hasattr(datatype, "name") and isinstance(datatype.name, str):
+        type_name = datatype.name
+    elif hasattr(datatype, "__name__") and isinstance(datatype.__name__, str):
+        type_name = datatype.__name__
+    else:
+        type_name = str(datatype)
+    
+    return type_name
+
+def get_datatype_human_text(datatype: typing.Union[type, Datatype, list, tuple]) -> str:
+    """Get the datatype name for humans.
 
     Parameters
     ----------

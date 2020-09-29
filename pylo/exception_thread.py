@@ -10,6 +10,8 @@ class ExceptionThread(threading.Thread):
         method was performed (normally this contains no or exactly one element)
     """
 
+    thread_count = 0
+
     def __init__(self, *args, **kwargs) -> None:
         """Get the ExceptionThread object."""
 
@@ -18,11 +20,16 @@ class ExceptionThread(threading.Thread):
     
     def run(self, *args, **kwargs):
         """Run the thread."""
-        # print("Starting thread {}.".format(self.ident))
+        print("Starting thread {} (#{}), {} active threads.".format(
+            self.name, self.ident, threading.active_count() - 1
+        ))
         
         try:
             super(ExceptionThread, self).run(*args, **kwargs)
         except Exception as e:
             self.exceptions.append(e)
         
-        # print("Ending thread {}.".format(self.ident))
+        ExceptionThread.thread_count -= 1
+        print("Ending thread {} (#{}), {} active threads.".format(
+            self.name, self.ident, threading.active_count() - 1
+        ))

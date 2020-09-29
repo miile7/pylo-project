@@ -4,7 +4,7 @@ import textwrap
 import configparser
 
 from .pylolib import path_like
-from .pylolib import get_datatype_name
+from .pylolib import get_datatype_human_text
 from .datatype import Datatype
 from .abstract_configuration import AbstractConfiguration
 
@@ -91,7 +91,7 @@ class IniConfiguration(AbstractConfiguration):
                     try:
                         datatype = self.getDatatype(group, key)
                         comment.append("Type: '{}'".format(
-                            get_datatype_name(datatype)
+                            get_datatype_human_text(datatype)
                         ))
                     except KeyError:
                         datatype = str

@@ -66,13 +66,12 @@ try:
 
 	# set the microscope to use the PyJEM microscope
 	configuration.setValue("setup", "microscope-module", "pylo.microscopes")
-	configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
+	configuration.setValue("setup", "microscope-class", "PyJEMTestMicroscope")
 
 	# use the DMCamera as the camera
 	configuration.setValue("setup", "camera-module", "pylo.cameras")
-	configuration.setValue("setup", "camera-class", "DMCamera")
+	configuration.setValue("setup", "camera-class", "DMTestCamera")
 	print("Done.")
-
 	print("Starting...")
 
 	# redirect all print() calls to the debug window

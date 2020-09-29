@@ -119,6 +119,9 @@ class DMView(AbstractView):
         print(msg)
         print("  Fix:", how_to_fix)
 
+        self.print(msg)
+        self.print("  Fix:", how_to_fix)
+
         if isinstance(error, Exception):
             traceback.print_exc()
 
@@ -290,6 +293,8 @@ class DMView(AbstractView):
 
             if s and v:
                 break
+            
+            time.sleep(0.05)
     
     def _deleteObservedTags(self) -> None:
         """Delete all the observed tags."""
@@ -307,6 +312,11 @@ class DMView(AbstractView):
             if isinstance(self._progress_dialog_success_tagname, str):
                 DM.GetPersistentTagGroup().DeleteTagWithLabel(
                     self._progress_dialog_success_tagname
+                )
+            
+            if isinstance(self._progress_dialog_kill_tagname, str):
+                DM.GetPersistentTagGroup().DeleteTagWithLabel(
+                    self._progress_dialog_kill_tagname
                 )
         
     def showRunning(self) -> None:
@@ -352,6 +362,7 @@ class DMView(AbstractView):
         self._progress_dialog_progress_tagname = None
         self._progress_dialog_text_tagname = None
         self._progress_dialog_success_tagname = None
+        self._progress_dialog_kill_tagname = None
 
         self._progress_dialog_success = None
 

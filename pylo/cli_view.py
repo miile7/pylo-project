@@ -7,7 +7,7 @@ import textwrap
 import linecache
 
 from .pylolib import format_value
-from .pylolib import get_datatype_name
+from .pylolib import get_datatype_human_text
 from .pylolib import human_concat_list
 from .datatype import Datatype
 from .stop_program import StopProgram
@@ -989,7 +989,7 @@ class CLIView(AbstractView):
                             abort_command != empty_command):
                             break
         
-        name = get_datatype_name(input_definition["datatype"])
+        name = get_datatype_human_text(input_definition["datatype"])
 
         if name == "text":
             abort_command = "!abort"
@@ -1136,7 +1136,7 @@ class CLIView(AbstractView):
                                       "converted to a '{}'. Please type in " + 
                                       "a correct value.").format(
                                         val, 
-                                        get_datatype_name(
+                                        get_datatype_human_text(
                                             input_definition["datatype"]
                                         )
                                     ))
