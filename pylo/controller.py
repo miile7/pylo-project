@@ -20,9 +20,8 @@ from .cameras.camera_interface import CameraInterface
 from .abstract_configuration import AbstractConfiguration
 from .microscopes.microscope_interface import MicroscopeInterface
 
-# from .config import PROGRAM_NAME
-# from .config import CONFIGURATION
-# from .config import VIEW
+from .config import MAX_LOOP_COUNT
+from .config import MEASUREMENT_START_TIMEOUT
 
 try:
     test_error = ModuleNotFoundError()
@@ -31,10 +30,6 @@ except NameError:
     # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
     class ModuleNotFoundError(ImportError):
         pass
-
-# the number of times the user is asked for the input, this is for avoiding
-# infinite loops that are caused by any error
-MAX_LOOP_COUNT = 1000
 
 # for importing with import_lib in Controller::_dynamicCreateClass()
 # add pylo/root, the key is the text to display in the help, the value will be
@@ -658,6 +653,8 @@ class Controller:
         Raises
         ------
         RuntimeError
+            When the measurement has not started after the waiting timeout
+        RuntimeError
             When `raise_error_when_not_started` is True and the 
             `Controller::startProgramLoop()` is not called before or the 
             program has already finished
@@ -669,14 +666,42 @@ class Controller:
             program loop is not started
         """
 
-        not_running = False
+        # check if the start function has been called, that is the case if 
+        # the threads are set and they are alive
+        if ((isinstance(self._measurement_thread, threading.Thread) and 
+             self._measurement_thread.is_alive()) or 
+            (isinstance(self._running_thread, threading.Thread) and 
+             self._running_thread.is_alive())):
+            running = True
+        else:
+            running = False
+        
+        # wait until the measurement has started, this is only for fixing
+        # synchronizing problems because this funciton is started before the 
+        # measurement thread is fully started
+        if running:
+            start_time = time.time()
+
+            # wait until the measurement is running
+            while time.time() < start_time + MEASUREMENT_START_TIMEOUT:
+                if self.measurement.running:
+                    break
+
+                time.sleep(MEASUREMENT_START_TIMEOUT / 10)
+            
+            if not self.measurement.running:
+                raise RuntimeError("The measurement was told to start by the " + 
+                                   "controller but when the controller is " + 
+                                   "waiting for the measurement to end, the " + 
+                                   "measurement still has not started. This " + 
+                                   "can be because of a too short " + 
+                                   "measurement timeout. If changing the " + 
+                                   "maximum time does not help, this is " + 
+                                   "a fatal error caused by a big internal " + 
+                                   "problem.")
 
         try:
-            # while ((isinstance(self._measurement_thread, threading.Thread) and 
-            #         self._measurement_thread.is_alive()) or 
-            #        (isinstance(self._running_thread, threading.Thread) and 
-            #         self._running_thread.is_alive())):
-            while self.measurement.running:
+            while running and self.measurement.running:
                 if (isinstance(self._measurement_thread, ExceptionThread) and 
                     len(self._measurement_thread.exceptions) > 0):
                     for error in self._measurement_thread.exceptions:
@@ -706,9 +731,9 @@ class Controller:
 
         if stop_program:
             return
-        elif not_running and raise_error_when_not_started:
+        elif not running and raise_error_when_not_started:
             raise RuntimeError("Cannot wait for the program if the program " + 
-                            "is not started or has already finished.")
+                               "has not started or has already finished.")
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.

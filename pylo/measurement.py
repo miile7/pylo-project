@@ -276,13 +276,14 @@ class Measurement:
         measurement_ready
             Fired when the measurement has fully finished
         """
+        self.running = True
+        
         # self.controller.view.progres_max = len(self.steps)
         self.controller.view.print("Starting measurement...")
         self.controller.view.print(
             "Saving all images to {}.".format(self.save_dir), inset="  "
         )
 
-        self.running = True
         self._image_save_threads = []
 
         if self.logging:

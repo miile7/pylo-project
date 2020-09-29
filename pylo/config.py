@@ -39,6 +39,30 @@ Default: None
 """)
 OFFLINE_MODE = True
 
+__config_docs__("MAX_LOOP_COUNT",
+"""The number of times the user is asked for the input, this is for avoiding
+infinite loops that are caused by any error.
+Default: 500
+""")
+MAX_LOOP_COUNT = 500
+
+__config_docs__("MEASUREMENT_START_TIME",
+"""The maximum time in seconds that can pass between the program order to start 
+the measurement (in the controller) and the measurement actually starting (in 
+the measurement thread). 
+
+This time has nothing to do with pyhsical waiting times but is only for thread 
+synchronization. The controller thread starts the measurement thread and the 
+goes into an "idle" state where it waits for the measurement to end checking
+the measurement status. But creating the measurement thread and then starting
+it takes longer than the controller waiting for it. This means the controller 
+checks the measurement status before the measurement has started. That again 
+leads to starting the measurement without surveilling it. The measurement can 
+then not be aborted.
+Default: 1
+""")
+MEASUREMENT_START_TIMEOUT = 1
+
 __config_docs__("TIFF_IMAGE_TAGS_INDEX",
 """The hexadecimal entry for tiff images where to save the tags as a json to
 Default: 0x010e (The image description)
