@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import typing
+import pathlib
 
 from .image import Image
 
@@ -54,6 +55,20 @@ class DMImage(Image):
     """
 
     shown_images_counter = 0
+    gatan_file_types = {
+        "dm": "Gatan Format",
+        "dm4": "Gatan Format",
+        "gatan": "Gatan Format",
+        "gatan format": "Gatan Format",
+        "dm3": "Gatan 3 Format",
+        "gatan 3 format": "Gatan 3 Format",
+        "gif": "GIF Format",
+        "bmp": "BMP Format",
+        "jpg": "JPEG/JFIF Format",
+        "jpeg": "JPEG/JFIF Format",
+        "jfif": "JPEG/JFIF Format",
+        "emf": "Enhanced Metafile Format",
+    }
 
     def __init__(self, image_data: typing.Any, tags: typing.Optional[dict]={}) -> None:
         """Create an image.
@@ -166,31 +181,17 @@ class DMImage(Image):
             existing files will be silently overwritten
         """
 
-        gatan_file_types = {
-            "dm": "Gatan Format",
-            "dm4": "Gatan Format",
-            "gatan": "Gatan Format",
-            "gatan format": "Gatan Format",
-            "dm3": "Gatan 3 Format",
-            "gatan 3 format": "Gatan 3 Format",
-            "gif": "GIF Format",
-            "bmp": "BMP Format",
-            "jpg": "JPEG/JFIF Format",
-            "jpeg": "JPEG/JFIF Format",
-            "jfif": "JPEG/JFIF Format",
-            "emf": "Enhanced Metafile Format",
-        }
-        if file_type in gatan_file_types:
+        if file_type in DMImage.gatan_file_types:
             name, _ = os.path.splitext(os.path.basename(file_path))
             image_doc = self._getImageDocument(name)
             
             # mentioned formats are 'Gatan Format', 'Gatan 3 Format, 
             # 'GIF Format', 'BMP Format', 'JPEG/JFIF Format', 
             # 'Enhanced Metafile Format'
-            image_doc.SaveToFile(gatan_file_types[file_type], file_path)
+            image_doc.SaveToFile(DMImage.gatan_file_types[file_type], file_path)
 
             if self.show_image:
-                self._show(image_doc, self.workspace_id)
+                self._show(image_doc, self.workspace_id, file_path)
             elif isinstance(self._py_image, DM.Py_Image):
                 # image is saved, drop the Py_Image reference for memory leaks,
                 # this is recommended in the docs
@@ -265,7 +266,8 @@ class DMImage(Image):
         return image_doc
     
     def show(self, name: typing.Optional[str]=None, 
-             workspace_id: typing.Optional[int]=None) -> DM.Py_ImageDocument:
+             workspace_id: typing.Optional[int]=None,
+             file_path: typing.Optional[typing.Union[pathlib.PurePath, str]]=None) -> DM.Py_ImageDocument:
         """Show the image.
 
         If the `workspace_id` is given, the image will be shown in this 
@@ -279,6 +281,8 @@ class DMImage(Image):
         workspace_id: int, optional
             The workspace id to show in, if not an int the image will be shown 
             in the current workspace, default: None
+        file_path : str or pathlib.PurePath, optional
+            The path where the image is
         
         Returns
         -------
@@ -287,10 +291,11 @@ class DMImage(Image):
         """
 
         image_doc = self._getImageDocument(name)
-        return self._show(image_doc, workspace_id)
+        return self._show(image_doc, workspace_id, file_path)
     
     def _show(self, image_doc: DM.Py_ImageDocument, 
-              workspace_id: typing.Optional[int]=None) -> DM.Py_ImageDocument:
+              workspace_id: typing.Optional[int]=None,
+              file_path: typing.Optional[typing.Union[pathlib.PurePath, str]]=None) -> DM.Py_ImageDocument:
         """Show the given image document.
 
         If the `workspace_id` is given, the image will be shown in this 
@@ -303,6 +308,8 @@ class DMImage(Image):
         workspace_id: int, optional
             The workspace id to show in, if not an int the image will be shown 
             in the current workspace, default: None
+        file_path : str or pathlib.PurePath, optional
+            The path where the image is
         
         Returns
         -------
@@ -334,6 +341,43 @@ class DMImage(Image):
 
         # show in the workspace
         image_doc.ShowAtRect(*pos)
+
+        # link to file
+        if isinstance(file_path, str) or isinstance(file_path, pathlib.PurePath):
+            if isinstance(workspace_id, int):
+                wsid = workspace_id
+            else:
+                wsid = ""
+            
+            dmscript = "\n".join((
+                "for(number i = CountImageDocuments({}) - 1; i >= 0; i--){{".format(wsid),
+                    "ImageDocument img_doc = GetImageDocument(i, {});".format(wsid),
+                    "if(img_doc.ImageDocumentGetName() == name){",
+                        "img_doc.ImageDocumentSetCurrentFile(path);",
+                        "if(format != \"\"){",
+                            "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
+                        "}",
+                        "img_doc.ImageDocumentClean();",
+                        "break;",
+                    "}",
+                "}"
+            ))
+
+            _, extension = os.path.splitext(file_path)
+
+            if extension in DMImage.gatan_file_types:
+                file_format = DMImage.gatan_file_types[extension]
+            else:
+                file_format = ""
+            
+            svars = {
+                "name": image_doc.GetName(),
+                "path": file_path,
+                "format": file_format
+            }
+
+            with execdmscript.exec_dmscript(dmscript, setvars=svars):
+                pass
 
         DMImage.shown_images_counter += 1
 
