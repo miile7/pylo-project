@@ -357,6 +357,7 @@ class DMImage(Image):
                         "if(format != \"\"){",
                             "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
                         "}",
+                        "img_doc.ImageDocumentClean();",
                         "break;",
                     "}",
                 "}"
