@@ -18,6 +18,7 @@ import csv
 import re
 
 import pylo
+import pylo.cameras
 import pylo.microscopes
 
 sleep_time = "random"

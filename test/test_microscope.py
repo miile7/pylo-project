@@ -10,7 +10,8 @@ import pytest
 import math
 
 import pylo
-import pylo.config
+import pylo.cameras
+import pylo.microscopes
 
 pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
 controller = pylo.Controller()
