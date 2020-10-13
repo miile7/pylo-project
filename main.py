@@ -2,8 +2,6 @@ import pylo
 import pylo.microscopes
 import pylo.cameras
 
-pylo.config
-
 pylo.config.VIEW = pylo.CLIView()
 pylo.config.CONFIGURATION = pylo.IniConfiguration()
 
