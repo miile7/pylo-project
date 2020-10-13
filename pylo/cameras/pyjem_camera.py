@@ -1,6 +1,27 @@
 from PIL import Image as PILImage
 import numpy as np
 
+try:
+    test_error = ModuleNotFoundError()
+except NameError:
+    # for python <3.6, ModuleNotFound error does not exist
+    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
+    class ModuleNotFoundError(ImportError):
+        pass
+
+# for development only
+try:
+    import dev_constants
+    load_from_dev = True
+except (ModuleNotFoundError, ImportError) as e:
+    load_from_dev = False
+
+if load_from_dev:
+    import sys
+    if hasattr(dev_constants, "pyjem_path"):
+        if not dev_constants.pyjem_path in sys.path:
+            sys.path.insert(0, dev_constants.pyjem_path)
+
 from ..config import OFFLINE_MODE
 error = None
 if OFFLINE_MODE != True:
