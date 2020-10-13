@@ -5,6 +5,7 @@ import typing
 import pathlib
 
 from .image import Image
+from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
 
 try:
     test_error = ModuleNotFoundError()
@@ -35,7 +36,7 @@ if DM is not None:
             
     import execdmscript
 else:
-    raise ModuleNotFoundError("Could not load module execdmscript.")
+    raise ExecutionOutsideEnvironmentError("Could not load module execdmscript.")
 
 class DMImage(Image):
     """An image that adds more export options and showing images.

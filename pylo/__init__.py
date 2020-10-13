@@ -41,9 +41,7 @@ from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
 from .image import Image
-from .dm_view import DMView
 from .cli_view import CLIView
-from .dm_image import DMImage
 from .datatype import Datatype
 from .log_thread import LogThread
 from .controller import Controller
@@ -52,12 +50,21 @@ from .stop_program import StopProgram
 from .abstract_view import AbstractView
 from .exception_thread import ExceptionThread
 from .blocked_function import BlockedFunction
-from .dm_configuration import DMConfiguration
 from .ini_configuration import IniConfiguration
 from .vulnerable_machine import VulnerableMachine
 from .measurement_variable import MeasurementVariable
 from .blocked_function_error import BlockedFunctionError
 from .abstract_configuration import AbstractConfiguration
+from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
+
+try:
+    from .dm_view import DMView
+    from .dm_image import DMImage
+    from .dm_configuration import DMConfiguration
+except ExecutionOutsideEnvironmentError:
+    DMView = None
+    DMImage = None
+    DMConfiguration = None
 
 controller = None
 

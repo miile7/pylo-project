@@ -13,6 +13,10 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
+from .camera_interface import CameraInterface
+from ..dm_image import DMImage
+from ..execution_outside_environment_error import ExecutionOutsideEnvironmentError
+
 try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
@@ -34,10 +38,7 @@ if DM is not None:
             
     import execdmscript
 else:
-    raise ModuleNotFoundError("Could not load module execdmscript.")
-
-from .camera_interface import CameraInterface
-from ..dm_image import DMImage
+    raise ExecutionOutsideEnvironmentError("Could not load module execdmscript.")
 
 CONFIG_DM_CAMERA_GROUP = "dm-camera"
 
