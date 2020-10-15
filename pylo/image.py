@@ -137,7 +137,8 @@ class Image:
         """Save the image to the given file_path.
 
         Note that the saving is done in another thread. The thread will be 
-        started and then returned.
+        started and then returned. If the file type is invalid, the thread will
+        raise the exception. This is not tested before starting the thread.
 
         Raises
         ------
@@ -145,8 +146,6 @@ class Image:
             When create_directories is False and the directories do not exist
         FileExistsError
             When overwrite is False and the file exists already
-        ValueError or TypeError
-            When the file_type is not supported
         Exception
             When the extension save function raises an Error
         
