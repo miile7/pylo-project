@@ -66,7 +66,17 @@ class IniConfiguration(AbstractConfiguration):
                 except KeyError:
                     datatype = None
                 
-                if callable(datatype):
+                if datatype == bool:
+                    if isinstance(value, str):
+                        value = value.lower()
+                    
+                    if value in ["no", "n", "false", "f", "off", "0"]:
+                        value = False
+                    elif value in ["yes", "y", "true", "t", "on", "1"]:
+                        value = True
+                    else:
+                        value = bool(value)
+                elif callable(datatype):
                     value = datatype(value)
 
                 self.setValue(section, key, value)
