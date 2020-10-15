@@ -373,7 +373,8 @@ class Measurement:
                 for thread in measurement_variable_threads:
                     thread.join()
                     
-                    if len(thread.exceptions):
+                    if (isinstance(thread, ExceptionThread) and  
+                        len(thread.exceptions)):
                         for error in thread.exceptions:
                             raise error
                 
@@ -428,7 +429,14 @@ class Measurement:
                 for thread in self._image_save_threads:
                     if (isinstance(thread, ExceptionThread) and 
                         len(thread.exceptions) > 0):
-                        raise thread.exceptions[0]
+                        for error in thread.exceptions:
+                            raise error
+                
+                # check log thread for errors
+                if (isinstance(self._log_thread, ExceptionThread) and 
+                    len(self._log_thread.exceptions)):
+                    for error in self._log_thread.exceptions:
+                        raise error
 
                 self.controller.view.progress = self._step_index + 1
 
@@ -459,6 +467,11 @@ class Measurement:
             if isinstance(self._log_thread, LogThread):
                 self._log_thread.finishAndStop()
 
+                if (isinstance(self._log_thread, ExceptionThread) and 
+                    len(self._log_thread.exceptions)):
+                    for error in self._log_thread.exceptions:
+                        raise error
+
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
             self.controller.view.print("Waiting for saving images...")
@@ -467,7 +480,7 @@ class Measurement:
             for thread in reset_threads:
                 thread.join()
 
-                if len(thread.exceptions):
+                if isinstance(thread, ExceptionThread) and len(thread.exceptions):
                     for error in thread.exceptions:
                         raise error
 
