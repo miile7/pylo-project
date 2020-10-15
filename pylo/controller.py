@@ -675,8 +675,6 @@ class Controller:
             running = True
         else:
             running = False
-        
-        exceptions = False
 
         # wait until the measurement has started, this is only for fixing
         # synchronizing problems because this funciton is started before the 
@@ -689,34 +687,29 @@ class Controller:
                    time.time() < start_time + MEASUREMENT_START_TIMEOUT):
                 time.sleep(MEASUREMENT_START_TIMEOUT / 10)
             
-            if not self.measurement.running:
-                if (isinstance(self._measurement_thread, ExceptionThread) and 
-                    len(self._measurement_thread.exceptions) > 0):
-                    exceptions = True
-                else:
-                    raise RuntimeError("The measurement was told to start by the " + 
-                                    "controller but when the controller is " + 
-                                    "waiting for the measurement to end, the " + 
-                                    "measurement still has not started. This " + 
-                                    "can be because of a too short " + 
-                                    "measurement timeout. If changing the " + 
-                                    "maximum time does not help, this is " + 
-                                    "a fatal error caused by a big internal " + 
-                                    "problem.")
+            if (not self.measurement.running and (
+                not isinstance(self._measurement_thread, ExceptionThread) or 
+                len(self._measurement_thread.exceptions) == 0)):
+                raise RuntimeError("The measurement was told to start by the " + 
+                                "controller but when the controller is " + 
+                                "waiting for the measurement to end, the " + 
+                                "measurement still has not started. This " + 
+                                "can be because of a too short " + 
+                                "measurement timeout. If changing the " + 
+                                "maximum time does not help, this is " + 
+                                "a fatal error caused by a big internal " + 
+                                "problem.")
 
         try:
-            while (running and self.measurement.running) or exceptions:
-                if (isinstance(self._measurement_thread, ExceptionThread) and 
-                    len(self._measurement_thread.exceptions) > 0):
-                    for error in self._measurement_thread.exceptions:
-                        raise error
-
-                if (isinstance(self._running_thread, ExceptionThread) and 
-                    len(self._running_thread.exceptions) > 0):
-                    for error in self._running_thread.exceptions:
-                        raise error
-                
+            while running and self.measurement.running:
+                self._checkThreadsForErrors()
                 time.sleep(0.05)
+            
+            # if the measurement detects an error, Measurement.running will be 
+            # False, so the while-loop is not executed and if an exception 
+            # occurres before starting the measurement, the loop will not be 
+            # running too
+            self._checkThreadsForErrors()
             
             # finished
             stop_program = True
@@ -739,6 +732,26 @@ class Controller:
             raise RuntimeError("Cannot wait for the program if the program " + 
                                "has not started or has already finished.")
     
+    def _checkThreadsForErrors(self) -> None:
+        """Check the measurement thread and the running thread for errors and 
+        raise them if there are some.
+
+        Raises
+        ------
+        Exception
+            When an error in the threads occurres, this error will be raised
+        """
+
+        if (isinstance(self._measurement_thread, ExceptionThread) and 
+            len(self._measurement_thread.exceptions) > 0):
+            for error in self._measurement_thread.exceptions:
+                raise error
+
+        if (isinstance(self._running_thread, ExceptionThread) and 
+            len(self._running_thread.exceptions) > 0):
+            for error in self._running_thread.exceptions:
+                raise error
+    
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
 
@@ -757,7 +770,8 @@ class Controller:
         if isinstance(self._running_thread, ExceptionThread):
             self._running_thread.join()
             
-        self.measurement.waitForAllImageSavings()
+        if isinstance(self.measurement, Measurement):
+            self.measurement.waitForAllImageSavings()
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
