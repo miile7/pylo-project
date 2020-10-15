@@ -426,7 +426,8 @@ class Measurement:
 
                 # checking image savings for errors
                 for thread in self._image_save_threads:
-                    if len(thread.exceptions) > 0:
+                    if (isinstance(thread, ExceptionThread) and 
+                        len(thread.exceptions) > 0):
                         raise thread.exceptions[0]
 
                 self.controller.view.progress = self._step_index + 1
