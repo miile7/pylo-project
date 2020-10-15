@@ -338,10 +338,18 @@ class TestImage:
 
         if file_type == None:
             with pytest.raises(ValueError):
-                image.saveTo(path)
+                thread = image.saveTo(path)
+                thread.join()
+
+                if len(thread.exceptions) > 0:
+                    raise thread.exceptions[0]
         else:
             with pytest.raises(ValueError):
-                image.saveTo(path, file_type=file_type)
+                thread = image.saveTo(path, file_type=file_type)
+                thread.join()
+
+                if len(thread.exceptions) > 0:
+                    raise thread.exceptions[0]
         
     
 if __name__ == "__main__":
