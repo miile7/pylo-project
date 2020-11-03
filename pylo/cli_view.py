@@ -867,7 +867,6 @@ class CLIView(AbstractView):
                 # required
                 if isinstance(line, dict):
                     try:
-                        self.print(line)
                         self._parseValue(line, values[line["id"]])
                     except ValueError as e:
                         errors.append(
