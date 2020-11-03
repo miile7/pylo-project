@@ -201,10 +201,10 @@ class PyJEMMicroscope(MicroscopeInterface):
                               0xFFFF)
         else:
             max_ol_current = 0xFFFF
-        
-        self.supported_measurement_variables = [
-            # limits taken from 
-            # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
+
+        # limits taken from 
+        # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
+        self.registerMeasurementVariable(
             MeasurementVariable(
                 "focus", 
                 "Focus (absolut)", 
@@ -215,9 +215,24 @@ class PyJEMMicroscope(MicroscopeInterface):
                 # step by one increases the focus (in LOWMag-Mode) by 3 microns
                 calibration=focus_calibration_factor
             ),
-            # tilt depends on holder
+            self._getFocus,
+            self._setFocus
+        )
+        
+        # tilt limits depend on holder
+        self.registerMeasurementVariable(
             MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
+            self._getXTilt,
+            self._setXTilt
+        )
+        
+        self.registerMeasurementVariable(
             MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
+            self._getYTilt,
+            self._setYTilt
+        )
+
+        self.registerMeasurementVariable(
             MeasurementVariable(
                 "ol-current", 
                 "Objective Lense Current", 
@@ -229,8 +244,10 @@ class PyJEMMicroscope(MicroscopeInterface):
                 calibrated_name="Magnetic Field",
                 calibration=magnetic_field_calibration_factor,
                 calibrated_format=float
-            )
-        ]
+            ),
+            self._getObjectiveLenseCurrent,
+            self._setObjectiveLenseCurrent
+        )
 
         # lenses
         self._lense_control = Lens3()
@@ -469,58 +486,6 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         return lorentz_mode
     
-    def setMeasurementVariableValue(self, id_: str, value: float) -> None:
-        """Set the measurement variable defined by its id to the given value in
-        its specific units.
-
-        Note it does not matter if a calibration is given or not. The 
-        calibration is for visuals (in the GUI and the saved values) only. So
-        **the `value` is the uncalibrated value**. It will NOT be 
-        re-calculated!
-
-        The JEOL NeoARM F200 supports the following variables:
-        - 'focus': The focus current in ?
-        - 'ol-current': The objective lense current which induces a magnetic 
-          field or the magnetic field itself
-        - 'x-tilt': The tilt in x direction in degrees
-        - 'y-tilt': The tilt in y direction in degrees, only supported if the 
-          correct probe holder is installed
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
-
-        Raises
-        ------
-        ValueError
-            When there is no measurement variable with the given id or when the 
-            `value` is out of its bounds.
-
-        Parameters
-        ----------
-        id_ : str
-            The id of the measurement variable
-        value : float
-            The value to set in the specific units
-        """
-        
-        if not self.isValidMeasurementVariableValue(id_, value):
-            raise ValueError(("Either the id {} does not exist or the value " + 
-                              "{} is not valid for the measurement " + 
-                              "variable.").format(id_, value))
-
-        elif id_ == "focus":
-            self._setFocus(value)
-        elif id_ == "ol-current":
-            self._setObjectiveLenseCurrent(value)
-        elif id_ == "x-tilt":
-            self._setXTilt(value)
-        elif id_ == "y-tilt": 
-            self._setYTilt(value)
-        else:
-            # this cannot happen, if the id doesn't exist the 
-            # MicroscopeInterface::isValidMeasurementVariableValue returns 
-            # false
-            raise ValueError("The id {} does not exist.".format(id_))
-    
     def _setFocus(self, value : int) -> None:
         """Set the focus to the given value.
 
@@ -633,36 +598,6 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         # allow other functions to use the microscope
         self._action_lock.release()
-    
-    def getMeasurementVariableValue(self, id_: str) -> float:
-        """Get the value for the given `MeasurementVariable` id.
-
-        Note it does not matter if a calibration is given or not. The 
-        calibration is for visuals (in the GUI and the saved values) only. So
-        **the return value is the uncalibrated value**. It will NOT be 
-        re-calculated!
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
-
-        Raises
-        ------
-        ValueError
-            When there is no `MeasurementVariable` for the `id_`.
-        """
-
-        if id_ == "focus":
-            value = self._getFocus()
-        elif id_ == "ol-current":
-            value = self._getObjectiveLenseCurrent()
-        elif id_ == "x-tilt":
-            value = self._getXTilt()
-        elif id_ == "y-tilt":
-            value = self._getYTilt()
-        else:
-            raise ValueError(("There is no MeasurementVariable for the " + 
-                              "id {}.").format(id_))
-        
-        return value
     
     def _getFocus(self) -> float:
         """Get the current focus as an absolute value.
