@@ -224,7 +224,7 @@ class CLIView(AbstractView):
 
         self.error = "\n".join(errors)
 
-        values, command = self._printSelect(
+        values, command, changed = self._printSelect(
             "Define the start conditions",
             *measuremnt_vars_inputs,
             "",
@@ -258,11 +258,14 @@ class CLIView(AbstractView):
                         s["step-width"] = v
                     elif match.group(2) == "end":
                         s["end"] = v
-                    elif (match.group(2) == "variable" and "variable" not in s and 
-                          v in variable_ids):
-                        # on-each-point sets the "variable" key already, do not
-                        # overwrite it, otherwise the variable can never be 
-                        # changed again
+                    elif (match.group(2) == "variable" and v in variable_ids and
+                        ("variable" not in s or changed == k)):
+                        # on-each-point sets the "variable" key already, only 
+                        # overwrite if the user changes this value, this is 
+                        # necessary because the variable in the on-each-point
+                        # value can be changed by either the 
+                        # series-on-each-point value or the 'variable' value of
+                        # the new sub-series
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
                         s["on-each-point"] = {"variable": v}
@@ -565,7 +568,7 @@ class CLIView(AbstractView):
                 
                 config_dict[group][key] = val
 
-        values, command = self._printSelect(
+        values, command, _ = self._printSelect(
             "Change settings.",
             *setting_inputs
         )
@@ -701,7 +704,7 @@ class CLIView(AbstractView):
             
             input_definitions.append(l)
         
-        values, command = self._printSelect(
+        values, command, _ = self._printSelect(
             *input_definitions
         )
 
@@ -713,7 +716,7 @@ class CLIView(AbstractView):
         else:
             return self._askForLoop(inputs, values, **kwargs)
 
-    def _printSelect(self, *args: typing.Union[str, dict]) -> dict:
+    def _printSelect(self, *args: typing.Union[str, dict]) -> typing.Tuple[dict, typing.Union[bool, None], typing.Union[str, None]]:
         """Show a select overview.
 
         This function offers to change multiple values. Each value will be 
@@ -758,7 +761,9 @@ class CLIView(AbstractView):
         dict, bool or None
             The dict with the values at index 0, True at index 1 if the user
             wants to continue, False if he/she wants to cancel and None if the
-            user selected someting without "pressing" continue or "cancel"
+            user selected someting without "pressing" continue or "cancel" and
+            the "id" of the changed value or None if nothing changed or a 
+            command ("continue" or "cancel") was performed at index 2
         """
 
         self.clear()
@@ -852,7 +857,7 @@ class CLIView(AbstractView):
         user_input = self.input("Number, [c]ontinue or [q]uit: ")
 
         if user_input == "q":
-            return values, False
+            return values, False, None
         elif user_input == "c":
             errors = []
 
@@ -884,7 +889,7 @@ class CLIView(AbstractView):
                 self.error += ")"
                 return self._printSelect(*args)
             else:
-                return values, True
+                return values, True, None
         else:
             try:
                 user_input = int(user_input)
@@ -908,10 +913,12 @@ class CLIView(AbstractView):
                     if (v is not None or (not "required" in input_definition or 
                         not input_definition["required"])):
                         values[id_] = v
+                    else:
+                        id_ = None
                 except StopProgram:
                     pass
 
-                return values, None
+                return values, None, id_
             else:
                 # error is shown in CLIView::printTitle
                 self.error = ("The input '{}' is out of range. Please type " + 
