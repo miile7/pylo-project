@@ -140,6 +140,9 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Manual Gitlab issues backup
+.issues_backup
+
 # test files
 test/tmp_test_files
 test/tmp-test-*
