@@ -1,3 +1,5 @@
+import typing
+
 from ..vulnerable_machine import VulnerableMachine
 
 class MicroscopeInterface(VulnerableMachine):
@@ -18,11 +20,73 @@ class MicroscopeInterface(VulnerableMachine):
         tilt can be set while the lense current is set
     """
 
-    def __init__(self, controller : "Controller"):
+    def __init__(self, controller : "Controller") -> None:
         """Get the microscope instance"""
         self.supported_measurement_variables = []
         self.supports_parallel_measurement_variable_setting = True
         self.controller = controller
+        self._measurement_variable_getter_setter_map = {}
+    
+    def registerMeasurementVariable(self, variable: "MeasurementVariable", 
+                                    getter: typing.Callable[["MicroscopeInterface"], typing.Union[int, float, str]], 
+                                    setter: typing.Callable[["MicroscopeInterface", typing.Union[int, float, str]], None]) -> None:
+        """Register a `MeasurementVariable` so this microscope knows that it 
+        can change this parameter.
+
+        The `getter` gets called with out parameters:
+        ```
+        getter()
+        ```
+
+        The `setter` is called with the value to set as the only parameter:
+        ```
+        setter(value)
+        ```
+
+        This way functions of the implementing child classes can directly pass
+        their member method which is the indented way.
+        
+        Example
+        -------
+        ```
+        class MyMicroscope(MicroscopeInterface):
+            def __init__(self, controller : "Controller") -> None:
+                super().__init__(controller)
+                
+                self.registerMeasurementVariable(
+                    MeasurementVariable("tilt", "Tilt", unit="deg"),
+                    self._getTilt, self._setTilt
+                )
+
+                # ...
+            
+            def _getTilt(self) -> float:
+                return self._microscope_api.getTilt()
+
+            def _setTilt(self, value: float) -> None:
+                self._microscope_api.setTilt(value)
+        ```    
+
+        Parameters
+        ----------
+        variable : MeasurementVariable
+            The measurement variable object to register
+        getter : callable
+            The function that is used to get the current value of this 
+            `MeasurementVariable` from the microscope, has to return the value
+            in the format the `MeasurementVariable` is used to, the first and 
+            only parameter is the instance of the microscope
+        setter : callable
+            The function that is used to set the current value of this 
+            `MeasurementVariable` from the microscope, the first parameter is 
+            the instance of the microscope, the second is the the value to 
+            apply
+        """
+
+        self.supported_measurement_variables.append(variable)
+        self._measurement_variable_getter_setter_map[variable.unique_id] = (
+            getter, setter
+        )
 
     def setInLorentzMode(self, lorentz_mode: bool) -> None:
         """Set whether the microscope should now be in lorentz mode or not.
@@ -47,7 +111,7 @@ class MicroscopeInterface(VulnerableMachine):
         """
         raise NotImplementedError()
 
-    def setMeasurementVariableValue(self, id_: str, value: float) -> None:
+    def setMeasurementVariableValue(self, id_: str, value: typing.Union[int, float, str]) -> None:
         """Set the measurement variable defined by its id to the given value.
 
         A measurement variable is each variable that this microscope can 
@@ -70,12 +134,24 @@ class MicroscopeInterface(VulnerableMachine):
         ----------
         id_ : str
             The id of the measurement variable
-        value : float
-            The value to set in the specific units
+        value : int, float or str
+            The value to set in the variable specific type and units
         """
-        raise NotImplementedError()
+        
+        if not self.isValidMeasurementVariableValue(id_, value):
+            raise ValueError(("Either the id {} does not exist or the value " + 
+                              "{} is not valid for the measurement " + 
+                              "variable.").format(id_, value))
 
-    def getMeasurementVariableValue(self, id_: str) -> float:
+        elif id_ in self._measurement_variable_getter_setter_map:
+            self._measurement_variable_getter_setter_map[id_][1](value)
+        else:
+            # this cannot happen, if the id doesn't exist the 
+            # MicroscopeInterface::isValidMeasurementVariableValue returns 
+            # false
+            raise ValueError("The id {} does not exist.".format(id_))
+
+    def getMeasurementVariableValue(self, id_: str) -> typing.Union[int, float, str]:
         """Get the value of the measurement variable defined by its id.
 
         A measurement variable is each variable that this microscope can 
@@ -97,10 +173,15 @@ class MicroscopeInterface(VulnerableMachine):
 
         Returns
         -------
-        int or float
-            The focus current
+        int, float or str
+            The value of the variable in the variable specific type and units
         """
-        raise NotImplementedError()
+
+        if id_ in self._measurement_variable_getter_setter_map:
+            return self._measurement_variable_getter_setter_map[id_][0]()
+        else:
+            raise ValueError(("There is no MeasurementVariable for the " + 
+                              "id {}.").format(id_))
 
     def isValidMeasurementVariableValue(self, id_: str, value: float) -> bool:
         """Get whether the value is allowed for the measurement variable with 
