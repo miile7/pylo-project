@@ -171,11 +171,12 @@ class CLIView(AbstractView):
         start : dict, optional (for recursive use only!)
             The start dict as it is required for the `Measurement::fromSeries()`
             function with the `MeasurementVariable`s as the keys and their 
-            start values as their values
+            start values as their values with uncalibrated values
         series : dict, optional (for recursive use only!)
             The series dict as it is required for the 
             `Measurement::fromSeries()` with the 'variable', 'start', 
-            'step-width', 'end' and the optional 'on-each-point' indices.
+            'step-width', 'end' and the optional 'on-each-point' indices with 
+            uncalibrated values
         
         Returns
         -------
@@ -190,7 +191,7 @@ class CLIView(AbstractView):
 
         start, start_errors = self.parseStart(
             controller.microscope.supported_measurement_variables, start, 
-            add_defaults=True, parse=False, uncalibrate=True
+            add_defaults=True, parse=False, uncalibrate=False
         )
         for id_ in start:
             v = controller.microscope.getMeasurementVariableById(id_)
@@ -296,7 +297,7 @@ class CLIView(AbstractView):
         series : dict
             The series dict with at least the 'variable' index that contains a
             valid `MeasurementVariable` id, optional with the 'start', 'end',
-            'step-width' and 'on-each-point' keys
+            'step-width' and 'on-each-point' keys with uncalibrated values
         
         Returns
         -------
@@ -307,7 +308,7 @@ class CLIView(AbstractView):
         series_inputs = []
         series, errors = self.parseSeries(
             controller.microscope.supported_measurement_variables, series, 
-            add_defaults=True, parse=False, uncalibrate=True
+            add_defaults=True, parse=False, uncalibrate=False
         )
         if series is None:
             return series_inputs, errors
