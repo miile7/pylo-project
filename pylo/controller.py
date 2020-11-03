@@ -17,6 +17,7 @@ from .stop_program import StopProgram
 from .abstract_view import AbstractView
 from .exception_thread import ExceptionThread
 from .cameras.camera_interface import CameraInterface
+from .blocked_function_error import BlockedFunctionError
 from .abstract_configuration import AbstractConfiguration
 from .microscopes.microscope_interface import MicroscopeInterface
 
@@ -642,8 +643,8 @@ class Controller:
             return
         except Exception as e:
             try:
+                self.view.showError(e, self._getFixForError(e))
                 self.view.show_running = False
-                self.view.showError(e)
             except StopProgram:
                 self.stopProgramLoop()
     
@@ -720,7 +721,7 @@ class Controller:
                 # stop before the error, mostly the view raises the python 
                 # error too so the program would not end then
                 self.stopProgramLoop()
-                self.view.showError(e)
+                self.view.showError(e, self._getFixForError(e))
             except StopProgram:
                 stop_program = True
         
@@ -751,6 +752,30 @@ class Controller:
             len(self._running_thread.exceptions) > 0):
             for error in self._running_thread.exceptions:
                 raise error
+    
+    def _getFixForError(self, error: Exception) -> typing.Union[None, str]:
+        """Get a possible fix for the given error.
+
+        Parameters
+        ----------
+        error : Exception
+            The error to get the possible fix for
+        
+        Returns
+        -------
+        None or str
+            The text how to possibly fix this error or None if there is no fix
+            found
+        """
+
+        fix = None
+        if isinstance(error, BlockedFunctionError):
+            fix = ("A function was blocked due to security reasons, " + 
+                    "probably because an error occurred. You will continue " + 
+                    "getting this error until you restart the program " + 
+                    "completely.")
+        
+        return fix
     
     def stopProgramLoop(self) -> None:
         """Stop the program loop.
