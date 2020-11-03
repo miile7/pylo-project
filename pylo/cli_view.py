@@ -258,7 +258,11 @@ class CLIView(AbstractView):
                         s["step-width"] = v
                     elif match.group(2) == "end":
                         s["end"] = v
-                    elif (match.group(2) == "variable" and v in variable_ids):
+                    elif (match.group(2) == "variable" and "variable" not in s and 
+                          v in variable_ids):
+                        # on-each-point sets the "variable" key already, do not
+                        # overwrite it, otherwise the variable can never be 
+                        # changed again
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
                         s["on-each-point"] = {"variable": v}
