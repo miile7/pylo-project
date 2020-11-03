@@ -119,14 +119,17 @@ class DMCamera(CameraInterface):
             The image object
         """
         
-        camera_tags = {"camera": copy.deepcopy(self.tags)}
+        tags = {"camera": copy.deepcopy(self.tags)}
 
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
             self.ccd_area[2], self.ccd_area[1])
         
-        image = DMImage.fromDMPyImageObject(image, camera_tags)
+        # save the image tags
+        tags.update(execdmscript.convert_from_taggroup(image.GetTagGroup()))
+        
+        image = DMImage.fromDMPyImageObject(image, tags)
         image.show_image = self.show_images
         image.workspace_id = self._workspace_id
 
