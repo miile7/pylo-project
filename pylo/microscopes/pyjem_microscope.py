@@ -1,6 +1,5 @@
 import time
 import typing
-import threading
 
 try:
     test_error = ModuleNotFoundError()
@@ -261,8 +260,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         self._gun = GUN3()
         # aperture
         self._aperture = Apt3()
-        # a lock so only one action can be performed at once at the microscope
-        self._action_lock = threading.Lock()
 
         # save current focus, there is no get function
         self._focus = 0
@@ -337,7 +334,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         `PyJEMMicroscope::getCurrentState()` function. Note that the `state` 
         does not have to contain all the keys.
 
-        This function blocks the `PyJEMMicroscope::_action_lock`.
+        This function blocks the `MicroscopeInterface::action_lock`.
 
         Raises
         ------ 
@@ -355,7 +352,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             this key (False), default: False
         """
 
-        self._action_lock.acquire()
+        self.action_lock.acquire()
 
         for key, value in state.items():
             if key == "cl1": 
@@ -392,18 +389,16 @@ class PyJEMMicroscope(MicroscopeInterface):
             elif key == "function-mode":
                 self._eos.SelectFunctionMode(value)
             elif not ignore_invalid_keys:
-                self._action_lock.release()
+                self.action_lock.release()
                 raise KeyError("The key '{}' is invalid.".format(key))
         
-        self._action_lock.release()
+        self.action_lock.release()
     
     def setInLorentzMode(self, lorentz_mode : bool) -> None:
         """Set the microscope to be in lorentz mode.
 
         This sets the probe mode to *TEM* and the function mode to *LowMAG*. It
         disables the objective lense (OL fine and coarse) and sets them to 0.
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Raises
         ------
@@ -415,11 +410,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         lorentz_mode : bool
             Whether the microscope should be in lorentz mode or not
         """
-
-        # make sure only this function is currently using the microscope,
-        # otherwise two functions may change microscope values at the same time
-        # which will mess up things
-        self._action_lock.acquire()
 
         # if self._stage.GetHolderStts() == 0:
         #     raise IOError("The holder is not inserted.")
@@ -449,21 +439,13 @@ class PyJEMMicroscope(MicroscopeInterface):
             # self._lense_control.SetNtrl((Lens3)arg1, (int)arg2)
             # NTRL within only value range.
             # 0:Brightness, 1:OBJ Focus, 2:DIFF Focus, 3:IL Focus, 4:PL Focus, 5:FL Focus
-
-        # let other functions access the microscope
-        self._action_lock.release()
     
     def getInLorentzMode(self) -> bool:
         """Get whether the microscope is in the lorentz mode.
 
         This will return true if the objective fine and coarse lenses are 
         switched to free lense control and their current is 0.
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
         """
-
-        # also for getting lock the microscope, just to be sure
-        self._action_lock.acquire()
 
         # get the probe mode, the documentation sais it returns the probe  mode
         # id as an int but the (offline) code actually returns a tuple, don't 
@@ -480,9 +462,6 @@ class PyJEMMicroscope(MicroscopeInterface):
             probe_mode == PROBE_MODE_TEM and 
             function_mode == FUNCTION_MODE_TEM_LowMAG
         )
-        
-        # let other functions access the microscope
-        self._action_lock.release()
 
         return lorentz_mode
     
@@ -491,8 +470,6 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         Typical values are between -1 and 50.
 
-        This function blocks the `PyJEMMicroscope::_action_lock`.
-
         Parameters
         ----------
         value : int
@@ -500,21 +477,17 @@ class PyJEMMicroscope(MicroscopeInterface):
         """
         
         diff = value - self._focus
-        self._action_lock.acquire()
         self._eos.SetObjFocus(int(diff))
         # self._eos.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetDiffFocus(value) +-1 to 50
         # self._lense_control.SetILFocus(value)
         # self._lense_control.SetPLFocus(value)
         self._focus = value
-        self._action_lock.release()
 
     def _setObjectiveLenseCurrent(self, value : float) -> None:
         """Set the objective lense current.
 
         The value corresponds to I/O output value without carry.
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
         
         Parameters
         ----------
@@ -526,24 +499,17 @@ class PyJEMMicroscope(MicroscopeInterface):
         if not self.isValidMeasurementVariableValue("ol-current", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "objective lense current.").format(value))
-        
-        # lock the microscope
-        self._action_lock.acquire()
 
         if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
             self._lense_control.SetOLc(value // self.objective_lense_coarse_fine_stepwidth)
             self._lense_control.SetOLf(value % self.objective_lense_coarse_fine_stepwidth)
         else:
             self._lense_control.SetOLf(value)
-
-        # allow other functions to use the microscope
-        self._action_lock.release()
     
     def _setXTilt(self, value : float) -> None:
         """Set the x tilt in degrees.
 
-        This function blocks the `PyJEMMicroscope::_action_lock`. It will 
-        execute until the x tilt is set correctly.
+        It will execute until the x tilt is set correctly.
         
         Parameters
         ----------
@@ -554,9 +520,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         if not self.isValidMeasurementVariableValue("x-tilt", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "x tilt.").format(value))
-        
-        # lock the microscope
-        self._action_lock.acquire()
 
         # tell it to move to the given x angle
         self._stage.SetTiltXAngle(value)
@@ -565,14 +528,10 @@ class PyJEMMicroscope(MicroscopeInterface):
         while self._stage.GetStatus()[STAGE_INDEX_X_TILT] == STAGE_STATUS_MOVING:
             time.sleep(0.1)
 
-        # allow other functions to use the microscope
-        self._action_lock.release()
-
     def _setYTilt(self, value : float) -> None:
         """Set the y tilt in degrees.
 
-        This function blocks the `PyJEMMicroscope::_action_lock`. It will 
-        execute until the y tilt is set correctly.
+        It will execute until the y tilt is set correctly.
 
         Note that not all probe holders support a y tilt!
         
@@ -585,9 +544,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         if not self.isValidMeasurementVariableValue("y-tilt", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "y tilt.").format(value))
-        
-        # lock the microscope
-        self._action_lock.acquire()
 
         # tell it to move to the given y angle
         self._stage.SetTiltYAngle(value)
@@ -595,9 +551,6 @@ class PyJEMMicroscope(MicroscopeInterface):
         # wait until the y tilt has the desired value
         while self._stage.GetStatus()[STAGE_INDEX_Y_TILT] == STAGE_STATUS_MOVING:
             time.sleep(0.1)
-
-        # allow other functions to use the microscope
-        self._action_lock.release()
     
     def _getFocus(self) -> float:
         """Get the current focus as an absolute value.
@@ -611,20 +564,16 @@ class PyJEMMicroscope(MicroscopeInterface):
         float
             The focus
         """
-        # self._action_lock.acquire()
 
         # GetObjFocus() doesn't exist, no idea how to get the focus value 
         # (except for saving it but that is only the last escape, this makes it
         # impossible to check if the focus really is set correctly)
         # self._eos.GetObjFocus()
 
-        # self._action_lock.release()
         return self._focus
     
     def _getObjectiveLenseCurrent(self) -> float:
         """Get the objective lense current in the current units.
-
-        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Returns
         -------
@@ -632,9 +581,6 @@ class PyJEMMicroscope(MicroscopeInterface):
             The actual current of the objective lense at the microscope,
             measured in objective fine lense steps
         """
-
-        # lock the microscope
-        self._action_lock.acquire()
 
         fine_value = self._lense_control.GetOLf()
         if isinstance(fine_value, (list, tuple)):
@@ -650,24 +596,16 @@ class PyJEMMicroscope(MicroscopeInterface):
         else:
             value = fine_value
 
-        # allow other functions to use the microscope
-        self._action_lock.release()
-
         return value
     
     def _getXTilt(self) -> float:
         """Get the x tilt in degrees.
-        
-        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Returns
         -------
         float
             The x tilt
         """
-
-        # lock the microscope
-        self._action_lock.acquire()
 
         # wait until the x tilt is not changing anymore
         while self._stage.GetStatus()[STAGE_INDEX_X_TILT] == STAGE_STATUS_MOVING:
@@ -676,24 +614,16 @@ class PyJEMMicroscope(MicroscopeInterface):
         # get the current stage position (includes the tilt)
         pos = self._stage.GetPos()
 
-        # allow other functions to use the microscope
-        self._action_lock.release()
-
         return round(pos[STAGE_INDEX_X_TILT], 2)
     
     def _getYTilt(self) -> float:
         """Get the y tilt in degrees.
-        
-        This function blocks the `PyJEMMicroscope::_action_lock`.
 
         Returns
         -------
         float
             The y tilt
         """
-        
-        # lock the microscope
-        self._action_lock.acquire()
 
         # wait until the y tilt is not changing anymore
         while self._stage.GetStatus()[STAGE_INDEX_Y_TILT] == STAGE_STATUS_MOVING:
@@ -701,9 +631,6 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         # get the current stage position (includes the tilt)
         pos = self._stage.GetPos()
-
-        # allow other functions to use the microscope
-        self._action_lock.release()
 
         return round(pos[STAGE_INDEX_Y_TILT], 2)
 
@@ -713,8 +640,9 @@ class PyJEMMicroscope(MicroscopeInterface):
         The safe state will set the microscope not to be in lorentz mode anymore.
         In addition the stage is driven to its origin, with resolving the tilt 
         in all axes.
-        
-        This function blocks the `PyJEMMicroscope::_action_lock`.
+
+        This function blocks the `MicroscopeInterface.action_lock` while 
+        operating.
         """
 
         # reset the lorentz mode
@@ -723,7 +651,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # lock the microscope after the lorentz mode, otherwise there is a 
         # deadlock (this function blocks the lock, 
         # PyJEMMicroscope::setInLorentzMode() waits for the lock)
-        self._action_lock.acquire()
+        self.action_lock.acquire()
 
         # close the beam valve
         # documentation sais: "This works for FEG and 3100EF" for 
@@ -746,7 +674,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         self._stage.SetOrg()
 
         # release the lock, the setCurrentState() needs the lock again
-        self._action_lock.release()
+        self.action_lock.release()
 
         # restore the starting state
         self.setCurrentState(self._init_state)

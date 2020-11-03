@@ -1,4 +1,5 @@
 import typing
+import threading
 
 from ..vulnerable_machine import VulnerableMachine
 
@@ -18,6 +19,11 @@ class MicroscopeInterface(VulnerableMachine):
     supports_parallel_measurement_variable_setting : bool
         Whether `MeasurementVariable`s can be set parallel, for example the 
         tilt can be set while the lense current is set
+    action_lock : bool
+        A lock that is used to prevent setting multiple measurement variables
+        at the same time if 
+        `MicroscopeInterface.supports_parallel_measurement_variable_setting` is
+        False
     """
 
     def __init__(self, controller : "Controller") -> None:
@@ -26,6 +32,9 @@ class MicroscopeInterface(VulnerableMachine):
         self.supports_parallel_measurement_variable_setting = True
         self.controller = controller
         self._measurement_variable_getter_setter_map = {}
+
+        # a lock so only one action can be performed at once at the microscope
+        self.action_lock = threading.Lock()
     
     def registerMeasurementVariable(self, variable: "MeasurementVariable", 
                                     getter: typing.Callable[["MicroscopeInterface"], typing.Union[int, float, str]], 
@@ -137,6 +146,12 @@ class MicroscopeInterface(VulnerableMachine):
         value : int, float or str
             The value to set in the variable specific type and units
         """
+
+        if not self.supports_parallel_measurement_variable_setting:
+            # make sure only this function is currently using the microscope,
+            # otherwise two functions may change microscope values at the same time
+            # which will mess up things
+            self.action_lock.acquire()
         
         if not self.isValidMeasurementVariableValue(id_, value):
             raise ValueError(("Either the id {} does not exist or the value " + 
@@ -149,7 +164,14 @@ class MicroscopeInterface(VulnerableMachine):
             # this cannot happen, if the id doesn't exist the 
             # MicroscopeInterface::isValidMeasurementVariableValue returns 
             # false
+            if not self.supports_parallel_measurement_variable_setting:
+                self.action_lock.release()
+            
             raise ValueError("The id {} does not exist.".format(id_))
+
+        if not self.supports_parallel_measurement_variable_setting:
+            # let other functions access the microscope
+            self.action_lock.release()
 
     def getMeasurementVariableValue(self, id_: str) -> typing.Union[int, float, str]:
         """Get the value of the measurement variable defined by its id.
@@ -177,11 +199,26 @@ class MicroscopeInterface(VulnerableMachine):
             The value of the variable in the variable specific type and units
         """
 
+        if not self.supports_parallel_measurement_variable_setting:
+            # make sure only this function is currently using the microscope,
+            # otherwise two functions may change microscope values at the same time
+            # which will mess up things
+            self.action_lock.acquire()
+
         if id_ in self._measurement_variable_getter_setter_map:
-            return self._measurement_variable_getter_setter_map[id_][0]()
+            value = self._measurement_variable_getter_setter_map[id_][0]()
         else:
+            if not self.supports_parallel_measurement_variable_setting:
+                self.action_lock.release()
+            
             raise ValueError(("There is no MeasurementVariable for the " + 
                               "id {}.").format(id_))
+
+        if not self.supports_parallel_measurement_variable_setting:
+            # let other functions access the microscope
+            self.action_lock.release()
+        
+        return value
 
     def isValidMeasurementVariableValue(self, id_: str, value: float) -> bool:
         """Get whether the value is allowed for the measurement variable with 
