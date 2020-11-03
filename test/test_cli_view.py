@@ -98,7 +98,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
             pylo.MeasurementVariable("focus", "Focus", 0, 0xfa,
                             format=pylo.microscopes.pyjem_microscope.hex_int),
             pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 5),
-            pylo.MeasurementVariable("tilt", "Tilt", -5, 5),
+            pylo.MeasurementVariable("tilt", "Tilt", -5, 5, calibration=5),
         ]
         self.supports_parallel_measurement_variable_setting = False
         self.values = {}
@@ -713,9 +713,31 @@ class TestCLIView:
             assert v.min_value <= series_definition["end"] 
             assert series_definition["end"] <= v.max_value
     
+    # PyLo
+    # ****
+    #
+    #
+    # Define the start conditions
+    # [0] Focus*:                0x0      0x0 <= val <= 0xfa
+    # [1] Magnetic Field*:       0        0 <= val <= 5
+    # [2] Tilt*:                 0        -25 <= val <= 25
+    #
+    # Define the series
+    # [3] Series variable*:      focus
+    # [4] Start value*:          0x0      0x0 <= val <= 0xfa
+    # [5] Step width*:           0x19     0x0 <= val <= 0xfa
+    # [6] End value*:            0xfa     0x0 <= val <= 0xfa
+    # [7] Series on each point:  <empty>
+    #
+    # Type in the number to change the value of, type [c] for continue and [q] for
+    # quit.
+    # Number, [c]ontinue or [q]uit:  < input: '0'
+    # 
+    # Hint: Use realprint(writer.io_log) to see what happens if an error 
+    # asserts False
     @pytest.mark.usefixtures("cliview", "controller")
     @pytest.mark.parametrize("start,series,user_inputs,expected_start,expected_series", [
-        # create default series
+        # create default series, parameter-1
         (None, None, ("c", ), 
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          # expecting: start=min, end=max, step-width = end-start/10
@@ -726,11 +748,12 @@ class TestCLIView:
             "1", 3, # magnetic field to 3
             "2", 4, # tilt to 4
             "c", 
-        ), 
-         {"focus": 15, "magnetic-field": 3, "tilt": 4},
+         ), 
+         # tilt is calibrated by 5
+         {"focus": 15, "magnetic-field": 3, "tilt": 4/5},
          # expecting: start=min, end=max, step-width = end-start/10
          {"variable": "focus", "start": 0, "end": 250, "step-width": 25}),
-        # create magnetic field series
+        # create magnetic field series, parameter-2
         (None, None, (
             "3", "magnetic-field", # variable
             "5", 0.5, # step width
@@ -740,15 +763,34 @@ class TestCLIView:
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          # expecting: start=min, end=max, step-width = end-start/10
          {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5}),
-        # create tilt field series
+        # create tilt field series, parameter-3
         (None, {"variable": "tilt"}, (
             "3", "tilt", # variable
             "c"
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "tilt", "start": -5, "end": 5, "step-width": 1}),
-        # create magnetic field series from 1 to 2 with 0.5 stepwidth
+         {"variable": "tilt", "start": -5.0, "end": 5.0, "step-width": 1.0}),
+        # create tilt field series with changed parameters, testing 
+        # calibration in on-each-point series (this was a bug), parameter-4
+        (None, {"variable": "tilt"}, (
+            "3", "focus", # variable
+            "4", "0x0", # focus start
+            "5", "0x5", # focus step width
+            "6", "0xfa", # focus end
+            "7", "tilt", # setting on each point
+            "9", -10, # tilt start
+            "10", 2.5, # tilt step-width
+            "11", 10, # tilt end
+            "c"
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         # expecting: set value divided by calibration factor, machine takes 
+         # uncalibrated value
+         {"variable": "focus", "start": 0, "end": 0xfa, "step-width": 0x5, "on-each-point": 
+            {"variable": "tilt", "start": -10/5, "end": 10/5, "step-width": 2.5/5}}),
+        # create magnetic field series from 1 to 2 with 0.5 stepwidth, 
+        # parameter-5
         (None, None, (
             "3", "magnetic-field", # vairable
             "4", 1, # start
@@ -758,7 +800,7 @@ class TestCLIView:
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
          {"variable": "magnetic-field", "start": 1, "end": 2, "step-width": 0.5}),
-        # create focus series from 0 to 16 with 2 stepwidth
+        # create focus series from 0 to 16 with 2 stepwidth, parameter-6
         (None, None, (
             "4", "0x0", # start
             "5", "0x2", # step width
@@ -770,6 +812,7 @@ class TestCLIView:
         # create tilt series from -5 to 5 with 1 stepwidth, 
         #   on each point: magnetic field series from 0 to 5, stepwidth 0.5
         #       on each point: focus series from 2 to 4, stepwidth 0.25
+        # parameter-7
         (None, None, (
             "3", "tilt", # tilt series
             "4", -5, # start
@@ -786,12 +829,32 @@ class TestCLIView:
             "c" # continue
          ),
          {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "tilt", "start": -5, "end": 5, "step-width": 1, "on-each-point":
+         {"variable": "tilt", "start": -5/5, "end": 5/5, "step-width": 1/5, "on-each-point":
             {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5, 
              "on-each-point":
                 {"variable": "focus", "start": 0x2, "end": 0x4, "step-width": 0x1}
             }
          }),
+        # add on-each-point value, then change it (this was a bug)
+        # parameter-8
+        (None, None, (
+            # "0", 0x0, # focus start value
+            # "1", 0, # magnetic field start value
+            # "2", 0, # tilt start value
+            "3", "focus", # set focus series
+            "4", "0x0", # start of focus series
+            "5", "0x10", # step-width of focus series
+            "6", "0xf0", # end of focus series
+            "7", "tilt", # on-each-point
+            "9", 0, # start of tilt
+            "10", 1, # step width
+            "11", 5, # end
+            "7", "magnetic-field", # switch on-each-point
+            "c" # continue
+         ),
+         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         {"variable": "focus", "start": 0x0, "end": 0xf0, "step-width": 0x10, "on-each-point":
+            {"variable": "magnetic-field", "start": 0.0, "end": 5.0, "step-width": 1.0}}),
         # # create magnetic field series from -5 to 5 with 1 stepwidth (invalid)
         # #   on each point focus series from -5 to 10 with stepwidth 1 (invalid)
         # (None, None, (
@@ -846,6 +909,8 @@ class TestCLIView:
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
+
+        realprint(writer.io_log)
 
         assert expected_start == start
         assert expected_series == series
