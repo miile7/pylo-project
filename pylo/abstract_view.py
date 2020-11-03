@@ -496,7 +496,7 @@ class AbstractView:
                 # the series["on-each-point"] is invalid
                 on_each_point_series, on_each_point_errors = self.parseSeries(
                     measurement_variables, series["on-each-point"], add_defaults, 
-                    path + [series["variable"]], parse, uncalibrate
+                    parse, uncalibrate, path + [series["variable"]]
                 )
                 series["on-each-point"] = on_each_point_series
                 errors += on_each_point_errors
