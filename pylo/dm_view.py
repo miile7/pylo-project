@@ -7,6 +7,14 @@ import threading
 import traceback
 
 try:
+    test_error = ModuleNotFoundError()
+except NameError:
+    # for python <3.6, ModuleNotFound error does not exist
+    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
+    class ModuleNotFoundError(ImportError):
+        pass
+
+try:
     import DigitalMicrograph as DM
 except (ModuleNotFoundError, ImportError) as e:
     DM = None
