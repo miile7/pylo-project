@@ -308,7 +308,7 @@ class TestCLIView:
             "x", None),
         ({"label": "Label y", "id": "testid25", "datatype": bool, "value": False}, 
             "x", None),
-        ({"label": "Label z", "id": "testid26", "datatype": ["d", "b"], "value": "d"}, 
+        ({"label": "Label z", "id": "testid26", "datatype": pylo.OptionDatatype(["d", "b"]), "value": "d"}, 
             "x", None)
     ])
     def test_input_value_loop_valid_values(self, cliview, input_definition, user_input, expected):
@@ -384,7 +384,7 @@ class TestCLIView:
         ({"label": "Testinput", "id": "testid36", "datatype": float, "value": -22, 
           "required": True, "max_value": -10}, "-6.4334", "-10", -10.0),
         # not in possibilities
-        ({"label": "Testinput", "id": "testid37", "datatype": ["d", "b"], "value": "d", 
+        ({"label": "Testinput", "id": "testid37", "datatype": pylo.OptionDatatype(["d", "b"]), "value": "d", 
           "required": True}, "w", "b", "b")
     ])
     def test_input_value_loop_invalid_values(self, cliview, input_definition, user_input1, user_input2, expected):
@@ -597,7 +597,7 @@ class TestCLIView:
         sys.stdin = writer
 
         writer.input_response = self.response_callback
-        values, command_return = cliview._printSelect(*select_definition)
+        values, command_return, changed = cliview._printSelect(*select_definition)
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
