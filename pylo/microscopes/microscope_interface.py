@@ -1,6 +1,7 @@
 import typing
 import threading
 
+from ..datatype import Datatype
 from ..vulnerable_machine import VulnerableMachine
 
 class MicroscopeInterface(VulnerableMachine):
@@ -133,6 +134,13 @@ class MicroscopeInterface(VulnerableMachine):
         objective lense or any lense close to the specimen), the 'tilt' angle
         or anything else. The unit depens on the value to set.
 
+        Raises
+        ------
+        KeyError
+            When the `id_` does not exist
+        ValueError
+            When the `value` is not allowed for this variable
+
         See Also
         --------
         supported_measurement_variables
@@ -144,7 +152,8 @@ class MicroscopeInterface(VulnerableMachine):
         id_ : str
             The id of the measurement variable
         value : int, float or str
-            The value to set in the variable specific type and units
+            The value to set in the variable specific type and units, this will
+            be parsed automatically if the measurement variable has a `format`
         """
 
         if not self.supports_parallel_measurement_variable_setting:
@@ -153,12 +162,16 @@ class MicroscopeInterface(VulnerableMachine):
             # which will mess up things
             self.action_lock.acquire()
         
+        var = self.getMeasurementVariableById(id_)
+
         if not self.isValidMeasurementVariableValue(id_, value):
-            raise ValueError(("Either the id {} does not exist or the value " + 
-                              "{} is not valid for the measurement " + 
-                              "variable.").format(id_, value))
+            raise ValueError(("The value '{}' is not valid for the " + 
+                              "measurement variable '{}'.").format(value, id_))
 
         elif id_ in self._measurement_variable_getter_setter_map:
+            if isinstance(var.format, (type, Datatype)):
+                value = var.format(value)
+            
             self._measurement_variable_getter_setter_map[id_][1](value)
         else:
             # this cannot happen, if the id doesn't exist the 
@@ -244,11 +257,19 @@ class MicroscopeInterface(VulnerableMachine):
         """
 
         for variable in self.supported_measurement_variables:
-            if variable.unique_id == id_ and (isinstance(value, (int, float)) and (
-                not isinstance(variable.min_value, (int, float)) or 
-                value >= variable.min_value) and (
-                not isinstance(variable.max_value, (int, float)) or 
-                value <= variable.max_value)):
+            if variable.unique_id == id_:
+                if isinstance(variable.format, (type, Datatype)):
+                    value = variable.format(value)
+                    
+                if isinstance(value, (int, float)):
+                    if (isinstance(variable.min_value, (int, float)) and 
+                        value < variable.min_value):
+                        return False
+
+                    if (isinstance(variable.max_value, (int, float)) and 
+                        value > variable.max_value):
+                        return False
+                
                 return True
         
         return False

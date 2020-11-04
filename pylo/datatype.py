@@ -6,7 +6,9 @@ import re
 format_reg = re.compile(r"^((?:.(?=(?:<|>|\^)))?)([<>=^]?)([\-+ ]?)(#?)(0?)([\d]*)([_,]?)((?:\.[\d]+)?)([bcdeEfFgGnosxX%]?)$")
 
 class Datatype:
-    def __init__(self, name: str, format: callable, parse: typing.Optional[callable]=None) -> None:
+    def __init__(self, name: str, 
+                 format: typing.Callable[[typing.Union[int, float, str], str], typing.Union[int, float, str]], 
+                 parse: typing.Optional[typing.Callable[[typing.Union[int, float, str]], typing.Union[int, float, str]]]=None) -> None:
         """Create a new datatype.
 
         Example:
