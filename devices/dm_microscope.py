@@ -35,6 +35,38 @@ from ..measurement_variable import MeasurementVariable
 # microscope
 CONFIG_PYJEM_MICROSCOPE_GROUP = "dm-microscope"
 
+# illumination modes = PyJEM Probe Mmodes
+ILLUMINATION_MODE_TEM = "TEM"
+ILLUMINATION_MODE_CsTEM = "CsTEM"
+ILLUMINATION_MODE_EDS = "EDS"
+ILLUMINATION_MODE_NBD = "NBD"
+ILLUMINATION_MODE_CBD = "CBD"
+ILLUMINATION_MODE_PROBE = "PROBE"
+ILLUMINATION_MODE_STEM = "STEM"
+
+# imaging optics modes (= function modes in PyJEM) for TEM
+IMAGING_OPTICS_MODE_MAG = "MAG"
+IMAGING_OPTICS_MODE_MAG2 = "MAG2"
+IMAGING_OPTICS_MODE_LowMAG = "LowMAG"
+IMAGING_OPTICS_MODE_SAMAG = "SAMAG"
+IMAGING_OPTICS_MODE_DIFF = "DIFF"
+
+# imaging optics modes (= function modes in PyJEM) for STEM mode
+IMAGING_OPTICS_MODE_ALIGN = "ALIGN"
+IMAGING_OPTICS_MODE_UUDIFF = "UUDIFF"
+IMAGING_OPTICS_MODE_ROCKING = "ROCKING"
+
+# imaging modes (= function modes in PyJEM) for ??
+IMAGING_OPTICS_MODE_LMAG = "LMAG"
+IMAGING_OPTICS_MODE_AMAG = "AMAG"
+IMAGING_OPTICS_MODE_RESERVE = "RESERVE"
+IMAGING_OPTICS_MODE_MAG1 = "MAG1"
+IMAGING_OPTICS_MODE_GIF_MAG1 = "GIF MAG1"
+IMAGING_OPTICS_MODE_GIF_MAG2 = "GIF MAG2"
+IMAGING_OPTICS_MODE_GIF_LowMAG = "GIF LowMAG"
+IMAGING_OPTICS_MODE_GIF_SAMAG = "GIF SAMAG"
+IMAGING_OPTICS_MODE_GIF_DIFF = "GIF DIFF"
+
 class DMMicroscope(MicroscopeInterface):
     """This class is the interface for communicating with the interface 
     integrated in Gatan Microscope Suite (GMS/Digital Micrograph/DM).
