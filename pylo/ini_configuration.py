@@ -4,8 +4,10 @@ import textwrap
 import configparser
 
 from .pylolib import path_like
+from .pylolib import human_concat_list
 from .pylolib import get_datatype_human_text
 from .datatype import Datatype
+from .datatype import OptionDatatype
 from .abstract_configuration import AbstractConfiguration
 
 class IniConfiguration(AbstractConfiguration):
@@ -103,6 +105,11 @@ class IniConfiguration(AbstractConfiguration):
                         comment.append("Type: '{}'".format(
                             get_datatype_human_text(datatype)
                         ))
+
+                        if isinstance(datatype, OptionDatatype):
+                            comment.append("Allowed values: {}".format(
+                                human_concat_list(datatype.options)
+                            ))
                     except KeyError:
                         datatype = str
 
