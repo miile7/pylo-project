@@ -7,6 +7,22 @@ import typing
 format_reg = re.compile(r"^((?:.(?=(?:<|>|\^)))?)([<>=^]?)([\-+ ]?)(#?)(0?)([\d]*)([_,]?)((?:\.[\d]+)?)([bcdeEfFgGnosxX%]?)$")
 
 class Datatype:
+    """A class providing a datatype encapsulation that allows parsing and 
+    formatting values, mostly int or float values, into different input and 
+    display formats.
+
+    Class attributes
+    ----------------
+    int : Datatype
+        A int datatype returning always an int but taking also floats and 
+        strings that contain floats, digits after the separator will be lost 
+        (always rounding down)
+    hex_int : Datatype
+        A int that reads and formats to hex output and input, the parsed value
+        will always be a normal int, the formating output and parsing input
+        will be a hexadecimal number (with leading "0x")
+    """
+
     def __init__(self, name: str, 
                  format: typing.Callable[[typing.Union[int, float, str], str], typing.Union[int, float, str]], 
                  parse: typing.Optional[typing.Callable[[typing.Union[int, float, str]], typing.Union[int, float, str]]]=None) -> None:
@@ -298,3 +314,8 @@ class OptionDatatype(Datatype):
         
         raise ValueError("The value '{}' is not in the options.".format(v))
                 
+from .default_datatypes import int_type
+Datatype.int = int_type
+
+from .default_datatypes import hex_int_type
+Datatype.hex_int = hex_int_type
