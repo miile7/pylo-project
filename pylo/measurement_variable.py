@@ -56,11 +56,11 @@ class MeasurementVariable:
     has_calibration : bool
         Whether there is a calibration factor (or function) that can calculate
         between two systems
-    calibrated_unit : str or None
+    calibrated_unit : str or None, optional
         The units of the calibrated system, None for no unit
-    calibrated_name : str or None
+    calibrated_name : str or None, optional
         The name of the calibrated system if there is one, None for no name
-    calibration_format : Datatype or type
+    calibration_format : type, Datatype or None
         A Datatype or type to format the input and output
     """
 
@@ -140,16 +140,7 @@ class MeasurementVariable:
         self.min_value = min_value
         self.max_value = max_value
         self.unit = unit
-
-        if not isinstance(format, type) and not isinstance(format, Datatype):
-            self.format = Datatype(
-                (self.unit 
-                    if self.unit is not None 
-                    else "{}-type".format(self.unique_id)),
-                format
-            )
-        else:
-            self.format = format
+        self.format = format
 
         if (callable(calibration) and 
             callable(uncalibration)):
@@ -201,17 +192,11 @@ class MeasurementVariable:
             
             self.calibrated_name = calibrated_name
             self.calibrated_unit = calibrated_unit
-
-            if (not isinstance(calibrated_format, type) and 
-                not isinstance(calibrated_format, Datatype)):
-                self.calibrated_format = Datatype(
-                    (self.calibrated_unit 
-                        if self.calibrated_unit is not None 
-                        else "{}-type".format(self.unique_id)),
-                    calibrated_format
-                )
-            else:
+            
+            if isinstance(calibrated_format, (type, Datatype)):
                 self.calibrated_format = calibrated_format
+            else:
+                self.calibrated_format = self.format
         else:
             self.calibrated_name = None
             self.calibrated_unit = None
