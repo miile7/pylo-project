@@ -12,6 +12,7 @@ from .events import before_init
 from .events import before_start
 from .events import series_ready
 
+from .datatype import OptionDatatype
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
@@ -382,7 +383,7 @@ class Controller:
             
             if len(_) > 0 and isinstance(_[0], typing.Sequence):
                 # check if there are options for this ask
-                input_param["options"] = list(_[0])
+                input_param["datatype"] = OptionDatatype(_[0])
             
             input_params.append(input_param)
 
