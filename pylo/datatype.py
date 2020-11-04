@@ -235,6 +235,8 @@ class OptionDatatype(Datatype):
         self.options = list(options)
         self.exact_comparism = exact_comparism
 
+        super().__init__("optionslist", self.format_options, self.parse_options)
+
     def format_options(self, v: typing.Any, f: typing.Optional[str]="") -> str:
         """Format the given value for the given format.
 
