@@ -320,7 +320,7 @@ class DMMicroscope(MicroscopeInterface):
     def _getYTilt(self) -> float:
         """Get the y tilt in degrees.
 
-        Returns
+        ReturnsY
         -------
         float
             The y tilt
