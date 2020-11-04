@@ -10,6 +10,7 @@ from .pylolib import format_value
 from .pylolib import get_datatype_human_text
 from .pylolib import human_concat_list
 from .datatype import Datatype
+from .datatype import OptionDatatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
@@ -336,7 +337,7 @@ class CLIView(AbstractView):
                 {
                     "id": "series-{}-variable".format(depth),
                     "label": "Series variable",
-                    "datatype": variable_ids.copy(),
+                    "datatype": OptionDatatype(variable_ids.copy()),
                     "required": True,
                     "value": s["variable"],
                     "inset": depth * "  "
@@ -374,7 +375,7 @@ class CLIView(AbstractView):
                 {
                     "id": "series-{}-on-each-point".format(depth),
                     "label": "Series on each point",
-                    "datatype": on_each_point_ids,
+                    "datatype": OptionDatatype(on_each_point_ids),
                     "required": False,
                     "value": s["on-each-point"]["variable"] if "on-each-point" in s else None,
                     "inset": depth * "  "
@@ -597,13 +598,8 @@ class CLIView(AbstractView):
         
         The following indices are supported for the `inputs`:
         - 'name' : str, required - The name of the input to show
-        - 'datatype' : type - The datatype to allow
+        - 'datatype' : type or Datatype - The datatype to allow
         - 'description' : str - A description what this value is about
-        - 'options' : list or tuple - A list of options to show to the user to 
-          select from
-        - 'allow_custom' : bool - Whether the user may only use the 'options' 
-          (True) or is is allowed to type in custom values too (False), this 
-          value is ignored if there are no 'options' given, default: False
         
         Raises
         ------
@@ -614,8 +610,7 @@ class CLIView(AbstractView):
         ----------
         inputs : dict
             A dict with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', 'description', 'options' and 
-            'allow_custom'
+            additional keys are 'datatype' or 'description'
         
         Keyword Args
         ------------
@@ -640,11 +635,6 @@ class CLIView(AbstractView):
         - 'name' : str, required - The name of the input to show
         - 'datatype' : type - The datatype to allow
         - 'description' : str - A description what this value is about
-        - 'options' : list or tuple - A list of options to show to the user to 
-          select from
-        - 'allow_custom' : bool - Whether the user may only use the 'options' 
-          (True) or is is allowed to type in custom values too (False), this 
-          value is ignored if there are no 'options' given, default: False
         
         Raises
         ------
@@ -655,8 +645,7 @@ class CLIView(AbstractView):
         ----------
         inputs : sequence of dicts
             Dicts with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', 'description', 'options' and 
-            'allow_custom'
+            additional keys are 'datatype' or 'description'
         
         Keyword Args
         ------------
@@ -686,10 +675,7 @@ class CLIView(AbstractView):
                 "id": i,
                 "required": True
             }
-            if ("options" in line and isinstance(line["options"], (list, tuple)) and 
-                (not "allow_custom" in line or not line["allow_custom"])):
-               l["datatype"] = line["options"]
-            elif isinstance(line["datatype"], type):
+            if isinstance(line["datatype"], (type, Datatype)):
                 l["datatype"] = line["datatype"]
             else:
                 l["datatype"] = str
@@ -739,7 +725,7 @@ class CLIView(AbstractView):
         An input is defined with the following indices:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type, Datatype or list (required), the type, currently 
+        - "datatype": type or Datatype (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -931,7 +917,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type, Datatype or list (required), the type, currently 
+        - "datatype": type or Datatype (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -972,8 +958,8 @@ class CLIView(AbstractView):
         abort_command = "a"
         text = "Please set the {} to ".format(input_definition["label"])
 
-        if isinstance(input_definition["datatype"], (list, tuple)):
-            options = list(map(str, input_definition["datatype"]))
+        if isinstance(input_definition["datatype"], OptionDatatype):
+            options = list(map(str, input_definition["datatype"].options))
             text += human_concat_list(options) + "."
 
             options_ci = list(map(lambda x: x.lower(), options))
@@ -1065,7 +1051,7 @@ class CLIView(AbstractView):
         The `input_definition` is a dict that supports the following keys:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type, Datatype or list (required), the type, currently 
+        - "datatype": type or Datatype (required), the type, currently 
           supported: float or a list of possible inputs
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
@@ -1082,7 +1068,6 @@ class CLIView(AbstractView):
         ------
         ValueError
             When the val is None but "required" is True or
-            when the "datatype" is a list but the value is not in the list or
             when the value cannot be parsed to the desired type or
             when the value is not in the boundaries
         
@@ -1104,28 +1089,7 @@ class CLIView(AbstractView):
             raise ValueError(("The value is required. You have to fill in " + 
                               "something valid."))
         elif val is not None:
-            if isinstance(input_definition["datatype"], (list, tuple)):
-                options = list(map(str, input_definition["datatype"]))
-                options_ci = list(map(lambda x: x.lower(), options))
-                # count how many times the lower case option occurres, if it is
-                # more than once, the case matters
-                options_ci_max_count = max(map(lambda x: options_ci.count(x), 
-                                               options_ci))
-
-                if options_ci_max_count > 1:
-                    case_insensitive = False
-                else:
-                    case_insensitive = True
-
-                if (not isinstance(val, str) or 
-                    (case_insensitive and val.lower() not in options_ci) or 
-                    (not case_insensitive and val not in options)):
-                    raise ValueError(("The value has to be one of the " + 
-                                      "following: {}").format(human_concat_list(options)))
-                elif case_insensitive:
-                    index = options_ci.index(val.lower())
-                    val = options[index]
-            elif input_definition["datatype"] == bool:
+            if input_definition["datatype"] == bool:
                 if isinstance(val, bool):
                     return val
                 elif (isinstance(val, str) and 
@@ -1139,6 +1103,15 @@ class CLIView(AbstractView):
                                       "or 'on' to indicate a true boolean, " + 
                                       "use 'no', 'n', 'false', 'f' or 'off' " + 
                                       "to represent a false (case insensitive)"))
+            elif isinstance(input_definition["datatype"], OptionDatatype):
+                try:
+                    val = input_definition["datatype"](val)
+                except KeyError:
+                    raise ValueError(("The value '{}' is not an option of " + 
+                                      "the list, please enter {}").format(
+                                          val,
+                                          human_concat_list(input_definition["datatype"].options)
+                                      ))
             elif callable(input_definition["datatype"]):
                 try:
                     val = input_definition["datatype"](val)
