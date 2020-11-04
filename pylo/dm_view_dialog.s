@@ -7,7 +7,7 @@ class DMViewDialog : UIFrame{
      * python `MeasurementVariable` object. Each attribute of the object can be received with the
      * same name in the TagGroup exteded with the `start`, `step_width` and `end` keys that contain
      * the corresponding (formatted) values. The `datatype` is either 'string', 'int' or 'float' as 
-     * a string.
+     * a string or a list of allowed values.
      */
     TagGroup measurement_variables;
 
@@ -171,6 +171,7 @@ class DMViewDialog : UIFrame{
      */
     number getNumericValue(object self, TagGroup measurement_variable, string value, number &parsable){
         string format = "";
+        
         if(measurement_variable.TagGroupDoesTagExist("format")){
             measurement_variable.TagGroupGetTagAsString("format", format)
         }
@@ -1322,6 +1323,28 @@ class DMViewDialog : UIFrame{
 
             line.DLGAddElement(inner_line_wrapper);
         }
+        else if(type == "options"){
+            string value;
+            number value_index;
+            value_definition.TagGroupGetTagAsString("value", value);
+
+            TagGroup options;
+            value_definition.TagGroupGetTagAsString("options", options);
+
+            input = DLGCreateChoice()
+            for(number i = 0; i < options.TagGroupCountTags(); i++){
+                string item_text;
+                options.TagGroupGetIndexedTagAsString(i, item_text);
+
+                input.DLGAddChoiceItemEntry(item_text);
+
+                if(value == item_text){
+                    value_index = i;
+                }
+            }
+
+            input.DLGValue(value_index);
+        }
         else{
             string value;
             value_definition.TagGroupGetTagAsString("value", value);
@@ -1747,6 +1770,79 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+     * Add the value from the `input` to the `target` at the given `index`. The 'datatype' in the 
+     * `settings` will be parsed.
+     *
+     * If the lenth of the `target` `TagGroup` is smaller or equal to the `index`, the value will be 
+     * *inserted*, otherwise it will be *set*.
+     *
+     * @param input
+     *      The input field as a `TagGroup`
+     * @param settings
+     *      The settings for the input
+     * @param index
+     *      The index in the `target` `TagGroup` to set the value to
+     * @param target
+     *      The target `TagGroup` to set the value in
+     */
+    void addValueFromInputToTagGroup(object self, TagGroup input, TagGroup settings, number index, TagGroup &target){
+        string type;
+        settings.TagGroupGetTagAsString("datatype", type);
+
+        if(type == "int"){
+            number value = input.DLGGetValue();
+            if(target.TagGroupCountTags() <= index){
+                target.TagGroupInsertTagAsLong(index, value);
+            }
+            else{
+                target.TagGroupSetIndexedTagAsLong(index, value);
+            }
+        }
+        else if(type == "float"){
+            number value = input.DLGGetValue();
+            if(target.TagGroupCountTags() <= index){
+                target.TagGroupInsertTagAsFloat(index, value);
+            }
+            else{
+                target.TagGroupSetIndexedTagAsFloat(index, value);
+            }
+        }
+        else if(type == "boolean"){
+            number value = input.DLGGetValue();
+            if(target.TagGroupCountTags() <= index){
+                target.TagGroupInsertTagAsBoolean(index, value);
+            }
+            else{
+                target.TagGroupSetIndexedTagAsBoolean(index, value);
+            }
+        }
+        else if(type == "options"){
+            number value = input.DLGGetValue();
+            TagGroup options;
+            settings.TagGroupGetTagAsTagGroup("options", options);
+
+            string str_value;
+            if(options.TagGroupCountTags())
+
+            if(target.TagGroupCountTags() <= index){
+                target.TagGroupInsertTagAsBoolean(index, value);
+            }
+            else{
+                target.TagGroupSetIndexedTagAsBoolean(index, value);
+            }
+        }
+        else{
+            string value = input.DLGGetStringValue();
+            if(target.TagGroupCountTags() <= index){
+                target.TagGroupInsertTagAsString(index, value);
+            }
+            else{
+                target.TagGroupSetIndexedTagAsString(index, value);
+            }
+        }
+    }
+
+    /**
      * Get the configuration as a `TagGroup`.
      *
      * @return
@@ -1779,10 +1875,15 @@ class DMViewDialog : UIFrame{
                     number i = config_vars.TagGroupCreateNewLabeledTag(group);
                     config_vars.TagGroupSetIndexedTagAsTagGroup(i, group_tg);
                 }
-                
-                string value = input.DLGGetStringValue();
+
                 number k = group_tg.TagGroupCreateNewLabeledTag(key);
-                group_tg.TagGroupSetIndexedTagAsString(k, value);
+                
+                TagGroup group_values;
+                configuration.TagGroupGetTagAsTagGroup(group, group_values);
+                TagGroup value_settings;
+                group_values.TagGroupGetTagAsTagGroup(key, value_settings);
+
+                self.addValueFromInputToTagGroup(input, value_settings, k, config_vars);
             }
         }
 
@@ -1806,32 +1907,7 @@ class DMViewDialog : UIFrame{
             TagGroup value_settings;
             ask_for_values.TagGroupGetIndexedTagAsTagGroup(i, value_settings);
             
-            // number index = vals.TagGroupCreateNewLabeledTag("" + i);
-            number index = i;
-
-            string type;
-            value_settings.TagGroupGetTagAsString("datatype", type);
-
-            if(type == "int"){
-                number value = input.DLGGetValue();
-                // vals.TagGroupSetIndexedTagAsLong(index, value);
-                vals.TagGroupInsertTagAsLong(index, value);
-            }
-            else if(type == "float"){
-                number value = input.DLGGetValue();
-                // vals.TagGroupSetIndexedTagAsFloat(index, value);
-                vals.TagGroupInsertTagAsFloat(index, value);
-            }
-            else if(type == "boolean"){
-                number value = input.DLGGetValue();
-                // vals.TagGroupSetIndexedTagAsBoolean(index, value);
-                vals.TagGroupInsertTagAsBoolean(index, value);
-            }
-            else{
-                string value = input.DLGGetStringValue();
-                // vals.TagGroupSetIndexedTagAsString(index, value);
-                vals.TagGroupInsertTagAsString(index, value);
-            }
+            self.addValueFromInputToTagGroup(input, value_settings, i, vals);
         }
 
         return vals;
