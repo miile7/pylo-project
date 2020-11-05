@@ -75,16 +75,13 @@ class TestAbstractView:
     
     @pytest.mark.usefixtures("view")
     @pytest.mark.parametrize("input_dict,expected_dict", [
-        ({"name": "Test 1", "datatype": int, "description": "Test description", 
-          "options": ("Opt 1", "Opt 2"), "allow_custom": True}, "same"),
-        ({"name": "Test 2", "datatype": float, "description": "Test description", 
-          "options": (1.2, 1.3), "allow_custom": False}, "same"),
-        ({"name": "Test 3", "options": (1.2, 1.3)}, {"name": "Test 3", 
-          "options": (1.2, 1.3), "allow_custom": False}),
-        ({"name": "Test 4"}, {"name": "Test 4", "allow_custom": True}),
-        ({"name": "Test 5", "datatype": None, "description": None, 
-          "options": None, "allow_custom": None}, {"name": "Test 5", 
-          "allow_custom": True})
+        ({"name": "Test 1", "datatype": pylo.OptionDatatype(["Opt1", "Opt2"]), 
+          "description": "Test description"}, "same"),
+        ({"name": "Test 2", "datatype": pylo.OptionDatatype((1.2, 1.3)), 
+          "description": "Test description"}, "same"),
+        ({"name": "Test 4"}, "same"),
+        ({"name": "Test 5", "datatype": None, "description": None}, 
+         {"name": "Test 5"})
     ])
     def test_format_ask_for(self, view, input_dict, expected_dict):
         """Test the format function for the askFor input"""
@@ -100,11 +97,7 @@ class TestAbstractView:
           "options": ("Opt 1", "Opt 2"), "allow_custom": True}, KeyError),
         ({"name": 1}, TypeError),
         ({"name": "Test 1", "datatype": "str"}, TypeError),
-        ({"name": "Test 1", "datatype": str, "description": False}, TypeError),
-        ({"name": "Test 1", "datatype": str, "description": "False", 
-          "options": 1}, TypeError),
-        ({"name": "Test 1", "datatype": str, "description": "False", 
-          "options": (1, 2), "allow_custom": "No"}, TypeError),
+        ({"name": "Test 1", "datatype": str, "description": False}, TypeError)
     ])
     def test_format_ask_for_errors(self, view, input_dict, expected_error):
         """Test the format function for the askFor input"""

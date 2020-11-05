@@ -259,7 +259,11 @@ class MicroscopeInterface(VulnerableMachine):
         for variable in self.supported_measurement_variables:
             if variable.unique_id == id_:
                 if isinstance(variable.format, (type, Datatype)):
-                    value = variable.format(value)
+                    try:
+                        value = variable.format(value)
+                    except ValueError:
+                        # could not be converted
+                        return False
                     
                 if isinstance(value, (int, float)):
                     if (isinstance(variable.min_value, (int, float)) and 

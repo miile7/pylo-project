@@ -157,7 +157,10 @@ class TestMeasurementVariable:
         int, 
         float, 
         bool, 
-        lambda x: str(x * 100) + "%",
+        pylo.Datatype(
+            "percentage",
+            format=lambda x: str(x * 100) + "%"
+        ),
         pylo.Datatype(
             "is-a-type", 
             lambda x: "is a" if x == "a" else "not a", 

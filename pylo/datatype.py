@@ -1,5 +1,6 @@
-import typing
 import re
+import math
+import typing
 
 # the regular expression that matches any valid format specification, each 
 # group contains one specification item
@@ -180,3 +181,120 @@ class Datatype:
             format_tuple[7] = "." + str(format_tuple[7])
         
         return "{" + str(keyname) + ":" + "".join(map(str, format_tuple)) + "}"
+
+class OptionDatatype(Datatype):
+    """A datatype that allows the selection of a variant of values.
+
+    Attributes
+    ----------
+    options : sequence
+        The options that are allowed
+    exact_comparism : bool, optional
+        Whether to do exact comparisms or not, for strings exact is case 
+        sensitive, for floats exact is all digits, default: False
+    ignore_chars : list of strings
+        The list of strings to replace before comparing (and before converting 
+        to lower case) if `OptionDatatype.exact_comparism` is False and the 
+        option is a string, this can be for example white space to compare with 
+        ignore whitespace, default: []
+    rel_tol : float
+        The relative tolerance to use  if `OptionDatatype.exact_comparism` is
+        False and the option is a float, default: 0
+    abs_tol : float
+        The absolute tolerance to use  if `OptionDatatype.exact_comparism` is
+        False and the option is a float, default: 1e-6
+    """
+
+    def __init__(self, options: typing.Sequence, 
+                 exact_comparism: typing.Optional[bool]=False) -> None:
+        """Create a new option datatype.
+
+        The `exact_comparism` tells, whether to compare exactly or not. What 
+        this means depends on the type of the options.
+        - `options` are strings: Exact is case sensitive, inexact is case 
+          insensitive, `datatype.ignore_chars` can be a list of characters that 
+          will be removed in both, the value and the option to compare before 
+          comparism
+        - `options` are floats: Exact is all digits, inexact uses 
+          `math.isclose()`, `datatype.rel_tol` and `datatype.abs_tol` are given
+          directly to the function if they are ints
+
+        Parameters
+        ----------
+        options : sequence
+            The options
+        exact_comparism : bool, optional
+            Whether to do exact comparisms or not, for strings exact is case 
+            sensitive, for floats exact is all digits, default: False
+        """
+
+        self.ignore_chars = []
+        self.rel_tol = 0
+        self.abs_tol = 1e-6
+
+        self.options = list(options)
+        self.exact_comparism = exact_comparism
+
+        super().__init__("optionslist", self.format_options, self.parse_options)
+
+    def format_options(self, v: typing.Any, f: typing.Optional[str]="") -> str:
+        """Format the given value for the given format.
+
+        Parameters
+        ----------
+        v : any
+            The value to format
+        f : str
+            The format specification
+        
+        Returns
+        -------
+        str
+            The formatted value
+        """
+
+        return self.parse_options(v)
+
+    def parse_options(self, v: typing.Any):
+        """Parse the given value.
+
+        Raises
+        ------
+        ValueError
+            When the value `v` is not an allowed option.
+
+        Parameters
+        ----------
+        v : int, float, str, any
+            If int or float are given, the number is returned as an int, if a
+            string is given it is treated as a hex number (values after the decimal
+            separator are ignored), everything else will be tried to convert to a 
+            16 base int
+        
+        Returns
+        -------
+        int
+            The converted int
+        """
+
+        for o in self.options:
+            if (not self.exact_comparism and isinstance(v, (int, float)) and 
+                isinstance(o, (int, float))):
+                c = math.isclose(v, o, abs_tol=self.abs_tol, rel_tol=self.rel_tol)
+            elif (not self.exact_comparism and isinstance(v, str) and 
+                  isinstance(o, str)):
+                vm = v
+                om = o
+                for r in self.ignore_chars:
+                    vm = vm.replace(r, "")
+                    om = om.replace(r, "")
+
+                c = vm.lower() == om.lower()
+            else:
+                c = o == v
+            
+            if c:
+                return o
+        
+        raise ValueError("The value '{}' is not in the options.".format(v))
+                

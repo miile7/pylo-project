@@ -13,6 +13,7 @@ import typing
 import pathlib
 
 from .datatype import Datatype
+from .datatype import OptionDatatype
 
 # allow to check if a variable is a path
 path_like = []
@@ -101,7 +102,7 @@ def get_datatype_human_text(datatype: typing.Union[type, Datatype, list, tuple])
         type_name = "boolean value (yes/y/true/t/on or no/n/false/f/off)"
     elif datatype == str:
         type_name = "text"
-    elif isinstance(datatype, (list, tuple)):
+    elif isinstance(datatype, OptionDatatype) or isinstance(datatype, (list, tuple)):
         type_name = "possibility list"
     elif hasattr(datatype, "name") and isinstance(datatype.name, str):
         type_name = datatype.name

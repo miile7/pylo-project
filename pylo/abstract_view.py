@@ -5,10 +5,8 @@ from .datatype import Datatype
 
 if hasattr(typing, "TypedDict"):
     AskInput = typing.TypedDict("AskInput", {
-                                "datatype": type,
-                                "description": str,
-                                "options": typing.Union[None, typing.Sequence],
-                                "allow_custom": bool
+                                "datatype": typing.Union[type, Datatype],
+                                "description": str
                                 }, total=False)
 else:
     AskInput = typing.Dict
@@ -184,13 +182,8 @@ class AbstractView:
         
         The following indices are supported for the `inputs`:
         - 'name' : str, required - The name of the input to show
-        - 'datatype' : type - The datatype to allow
+        - 'datatype' : type or Datatype - The datatype to allow
         - 'description' : str - A description what this value is about
-        - 'options' : list or tuple - A list of options to show to the user to 
-          select from
-        - 'allow_custom' : bool - Whether the user may only use the 'options' 
-          (True) or is is allowed to type in custom values too (False), this 
-          value is ignored if there are no 'options' given, default: False
         
         Raises
         ------
@@ -201,8 +194,7 @@ class AbstractView:
         ----------
         inputs : dict
             A dict with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', 'description', 'options' and 
-            'allow_custom'
+            additional keys are 'datatype', and 'description'
         
         Returns
         -------
@@ -226,8 +218,7 @@ class AbstractView:
         ----------
         input_dict : dict
             A dict with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', 'description', 'options' and 
-            'allow_custom'
+            additional keys are 'datatype', and 'description'
         
         Returns
         -------
@@ -239,8 +230,8 @@ class AbstractView:
         if not "name" in input_dict:
             raise KeyError("There is no '{}' index given.".format("name"))
 
-        for key, datatype in {"name": str, "datatype": type, "description": str,
-                              "options": (list, tuple), "allow_custom": bool}.items():
+        for key, datatype in {"name": str, "datatype": (type, Datatype), 
+                              "description": str}.items():
             if key in input_dict:
                 if input_dict[key] is None:
                     del input_dict[key]
@@ -251,11 +242,6 @@ class AbstractView:
         
         if "description" in input_dict and input_dict["description"] == "":
             del input_dict["description"]
-
-        if "options" not in input_dict:
-            input_dict["allow_custom"] = True
-        elif "allow_custom" not in input_dict:
-            input_dict["allow_custom"] = not ("options" in input_dict)
         
         return input_dict
     
@@ -313,7 +299,7 @@ class AbstractView:
                     start = {}
             
             if (v.unique_id in start and parse and v.format != None and 
-                callable(v.format)):
+                isinstance(v.format, (type, Datatype))):
                 start[v.unique_id] = v.format(start[v.unique_id])
 
             if (not v.unique_id in start or 
@@ -442,7 +428,7 @@ class AbstractView:
 
         for k, d in keys.items():
             if (k in series and parse and var.format != None and 
-                callable(var.format)):
+                isinstance(var.format, (type, Datatype))):
                 series[k] = var.format(series[k])
             
             if not k in series or not isinstance(series[k], (int, float)):

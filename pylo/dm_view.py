@@ -20,6 +20,7 @@ except (ModuleNotFoundError, ImportError) as e:
     DM = None
 
 from .datatype import Datatype
+from .datatype import OptionDatatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
@@ -138,13 +139,8 @@ class DMView(AbstractView):
         
         The following indices are supported for the `inputs`:
         - 'name' : str, required - The name of the input to show
-        - 'datatype' : type - The datatype to allow
+        - 'datatype' : type or Datatype - The datatype to allow
         - 'description' : str - A description what this value is about
-        - 'options' : list or tuple - A list of options to show to the user to 
-          select from
-        - 'allow_custom' : bool - Whether the user may only use the 'options' 
-          (True) or is is allowed to type in custom values too (False), this 
-          value is ignored if there are no 'options' given, default: False
         
         Raises
         ------
@@ -155,8 +151,7 @@ class DMView(AbstractView):
         ----------
         inputs : dict
             A dict with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', 'description', 'options' and 
-            'allow_custom'
+            additional keys are 'datatype' and 'description'
         
         Keyword Args
         ------------
@@ -572,7 +567,10 @@ class DMView(AbstractView):
                                 var.format.format(val)
                             )
                 
-                if var.format != None:
+                if isinstance(var.format, OptionDatatype):
+                    m_var["format"] = "options"
+                    m_var["options"] = var.format.options
+                elif var.format != None:
                     m_var["format"] = get_datatype_name(var.format)
                 
                 m_vars.append(m_var)
@@ -594,7 +592,11 @@ class DMView(AbstractView):
                         var_type = configuration.getDatatype(group, key)
                     except KeyError:
                         var_type = str
-                    var_type_name = get_datatype_name(var_type)
+                    
+                    if isinstance(var_type, OptionDatatype):
+                        var_type_name = "options"
+                    else:
+                        var_type_name = get_datatype_name(var_type)
 
                     if (var_type != str and hasattr(var_type, "format") and 
                         callable(var_type.format)):
@@ -628,18 +630,26 @@ class DMView(AbstractView):
                         "ask_if_not_present": ask_if_not_present,
                         "restart_required": restart_required,
                     }
+
+                    if isinstance(var_type, OptionDatatype):
+                        config_vars[group][key]["options"] = var_type.options
         
         ask_vals = []
         if isinstance(ask_for_values, (tuple, list)):
             for input_definition in ask_for_values:
                 if "datatype" in input_definition:
-                    if not isinstance(input_definition["datatype"], str):
+                    if isinstance(input_definition["datatype"], OptionDatatype):
+                        input_definition["datatype"] = "options"
+                        input_definition["options"] = input_definition["datatype"].options
+                    elif not isinstance(input_definition["datatype"], str):
                         if hasattr(input_definition["datatype"], "name"):
                             input_definition["datatype"] = input_definition["datatype"].name
                         elif hasattr(input_definition["datatype"], "__name__"):
                             input_definition["datatype"] = input_definition["datatype"].__name__
                         else:
                             input_definition["datatype"] = str(input_definition["datatype"])
+                    else:
+                        input_definition["datatype"] = "string"
                 else:
                     input_definition["datatype"] = "string"
             
