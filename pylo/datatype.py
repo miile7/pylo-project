@@ -28,6 +28,25 @@ class Datatype:
                  parse: typing.Optional[typing.Callable[[typing.Union[int, float, str]], typing.Union[int, float, str]]]=None) -> None:
         """Create a new datatype.
 
+        The `format` callback gets two arguments. The first one is the value, 
+        the second one is the format string (between the two curly brackets, 
+        without the leading colon). It has to return the value as a string 
+        representation.
+        ```
+        str_value = format(value, str_format)
+        ```
+
+        The `parse` callback will get the value to parse as the only parameter.
+        This can be of any type. The `parse` function has to return the value 
+        in the correct format, preferrable a number. If the value is not 
+        parsable, it has to raise a ValueError.
+        ```
+        try:
+            value = parse(value)
+        except ValueError:
+            pass
+        ```
+
         Example:
         -------
         ```python
@@ -58,6 +77,11 @@ class Datatype:
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.
+
+        Raises
+        ------
+        ValueError
+            If the `value` is not parsable
 
         Parameters
         ----------
@@ -313,7 +337,7 @@ class OptionDatatype(Datatype):
                 return o
         
         raise ValueError("The value '{}' is not in the options.".format(v))
-                
+
 from .default_datatypes import int_type
 Datatype.int = int_type
 
