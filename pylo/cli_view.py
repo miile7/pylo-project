@@ -725,8 +725,7 @@ class CLIView(AbstractView):
         An input is defined with the following indices:
         - "label": str (required), the name to show to the user
         - "id": str (required), the id that is used in the returned dict
-        - "datatype": type or Datatype (required), the type, currently 
-          supported: float or a list of possible inputs
+        - "datatype": type or Datatype (required), the type
         - "value": <type of "datatype" or None if "required" is False> 
           (required), the value to use, only if "required" is false, None can 
           be used too
@@ -766,9 +765,11 @@ class CLIView(AbstractView):
         for line in args:
             if isinstance(line, dict):
                 label_widths.append(len(line["label"]))
-                value_widths.append(len(format_value(
-                    line["datatype"], line["value"]
-                )))
+                if line["value"] is not None:
+                    # none_val width is already counted in the beginning
+                    value_widths.append(len(format_value(
+                        line["datatype"], line["value"]
+                    )))
                 max_index += 1
 
         # the label char width, +1 for the colon, +1 for the "required" asterix

@@ -219,15 +219,15 @@ default_valid_select_definition = [
     ({"label": "Label q", "id": "testid17", "datatype": bool, "value": True, 
         "required": True}, "off", False),
     # possibility list
-    ({"label": "Label r", "id": "testid18", "datatype": ["d", "b"], "value": "d", 
-        "required": True}, "b", "b"),
-    ({"label": "Label s", "id": "testid19", "datatype": ["d", "b"], "value": "d", 
-        "required": True}, "B", "b"),
+    ({"label": "Label r", "id": "testid18", "datatype": pylo.OptionDatatype(["d", "b"]), 
+        "value": "d", "required": True}, "b", "b"),
+    ({"label": "Label s", "id": "testid19", "datatype": pylo.OptionDatatype(["d", "b"]), 
+        "value": "d", "required": True}, "B", "b"),
     # abort command and empty commands are possibilities
-    ({"label": "Label t", "id": "testid20", "datatype": ["a", "x"], "value": "a", 
-        "required": True}, "a", "a"),
-    ({"label": "Label u", "id": "testid21", "datatype": ["a", "x"], "value": "a", 
-        "required": True}, "x", "x")
+    ({"label": "Label t", "id": "testid20", "datatype": pylo.OptionDatatype(["a", "x"]), 
+        "value": "a", "required": True}, "a", "a"),
+    ({"label": "Label u", "id": "testid21", "datatype": pylo.OptionDatatype(["a", "x"]), 
+        "value": "a", "required": True}, "x", "x")
 ]
 
 class TestCLIView:
@@ -344,8 +344,8 @@ class TestCLIView:
         
         # check returned value
         if not inp is None:
-            if isinstance(input_definition["datatype"], list):
-                assert inp in input_definition["datatype"]
+            if isinstance(input_definition["datatype"], pylo.OptionDatatype):
+                assert inp in input_definition["datatype"].options
             else:
                 assert type(inp) == input_definition["datatype"]
         
@@ -412,8 +412,8 @@ class TestCLIView:
         assert self.response_counter == num_wrong_answers + 1
 
         # check returned value
-        if isinstance(input_definition["datatype"], list):
-            assert inp in input_definition["datatype"]
+        if isinstance(input_definition["datatype"], pylo.OptionDatatype):
+            assert inp in input_definition["datatype"].options
         else:
             assert type(inp) == input_definition["datatype"]
         
@@ -428,9 +428,9 @@ class TestCLIView:
           "min_value": 2, "max_value": 10}, "a"),
         ({"label": "Testinput", "id": "testid40", "datatype": bool, "value": False}, 
           "a"),
-        ({"label": "Testinput", "id": "testid41", "datatype": ["x", "a"], 
+        ({"label": "Testinput", "id": "testid41", "datatype": pylo.OptionDatatype(["x", "a"]), 
           "value": "x"}, "!abort"),
-        ({"label": "Testinput", "id": "testid42", "datatype": ["x", "a", "!abort"], 
+        ({"label": "Testinput", "id": "testid42", "datatype": pylo.OptionDatatype(["x", "a", "!abort"]), 
           "value": "x"}, "!a"),
     ])
     def test_input_value_loop_abort(self, cliview, input_definition, user_input):
@@ -458,11 +458,11 @@ class TestCLIView:
         ({"label": "Testinput", "id": "testid44", "datatype": float, "value": 5, 
           "required": True, "min_value": -38939.232, "max_value": 1}, "x", 
           "-323.25", -323.25),
-        ({"label": "Testinput", "id": "testid45", "datatype": ["a", "b"], "value": "a", 
+        ({"label": "Testinput", "id": "testid45", "datatype": pylo.OptionDatatype(["a", "b"]), "value": "a", 
           "required": True}, "x", "b", "b"),
-        ({"label": "Testinput", "id": "testid46", "datatype": ["x", "c"], "value": "x", 
+        ({"label": "Testinput", "id": "testid46", "datatype": pylo.OptionDatatype(["x", "c"]), "value": "x", 
           "required": True}, "!empty", "c", "c"),
-        ({"label": "Testinput", "id": "testid47", "datatype": ["x", "c", "!empty"], 
+        ({"label": "Testinput", "id": "testid47", "datatype": pylo.OptionDatatype(["x", "c", "!empty"]), 
           "value": "x", "required": True}, "!a", "c", "c")
     ])
     def test_input_value_loop_missing_required_values(self, cliview, input_definition, user_input1, user_input2, expected):
@@ -498,8 +498,8 @@ class TestCLIView:
             assert "put in" in o
 
         # check returned value
-        if isinstance(input_definition["datatype"], list):
-            assert inp in input_definition["datatype"]
+        if isinstance(input_definition["datatype"], pylo.OptionDatatype):
+            assert inp in input_definition["datatype"].options
         else:
             assert type(inp) == input_definition["datatype"]
         
@@ -629,7 +629,7 @@ class TestCLIView:
         sys.stdin = writer
 
         writer.input_response = self.response_callback
-        values, command_return = cliview._printSelect(*select_definition)
+        values, command_return, change = cliview._printSelect(*select_definition)
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
@@ -640,6 +640,7 @@ class TestCLIView:
         ))
         expected_values[expected_id] = expected
 
+        assert change == expected_id
         assert command_return == None
         assert values == expected_values
     
@@ -1018,9 +1019,9 @@ class TestCLIView:
         ({"datatype": str, "required": True}, None),
         ({"datatype": str, "required": True}, None),
         # not in list
-        ({"datatype": ["val1", "val2"]}, "val3"),
+        ({"datatype": pylo.OptionDatatype(["val1", "val2"])}, "val3"),
         # not in list casesensitive
-        ({"datatype": ["val", "VAL"]}, "vAl"),
+        ({"datatype": pylo.OptionDatatype(["val", "VAL"], exact_comparism=True)}, "vAl"),
         # not in boundaries
         ({"datatype": int, "min_value": 0, "max_value": 2}, 3),
         ({"datatype": int, "min_value": 0, "max_value": 2}, -1),
