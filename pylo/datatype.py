@@ -260,7 +260,7 @@ class OptionDatatype(Datatype):
 
         Raises
         ------
-        KeyError
+        ValueError
             When the value `v` is not an allowed option.
 
         Parameters
@@ -296,5 +296,5 @@ class OptionDatatype(Datatype):
             if c:
                 return o
         
-        raise KeyError("The value '{}' is not in the options.".format(v))
+        raise ValueError("The value '{}' is not in the options.".format(v))
                 

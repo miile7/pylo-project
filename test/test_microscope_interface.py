@@ -34,14 +34,14 @@ class TestMicroscopeInterface:
         
     def test_error_is_thrown_set_measurement_variable(self):
         """Test if the setMeasurementVariableValue() function raises a 
-        NotImplementedError."""
-        with pytest.raises(NotImplementedError):
+        KeyError since there are no measurement variables."""
+        with pytest.raises(KeyError):
             self.microscope.setMeasurementVariableValue("test-variable", 0)
         
     def test_error_is_thrown_get_measurement_variable(self):
         """Test if the getMeasurementVariableValue() function raises a 
-        NotImplementedError."""
-        with pytest.raises(NotImplementedError):
+        KeyError since there are no measurement variables."""
+        with pytest.raises(ValueError):
             self.microscope.getMeasurementVariableValue("test-variable")
         
     def test_error_is_thrown_reset_to_safe_state(self):
