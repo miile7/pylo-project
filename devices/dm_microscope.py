@@ -61,6 +61,9 @@ IMAGING_OPTICS_MODE_LMAG = "LMAG"
 IMAGING_OPTICS_MODE_AMAG = "AMAG"
 IMAGING_OPTICS_MODE_RESERVE = "RESERVE"
 IMAGING_OPTICS_MODE_MAG1 = "MAG1"
+
+# gif detector imaging modes
+# https://eels.info/products/tem-gif-integration
 IMAGING_OPTICS_MODE_GIF_MAG1 = "GIF MAG1"
 IMAGING_OPTICS_MODE_GIF_MAG2 = "GIF MAG2"
 IMAGING_OPTICS_MODE_GIF_LowMAG = "GIF LowMAG"
@@ -165,22 +168,22 @@ class DMMicroscope(MicroscopeInterface):
             self._setYTilt
         )
 
-        self.registerMeasurementVariable(
-            MeasurementVariable(
-                "ol-current", 
-                "Objective Lense Current", 
-                unit="hex",
-                format=Datatype.hex_int,
-                min_value=0x0,
-                max_value=max_ol_current,
-                calibrated_unit=magnetic_field_unit,
-                calibrated_name="Magnetic Field",
-                calibration=magnetic_field_calibration_factor,
-                calibrated_format=float
-            ),
-            self._getObjectiveLenseCurrent,
-            self._setObjectiveLenseCurrent
-        )
+        # self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "ol-current", 
+        #         "Objective Lense Current", 
+        #         unit="hex",
+        #         format=Datatype.hex_int,
+        #         min_value=0x0,
+        #         max_value=max_ol_current,
+        #         calibrated_unit=magnetic_field_unit,
+        #         calibrated_name="Magnetic Field",
+        #         calibration=magnetic_field_calibration_factor,
+        #         calibrated_format=float
+        #     ),
+        #     self._getObjectiveLenseCurrent,
+        #     self._setObjectiveLenseCurrent
+        # )
 
         # save current focus, there is no get function
         self._focus = 0
