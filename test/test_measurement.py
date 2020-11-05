@@ -84,7 +84,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.supported_measurement_variables = [
             pylo.MeasurementVariable("focus", "Focus", 0, 10, "mA"),
             pylo.MeasurementVariable("lense-current", "OM Current", 0, 3, 
-                                     format=pylo.microscopes.pyjem_microscope.hex_int,
+                                     format=pylo.Datatype.hex_int,
                                      calibration=2, calibrated_unit="T",
                                      calibrated_name="Magnetic Field"),
             pylo.MeasurementVariable("x-tilt", "Tilt (x direction)", -35, 35, "deg")

@@ -96,7 +96,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self):
         self.supported_measurement_variables = [
             pylo.MeasurementVariable("focus", "Focus", 0, 0xfa,
-                            format=pylo.microscopes.pyjem_microscope.hex_int),
+                            format=pylo.Datatype.hex_int),
             pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 5),
             pylo.MeasurementVariable("tilt", "Tilt", -5, 5, calibration=5),
         ]
