@@ -16,8 +16,6 @@ from .events import after_record
 from .events import measurement_ready
 
 from .image import Image
-from .pylolib import dirpath_type
-from .pylolib import filepath_type
 from .datatype import Datatype
 from .log_thread import LogThread
 from .stop_program import StopProgram
@@ -942,7 +940,7 @@ class Measurement:
         # saved
         configuration.addConfigurationOption(
             CONFIG_MEASUREMENT_GROUP, "save-directory", 
-            datatype=dirpath_type, 
+            datatype=Datatype.dirpath, 
             default_value=DEFAULT_SAVE_DIRECTORY, 
             ask_if_not_present=True,
             description="The directory where to save the camera images to " + 
@@ -972,7 +970,7 @@ class Measurement:
         # add the save path for the log
         configuration.addConfigurationOption(
             CONFIG_MEASUREMENT_GROUP, "log-save-path",
-            datatype=filepath_type,
+            datatype=Datatype.filepath,
             default_value=DEFAULT_LOG_PATH,
             description=("The file path (including the file name) to save " + 
             "log to.")

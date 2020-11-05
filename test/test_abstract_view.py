@@ -75,9 +75,9 @@ class TestAbstractView:
     
     @pytest.mark.usefixtures("view")
     @pytest.mark.parametrize("input_dict,expected_dict", [
-        ({"name": "Test 1", "datatype": pylo.OptionDatatype(["Opt1", "Opt2"]), 
+        ({"name": "Test 1", "datatype": pylo.Datatype.options(["Opt1", "Opt2"]), 
           "description": "Test description"}, "same"),
-        ({"name": "Test 2", "datatype": pylo.OptionDatatype((1.2, 1.3)), 
+        ({"name": "Test 2", "datatype": pylo.Datatype.options((1.2, 1.3)), 
           "description": "Test description"}, "same"),
         ({"name": "Test 4"}, "same"),
         ({"name": "Test 5", "datatype": None, "description": None}, 

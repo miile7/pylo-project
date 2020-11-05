@@ -163,16 +163,3 @@ def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'",
         return ""
     else:
         return surround * 2
-
-__dirpath_parse = lambda v: (os.path.abspath(os.path.dirname(v)) 
-                             if os.path.isfile(v) else os.path.abspath(v))
-dirpath_type = Datatype(
-    "dirpath", 
-    lambda v, f: str(__dirpath_parse(v)),
-    __dirpath_parse
-)
-filepath_type = Datatype(
-    "filepath", 
-    lambda v, f: str(os.path.abspath(v)),
-    lambda v: str(os.path.abspath(v))
-)

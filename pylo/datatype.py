@@ -21,6 +21,15 @@ class Datatype:
         A int that reads and formats to hex output and input, the parsed value
         will always be a normal int, the formating output and parsing input
         will be a hexadecimal number (with leading "0x")
+    dirpath : Datatype
+        A directory path that will format to an absolute path of a directory 
+        always, if possible
+    dirpath : Datatype
+        A directory path that will format to an absolute path always
+    optoins : class
+        The `OptionDatatype` class so it can be used more intuitively like the 
+        other datatypes, this expresses a list of values that are valid, use 
+        with `Datatype.options(("opt 1", "opt 2"))`
     """
 
     def __init__(self, name: str, 
@@ -30,8 +39,9 @@ class Datatype:
 
         The `format` callback gets two arguments. The first one is the value, 
         the second one is the format string (between the two curly brackets, 
-        without the leading colon). It has to return the value as a string 
-        representation.
+        including the leading colon). It has to return the value as a string 
+        representation. The value should be formatted as good as possible. If 
+        it is impossible to format, an empty string should be returned.
         ```
         str_value = format(value, str_format)
         ```
@@ -246,7 +256,8 @@ class OptionDatatype(Datatype):
     """
 
     def __init__(self, options: typing.Sequence, 
-                 exact_comparism: typing.Optional[bool]=False) -> None:
+                 exact_comparism: typing.Optional[bool]=False,
+                 **kwargs) -> None:
         """Create a new option datatype.
 
         The `exact_comparism` tells, whether to compare exactly or not. What 
@@ -266,6 +277,21 @@ class OptionDatatype(Datatype):
         exact_comparism : bool, optional
             Whether to do exact comparisms or not, for strings exact is case 
             sensitive, for floats exact is all digits, default: False
+        
+        Keyword Arguments
+        -----------------
+        ignore_chars : list of strings
+            The list of strings to replace before comparing (and before 
+            converting to lower case) if `OptionDatatype.exact_comparism` is 
+            False and the option is a string, this can be for example white 
+            space to compare with ignore whitespace, default: []
+        rel_tol : float
+            The relative tolerance to use  if `OptionDatatype.exact_comparism` 
+            is False and the option is a float, default: 0
+        abs_tol : float
+            The absolute tolerance to use  if `OptionDatatype.exact_comparism` 
+            is False and the option is a float, note that this is similar to 
+            rounding *down*(!) at 0.5, default: 1e-6
         """
 
         self.ignore_chars = []
@@ -274,6 +300,16 @@ class OptionDatatype(Datatype):
 
         self.options = list(options)
         self.exact_comparism = exact_comparism
+
+        if ("ignore_chars" in kwargs and 
+            isinstance(kwargs["ignore_chars"], (list, tuple))):
+            self.ignore_chars = list(kwargs["ignore_chars"])
+        if ("rel_tol" in kwargs and 
+            isinstance(kwargs["rel_tol"], (int, float))):
+            self.rel_tol = kwargs["rel_tol"]
+        if ("abs_tol" in kwargs and 
+            isinstance(kwargs["abs_tol"], (int, float))):
+            self.abs_tol = kwargs["abs_tol"]
 
         super().__init__("optionslist", self.format_options, self.parse_options)
 
@@ -330,6 +366,8 @@ class OptionDatatype(Datatype):
                     om = om.replace(r, "")
 
                 c = vm.lower() == om.lower()
+            elif not self.exact_comparism:
+                c = o == v or str(o) == str(v)
             else:
                 c = o == v
             
@@ -338,8 +376,16 @@ class OptionDatatype(Datatype):
         
         raise ValueError("The value '{}' is not in the options.".format(v))
 
+Datatype.options = OptionDatatype
+
 from .default_datatypes import int_type
 Datatype.int = int_type
 
 from .default_datatypes import hex_int_type
 Datatype.hex_int = hex_int_type
+
+from .default_datatypes import dirpath_type
+Datatype.dirpath = dirpath_type
+
+from .default_datatypes import filepath_type
+Datatype.filepath = filepath_type

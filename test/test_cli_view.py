@@ -219,14 +219,14 @@ default_valid_select_definition = [
     ({"label": "Label q", "id": "testid17", "datatype": bool, "value": True, 
         "required": True}, "off", False),
     # possibility list
-    ({"label": "Label r", "id": "testid18", "datatype": pylo.OptionDatatype(["d", "b"]), 
+    ({"label": "Label r", "id": "testid18", "datatype": pylo.Datatype.options(["d", "b"]), 
         "value": "d", "required": True}, "b", "b"),
-    ({"label": "Label s", "id": "testid19", "datatype": pylo.OptionDatatype(["d", "b"]), 
+    ({"label": "Label s", "id": "testid19", "datatype": pylo.Datatype.options(["d", "b"]), 
         "value": "d", "required": True}, "B", "b"),
     # abort command and empty commands are possibilities
-    ({"label": "Label t", "id": "testid20", "datatype": pylo.OptionDatatype(["a", "x"]), 
+    ({"label": "Label t", "id": "testid20", "datatype": pylo.Datatype.options(["a", "x"]), 
         "value": "a", "required": True}, "a", "a"),
-    ({"label": "Label u", "id": "testid21", "datatype": pylo.OptionDatatype(["a", "x"]), 
+    ({"label": "Label u", "id": "testid21", "datatype": pylo.Datatype.options(["a", "x"]), 
         "value": "a", "required": True}, "x", "x")
 ]
 
@@ -308,7 +308,7 @@ class TestCLIView:
             "x", None),
         ({"label": "Label y", "id": "testid25", "datatype": bool, "value": False}, 
             "x", None),
-        ({"label": "Label z", "id": "testid26", "datatype": pylo.OptionDatatype(["d", "b"]), "value": "d"}, 
+        ({"label": "Label z", "id": "testid26", "datatype": pylo.Datatype.options(["d", "b"]), "value": "d"}, 
             "x", None)
     ])
     def test_input_value_loop_valid_values(self, cliview, input_definition, user_input, expected):
@@ -384,7 +384,7 @@ class TestCLIView:
         ({"label": "Testinput", "id": "testid36", "datatype": float, "value": -22, 
           "required": True, "max_value": -10}, "-6.4334", "-10", -10.0),
         # not in possibilities
-        ({"label": "Testinput", "id": "testid37", "datatype": pylo.OptionDatatype(["d", "b"]), "value": "d", 
+        ({"label": "Testinput", "id": "testid37", "datatype": pylo.Datatype.options(["d", "b"]), "value": "d", 
           "required": True}, "w", "b", "b")
     ])
     def test_input_value_loop_invalid_values(self, cliview, input_definition, user_input1, user_input2, expected):
@@ -428,9 +428,9 @@ class TestCLIView:
           "min_value": 2, "max_value": 10}, "a"),
         ({"label": "Testinput", "id": "testid40", "datatype": bool, "value": False}, 
           "a"),
-        ({"label": "Testinput", "id": "testid41", "datatype": pylo.OptionDatatype(["x", "a"]), 
+        ({"label": "Testinput", "id": "testid41", "datatype": pylo.Datatype.options(["x", "a"]), 
           "value": "x"}, "!abort"),
-        ({"label": "Testinput", "id": "testid42", "datatype": pylo.OptionDatatype(["x", "a", "!abort"]), 
+        ({"label": "Testinput", "id": "testid42", "datatype": pylo.Datatype.options(["x", "a", "!abort"]), 
           "value": "x"}, "!a"),
     ])
     def test_input_value_loop_abort(self, cliview, input_definition, user_input):
@@ -458,11 +458,11 @@ class TestCLIView:
         ({"label": "Testinput", "id": "testid44", "datatype": float, "value": 5, 
           "required": True, "min_value": -38939.232, "max_value": 1}, "x", 
           "-323.25", -323.25),
-        ({"label": "Testinput", "id": "testid45", "datatype": pylo.OptionDatatype(["a", "b"]), "value": "a", 
+        ({"label": "Testinput", "id": "testid45", "datatype": pylo.Datatype.options(["a", "b"]), "value": "a", 
           "required": True}, "x", "b", "b"),
-        ({"label": "Testinput", "id": "testid46", "datatype": pylo.OptionDatatype(["x", "c"]), "value": "x", 
+        ({"label": "Testinput", "id": "testid46", "datatype": pylo.Datatype.options(["x", "c"]), "value": "x", 
           "required": True}, "!empty", "c", "c"),
-        ({"label": "Testinput", "id": "testid47", "datatype": pylo.OptionDatatype(["x", "c", "!empty"]), 
+        ({"label": "Testinput", "id": "testid47", "datatype": pylo.Datatype.options(["x", "c", "!empty"]), 
           "value": "x", "required": True}, "!a", "c", "c")
     ])
     def test_input_value_loop_missing_required_values(self, cliview, input_definition, user_input1, user_input2, expected):
@@ -1019,9 +1019,9 @@ class TestCLIView:
         ({"datatype": str, "required": True}, None),
         ({"datatype": str, "required": True}, None),
         # not in list
-        ({"datatype": pylo.OptionDatatype(["val1", "val2"])}, "val3"),
+        ({"datatype": pylo.Datatype.options(["val1", "val2"])}, "val3"),
         # not in list casesensitive
-        ({"datatype": pylo.OptionDatatype(["val", "VAL"], exact_comparism=True)}, "vAl"),
+        ({"datatype": pylo.Datatype.options(["val", "VAL"], exact_comparism=True)}, "vAl"),
         # not in boundaries
         ({"datatype": int, "min_value": 0, "max_value": 2}, 3),
         ({"datatype": int, "min_value": 0, "max_value": 2}, -1),

@@ -337,7 +337,7 @@ class CLIView(AbstractView):
                 {
                     "id": "series-{}-variable".format(depth),
                     "label": "Series variable",
-                    "datatype": OptionDatatype(variable_ids.copy()),
+                    "datatype": Datatype.options(variable_ids.copy()),
                     "required": True,
                     "value": s["variable"],
                     "inset": depth * "  "
@@ -375,7 +375,7 @@ class CLIView(AbstractView):
                 {
                     "id": "series-{}-on-each-point".format(depth),
                     "label": "Series on each point",
-                    "datatype": OptionDatatype(on_each_point_ids),
+                    "datatype": Datatype.options(on_each_point_ids),
                     "required": False,
                     "value": s["on-each-point"]["variable"] if "on-each-point" in s else None,
                     "inset": depth * "  "
