@@ -101,8 +101,11 @@ class Image:
             acquision circumstances
         """
 
+        from .config import PROGRAM_NAME
+
         self.image_data = np.array(image_data, dtype=np.uint8)
         self.tags = tags
+        self.tags["recording program"] = PROGRAM_NAME
     
     def _executeSave(self, file_type: str, file_path: str) -> None:
         """Execute the save.

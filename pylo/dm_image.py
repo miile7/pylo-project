@@ -156,7 +156,7 @@ class DMImage(Image):
             The DMImage object
         """
 
-        additional_tags = {}
+        # additional_tags = {}
         img = DMImage(image.GetNumArray(), additional_tags)
         img._py_image = image
         
@@ -317,7 +317,11 @@ class DMImage(Image):
         DigitalMicrograph.Py_ImageDocument
             The image document that shows the image
         """
-        if isinstance(workspace_id, int):
+        if (isinstance(workspace_id, int) and 
+            DM.WorkspaceCountWindows(workspace_id) > 0):
+            # check if the workspace exists (if not it does not have windows),
+            # if the workspace does not exist and ImageDocument.MoveToWorkspace()
+            # is called, a RuntimeError is raised
             image_doc.MoveToWorkspace(workspace_id)
         
         # calculate position depending on the available size and the 
@@ -351,15 +355,17 @@ class DMImage(Image):
                 wsid = ""
             
             dmscript = "\n".join((
-                "for(number i = CountImageDocuments({}) - 1; i >= 0; i--){{".format(wsid),
-                    "ImageDocument img_doc = GetImageDocument(i, {});".format(wsid),
-                    "if(img_doc.ImageDocumentGetName() == name){",
-                        "img_doc.ImageDocumentSetCurrentFile(path);",
-                        "if(format != \"\"){",
-                            "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
+                "if(WorkspaceGetIndex({}) >= 0){{".format(wsid),
+                    "for(number i = CountImageDocuments({}) - 1; i >= 0; i--){{".format(wsid),
+                        "ImageDocument img_doc = GetImageDocument(i, {});".format(wsid),
+                        "if(img_doc.ImageDocumentGetName() == name){",
+                            "img_doc.ImageDocumentSetCurrentFile(path);",
+                            "if(format != \"\"){",
+                                "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
+                            "}",
+                            "img_doc.ImageDocumentClean();",
+                            "break;",
                         "}",
-                        "img_doc.ImageDocumentClean();",
-                        "break;",
                     "}",
                 "}"
             ))
