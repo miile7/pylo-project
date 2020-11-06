@@ -108,7 +108,7 @@ class DMCamera(CameraInterface):
         # the workspace id to show the images in if they should be displayed
         self._workspace_id = None
         if self.show_images:
-            self._createNewWorkspace()
+            self._ensureWorkspace()
     
     def recordImage(self) -> "DMImage":
         """Get the image of the current camera.
@@ -129,6 +129,10 @@ class DMCamera(CameraInterface):
         # save the image tags
         tags.update(execdmscript.convert_from_taggroup(image.GetTagGroup()))
         
+        # make sure the workspace exists before creating the image
+        if self.show_images:
+            self._ensureWorkspace()
+        
         image = DMImage.fromDMPyImageObject(image, tags)
         image.show_image = self.show_images
         image.workspace_id = self._workspace_id
@@ -137,6 +141,35 @@ class DMCamera(CameraInterface):
     
     def resetToSafeState(self) -> None:
         pass
+
+    def _ensureWorkspace(self, activate_new: typing.Optional[bool]=True, 
+                         force_active: typing.Optional[bool]=False) -> None:
+        """Ensure that the DMCamera._workspace_id exists.
+
+        If the workspace does not exist, it is created.
+        
+        Parameters
+        ----------
+        activate_new : bool, optional
+            Whether to set the workspace new as the active one, default: True
+        force_active : bool, optional
+            Whether to set the workspace as active also if it already exists,
+            default: False
+        """
+
+        if (not isinstance(self._workspace_id, int) or 
+            DM.WorkspaceCountWindows(self._workspace_id) == 0):
+            # either the workspace id does not exist or it exists but the user 
+            # closed the workspace already
+            self._createNewWorkspace(activate_new)
+        elif force_active:
+            setvars = {
+                "wsid": self._workspace_id
+            }
+            dmscript = "WorkspaceSetActive(wsid);"
+
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars):
+                pass
     
     def _createNewWorkspace(self, activate: typing.Optional[bool]=True) -> None:
         """Create a new workspace and save the workspace id.
@@ -149,9 +182,23 @@ class DMCamera(CameraInterface):
 
         from ..config import PROGRAM_NAME
 
+        # try to find the workspace with the program name, if there is none 
+        # create a new one
         dmscript = [
-            "number wsid = WorkspaceAdd(0);",
-            "WorkspaceSetName(wsid, \"{}\");".format(PROGRAM_NAME),
+            "number wsid;",
+            "number found = 0;",
+            "for(number i = 0; i < WorkspaceGetCount(); i++){",
+                "wsid = WorkspaceGetFromIndex(i);",
+                "string name = WorkspaceGetName(wsid);",
+                "if(name == \"{}\"){{".format(execdmscript.escape_dm_string(PROGRAM_NAME)),
+                    "found = 1;",
+                    "break;",
+                "}",
+            "}",
+            "if(!found){",
+                "wsid = WorkspaceAdd(0);",
+                "WorkspaceSetName(wsid, \"{}\");".format(execdmscript.escape_dm_string(PROGRAM_NAME)),
+            "}",
         ]
 
         if activate:
