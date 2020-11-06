@@ -75,6 +75,11 @@ class DMViewDialog : UIFrame{
     TagGroup ask_for_inputs;
 
     /**
+     * The message to show in the ask for dialog
+     */
+    string ask_vals_message;
+
+    /**
      * The panels for the series settings and the configuration settings.
      */
     TagGroup panel_list;
@@ -1329,7 +1334,7 @@ class DMViewDialog : UIFrame{
             value_definition.TagGroupGetTagAsString("value", value);
 
             TagGroup options;
-            value_definition.TagGroupGetTagAsString("options", options);
+            value_definition.TagGroupGetTagAsTagGroup("options", options);
 
             input = DLGCreateChoice()
             for(number i = 0; i < options.TagGroupCountTags(); i++){
@@ -1529,7 +1534,6 @@ class DMViewDialog : UIFrame{
         outer_wrapper.DLGAddElement(label);
 
         TagGroup wrapper = DLGCreateGroup();
-
         
         for(number i = 0; i < ask_for_values.TagGroupCountTags(); i++){
             TagGroup value_settings;
@@ -1587,7 +1591,7 @@ class DMViewDialog : UIFrame{
             panel_list = DLGCreatePanelList();
 
             TagGroup ask_for_panel = DLGCreatePanel();
-            ask_for_panel.DLGAddElement(self._createAskForContent(message));
+            ask_for_panel.DLGAddElement(self._createAskForContent(ask_vals_message));
             panel_list.DLGAddTab(ask_for_panel);
         }
         else{
@@ -1630,7 +1634,7 @@ class DMViewDialog : UIFrame{
         configuration = configuration_vars;
         ask_for_values = ask_vals;
         display_mode = startup;
-        message = msg
+        ask_vals_message = msg
         allow_panel_change = 1;
 		self.super.init(self._createContent(title));
         
@@ -1872,8 +1876,10 @@ class DMViewDialog : UIFrame{
 
                 if(group_tg.TagGroupIsValid() == 0){
                     group_tg = NewTagGroup();
-                    number i = config_vars.TagGroupCreateNewLabeledTag(group);
-                    config_vars.TagGroupSetIndexedTagAsTagGroup(i, group_tg);
+                    if(config_vars.TagGroupDoesTagExist(group) == 0){
+                        number i = config_vars.TagGroupCreateNewLabeledTag(group);
+                    }
+                    config_vars.TagGroupSetTagAsTagGroup(group, group_tg);
                 }
 
                 number k = group_tg.TagGroupCreateNewLabeledTag(key);
