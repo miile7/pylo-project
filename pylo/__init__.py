@@ -52,6 +52,7 @@ from .abstract_view import AbstractView
 from .exception_thread import ExceptionThread
 from .blocked_function import BlockedFunction
 from .ini_configuration import IniConfiguration
+from .measurement_steps import MeasurementSteps
 from .vulnerable_machine import VulnerableMachine
 from .measurement_variable import MeasurementVariable
 from .blocked_function_error import BlockedFunctionError
