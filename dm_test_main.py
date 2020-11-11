@@ -1,5 +1,9 @@
 import DigitalMicrograph as DM
 
+DM.ClearResults()
+print("Starting, this can take a while...")
+print("")
+
 print("Initializing DigitalMicrograph environmnet...")
 
 # the name of the tag is used, this is deleted so it shouldn't matter anyway
