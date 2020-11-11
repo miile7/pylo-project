@@ -1,3 +1,4 @@
+import math
 import time
 import typing
 
@@ -158,6 +159,10 @@ class PyJEMMicroscope(MicroscopeInterface):
             )
         except KeyError:
             focus_calibration_factor = None
+
+        if (not isinstance(focus_calibration_factor, (int, float)) or 
+            math.isclose(focus_calibration_factor, 0)):
+            focus_calibration_factor = None
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
@@ -169,6 +174,10 @@ class PyJEMMicroscope(MicroscopeInterface):
                 )
             )
         except KeyError:
+            self.objective_lense_coarse_fine_stepwidth = None
+        
+        if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
+            math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
             self.objective_lense_coarse_fine_stepwidth = None
 
         # the factor to multiply the lense current with to get the magnetic
@@ -183,16 +192,23 @@ class PyJEMMicroscope(MicroscopeInterface):
         except KeyError:
             magnetic_field_calibration_factor = None
         
-        # the units of the magnetic field that results when multiplying with 
-        # the magnetic_field_calibration_factor
-        try:
-            magnetic_field_unit = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "magnetic-field-unit"
+        if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
+            math.isclose(magnetic_field_calibration_factor, 0)):
+            magnetic_field_calibration_factor = None
+        
+        if magnetic_field_calibration_factor is not None:
+            # the units of the magnetic field that results when multiplying with 
+            # the magnetic_field_calibration_factor
+            try:
+                magnetic_field_unit = (
+                    self.controller.configuration.getValue(
+                        CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                        "magnetic-field-unit"
+                    )
                 )
-            )
-        except KeyError:
+            except KeyError:
+                magnetic_field_unit = None
+        else:
             magnetic_field_unit = None
 
         if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
@@ -725,7 +741,8 @@ class PyJEMMicroscope(MicroscopeInterface):
             "set the magnetic field at the probe position. The calibration " + 
             "factor is defined as the magnetic field per current. The unit is " + 
             "then [magnetic field]/[current]."), 
-            restart_required=True
+            restart_required=True,
+            default_value=0
         )
 
         # add the option for the magnetic field unit to display
