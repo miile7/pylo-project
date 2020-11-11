@@ -1,5 +1,6 @@
 import io
 import os
+import copy
 import time
 import typing
 import datetime
@@ -383,10 +384,19 @@ class Measurement:
                 if not self.running:
                     # stop() is called
                     return
+
+                # get the actual values
+                variable_values = {}
+                for variable_name in step:
+                    variable_values[variable_name] = (
+                        self.controller.microscope.getMeasurementVariableValue(variable_name)
+                    )
                 
                 self.controller.view.print("Recording image...", inset="  ")
-                # record measurement
-                self.current_image = self.controller.camera.recordImage()
+                # record measurement, add the real values to the image
+                self.current_image = self.controller.camera.recordImage(
+                    self.createTagsDict(variable_values)
+                )
                 name = self.formatName()
                 
                 if not self.running:
@@ -394,13 +404,7 @@ class Measurement:
                     return
                 
                 if self.logging:
-                    # add the actual values to the current log
-                    variable_values = {}
-                    for variable_name in step:
-                        variable_values[variable_name] = (
-                            self.controller.microscope.getMeasurementVariableValue(variable_name)
-                        )
-                    
+                    # add the real values to the log
                     self.addToLog(variable_values, "Recording image", name, 
                                   datetime.datetime.now().isoformat())
                 
@@ -538,6 +542,58 @@ class Measurement:
                 for error in thread.exceptions:
                     print("Measurement.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
                     raise error
+    
+    def createTagsDict(self, step: dict) -> dict:
+        """Get the tags dictionary by the given step.
+
+        Paramters
+        ---------
+        step : dict
+            A dict containing the ids of all measurement variables as the key
+            and the current value as the value
+        
+        Returns
+        -------
+        dict
+            The tags dict to save in the image
+        """
+
+        from .config import PROGRAM_NAME
+
+        beautified_step = {}
+        for var_id, val in step.items():
+            var = self.controller.microscope.getMeasurementVariableById(var_id)
+
+            if var.has_calibration and var.calibrated_name is not None:
+                name = str(var.calibrated_name)
+            else:
+                name = str(var.name)
+
+            if var.has_calibration and var.calibrated_unit is not None:
+                name += " (in {})".format(var.calibrated_unit)
+            elif var.unit is not None:
+                name += " (in {})".format(var.unit)
+            
+            if var.has_calibration:
+                val = var.ensureCalibratedValue(val)
+            
+            if var.has_calibration and isinstance(var.calibrated_format, Datatype):
+                val = var.calibrated_format.format(val)
+            elif isinstance(var.format, Datatype):
+                val = var.format.format(val)
+
+            beautified_step[name] = val
+
+        tags = {
+            "Measurement Step": {
+                "Human readable": copy.deepcopy(step),
+                "Machine values": beautified_step
+            },
+            "Acquire time": datetime.datetime.now().isoformat(),
+            "{} configuration".format(PROGRAM_NAME): self.controller.configuration.asDict()
+        }
+
+        return tags
     
     def setupLog(self, variable_ids: typing.List[str], 
                  before_columns: typing.Optional[typing.List[str]]=[], 

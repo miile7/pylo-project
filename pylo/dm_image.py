@@ -226,7 +226,8 @@ class DMImage(Image):
         
         # save the tags
         if isinstance(self.tags, dict) and self.tags != {}:
-            tag_group = execdmscript.convert_to_taggroup(self.tags)
+            tag_group = execdmscript.convert_to_taggroup(
+                self.tags, replace_invalid_chars=True)
             img.GetTagGroup().CopyTagsFrom(tag_group)
         
         # set the name
