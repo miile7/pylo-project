@@ -429,6 +429,10 @@ class DMView(AbstractView):
             else:
                 raise RuntimeError("The series could not be created from " + 
                                    "the dialogs values.")
+        
+        if len(results) > 2:
+            configuration = results[2]
+            controller.configuration.loadFromMapping(configuration)
 
         return start, series
     
