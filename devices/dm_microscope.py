@@ -26,6 +26,8 @@ if load_from_dev:
     if hasattr(dev_constants, "execdmscript_path"):
         if not dev_constants.execdmscript_path in sys.path:
             sys.path.insert(0, dev_constants.execdmscript_path)
+
+import execdmscript
     
 from ..datatype import Datatype
 from .microscope_interface import MicroscopeInterface
@@ -94,19 +96,26 @@ class DMMicroscope(MicroscopeInterface):
             )
         except KeyError:
             focus_calibration_factor = None
+
+        if (not isinstance(focus_calibration_factor, (int, float)) or 
+            math.isclose(focus_calibration_factor, 0)):
+            focus_calibration_factor = None
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
-        # try:
-        #     self.objective_lense_coarse_fine_stepwidth = (
-        #         self.controller.configuration.getValue(
-        #             CONFIG_PYJEM_MICROSCOPE_GROUP, 
-        #             "objective-lense-coarse-fine-stepwidth"
-        #         )
-        #     )
-        # except KeyError:
-        #     self.objective_lense_coarse_fine_stepwidth = None
-        self.objective_lense_coarse_fine_stepwidth = None
+        try:
+            self.objective_lense_coarse_fine_stepwidth = (
+                self.controller.configuration.getValue(
+                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    "objective-lense-coarse-fine-stepwidth"
+                )
+            )
+        except KeyError:
+            self.objective_lense_coarse_fine_stepwidth = None
+        
+        if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
+            math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
+            self.objective_lense_coarse_fine_stepwidth = None
 
         # the factor to multiply the lense current with to get the magnetic
         # field
@@ -120,16 +129,23 @@ class DMMicroscope(MicroscopeInterface):
         except KeyError:
             magnetic_field_calibration_factor = None
         
-        # the units of the magnetic field that results when multiplying with 
-        # the magnetic_field_calibration_factor
-        try:
-            magnetic_field_unit = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "magnetic-field-unit"
+        if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
+            math.isclose(magnetic_field_calibration_factor, 0)):
+            magnetic_field_calibration_factor = None
+        
+        if magnetic_field_calibration_factor is not None:
+            # the units of the magnetic field that results when multiplying with 
+            # the magnetic_field_calibration_factor
+            try:
+                magnetic_field_unit = (
+                    self.controller.configuration.getValue(
+                        CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                        "magnetic-field-unit"
+                    )
                 )
-            )
-        except KeyError:
+            except KeyError:
+                magnetic_field_unit = None
+        else:
             magnetic_field_unit = None
 
         if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
@@ -146,7 +162,8 @@ class DMMicroscope(MicroscopeInterface):
                 "Focus (absolut)", 
                 min_value=-1, 
                 max_value=1000, 
-                unit="µm", # micrometer
+                # unit="µm", # micrometer
+                unit="um", # micrometer
                 format=Datatype.int,
                 # step by one increases the focus (in LOWMag-Mode) by 3 microns
                 calibration=focus_calibration_factor
@@ -184,7 +201,6 @@ class DMMicroscope(MicroscopeInterface):
         #     self._getObjectiveLenseCurrent,
         #     self._setObjectiveLenseCurrent
         # )
-
         # save current focus, there is no get function
         self._focus = 0
 
@@ -212,10 +228,17 @@ class DMMicroscope(MicroscopeInterface):
             Whether the microscope should be in lorentz mode or not
         """
 
-        if lorentz_mode:
-            pass
+        # from .config import DEFAULT_DM_SET_OPTICS_MODE
+        DEFAULT_DM_SET_OPTICS_MODE = True
+
+        if DEFAULT_DM_SET_OPTICS_MODE:
+            script = "EMSetImagingOpticsMode(\"{}\");".format(
+                IMAGING_OPTICS_MODE_LowMAG)
+            with execdmscript.exec_dmscript(script):
+                pass
         else:
-            pass
+            raise NotImplementedError("Manual setting of the lorentz mode " + 
+                                      "is not yet implemented.")
     
     def getInLorentzMode(self) -> bool:
         """Get whether the microscope is in the lorentz mode.
@@ -223,8 +246,12 @@ class DMMicroscope(MicroscopeInterface):
         This will return true if the objective fine and coarse lenses are 
         switched to free lense control and their current is 0.
         """
-
-        return False
+        
+        if self.dm_microscope.CanGetImagingOpticsMode():
+            return (self.dm_microscope.GetImagingOpticsMode() == 
+                    IMAGING_OPTICS_MODE_LowMAG)
+        else:
+            raise IOError("Cannot get the optics mode.")
     
     def _setFocus(self, value: float) -> None:
         """Set the focus to the given value.
@@ -279,7 +306,6 @@ class DMMicroscope(MicroscopeInterface):
         """
         self.dm_microscope.SetStageBeta(value)
         # self.dm_microscope.SetStageAlpha(value)
-
     
     def _getFocus(self) -> float:
         """Get the current focus as an absolute value.
