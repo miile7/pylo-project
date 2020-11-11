@@ -790,6 +790,7 @@ class Controller:
             self.measurement.stop()
 
         if isinstance(self.view, AbstractView):
+            self.view.hideRunning()
             self.view.show_running = False
 
         if isinstance(self._measurement_thread, ExceptionThread):
