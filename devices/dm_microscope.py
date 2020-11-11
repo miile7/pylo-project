@@ -252,19 +252,6 @@ class DMMicroscope(MicroscopeInterface):
                     IMAGING_OPTICS_MODE_LowMAG)
         else:
             raise IOError("Cannot get the optics mode.")
-    
-    def _setFocus(self, value: float) -> None:
-        """Set the focus to the given value.
-
-        Typical values are between -1 and 50.
-
-        Parameters
-        ----------
-        value : int
-            The focus value
-        """
-        # self.dm_microscope.SetFocus(value)
-        self.dm_microscope.SetCalibratedFocus(value)
 
     def _setObjectiveLenseCurrent(self, value: float) -> None:
         """Set the objective lense current.
@@ -276,6 +263,17 @@ class DMMicroscope(MicroscopeInterface):
         value : int or float
             The value to set the objective lense current to in objective fine
             lense steps
+        """
+        pass
+    
+    def _getObjectiveLenseCurrent(self) -> float:
+        """Get the objective lense current in the current units.
+
+        Returns
+        -------
+        float
+            The actual current of the objective lense at the microscope,
+            measured in objective fine lense steps
         """
         pass
     
@@ -291,6 +289,17 @@ class DMMicroscope(MicroscopeInterface):
         """
         # self.dm_microscope.SetStageBeta(value)
         self.dm_microscope.SetStageAlpha(value)
+    
+    def _getXTilt(self) -> float:
+        """Get the x tilt in degrees.
+
+        Returns
+        -------
+        float
+            The x tilt
+        """
+        # return self.dm_microscope.GetStageBeta()
+        return self.dm_microscope.GetStageAlpha()
 
     def _setYTilt(self, value: float) -> None:
         """Set the y tilt in degrees.
@@ -307,6 +316,30 @@ class DMMicroscope(MicroscopeInterface):
         self.dm_microscope.SetStageBeta(value)
         # self.dm_microscope.SetStageAlpha(value)
     
+    def _getYTilt(self) -> float:
+        """Get the y tilt in degrees.
+
+        Returns
+        -------
+        float
+            The y tilt
+        """
+        return self.dm_microscope.GetStageBeta()
+        # return self.dm_microscope.GetStageAlpha()
+    
+    def _setFocus(self, value: float) -> None:
+        """Set the focus to the given value.
+
+        Typical values are between -1 and 50.
+
+        Parameters
+        ----------
+        value : int
+            The focus value
+        """
+        # self.dm_microscope.SetFocus(value)
+        self.dm_microscope.SetCalibratedFocus(value)
+    
     def _getFocus(self) -> float:
         """Get the current focus as an absolute value.
 
@@ -321,39 +354,6 @@ class DMMicroscope(MicroscopeInterface):
         """
         # return self.dm_microscope.GetFocus()
         return self.dm_microscope.GetCalibratedFocus()
-    
-    def _getObjectiveLenseCurrent(self) -> float:
-        """Get the objective lense current in the current units.
-
-        Returns
-        -------
-        float
-            The actual current of the objective lense at the microscope,
-            measured in objective fine lense steps
-        """
-        pass
-    
-    def _getXTilt(self) -> float:
-        """Get the x tilt in degrees.
-
-        Returns
-        -------
-        float
-            The x tilt
-        """
-        # return self.dm_microscope.GetStageBeta()
-        return self.dm_microscope.GetStageAlpha()
-    
-    def _getYTilt(self) -> float:
-        """Get the y tilt in degrees.
-
-        Returns
-        -------
-        float
-            The y tilt
-        """
-        return self.dm_microscope.GetStageBeta()
-        # return self.dm_microscope.GetStageAlpha()
 
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
