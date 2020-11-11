@@ -1870,26 +1870,29 @@ class DMViewDialog : UIFrame{
             
             if(self.parseConfigIdentifier(identifier, group, key, index)){
                 TagGroup group_tg;
-                if(config_vars.TagGroupDoesTagExist(group) != 0){
+                if(config_vars.TagGroupDoesTagExist(group)){
                     config_vars.TagGroupGetTagAsTagGroup(group, group_tg);
                 }
 
-                if(group_tg.TagGroupIsValid() == 0){
+                if(!group_tg.TagGroupIsValid()){
                     group_tg = NewTagGroup();
-                    if(config_vars.TagGroupDoesTagExist(group) == 0){
+                    if(!config_vars.TagGroupDoesTagExist(group)){
                         number i = config_vars.TagGroupCreateNewLabeledTag(group);
                     }
-                    config_vars.TagGroupSetTagAsTagGroup(group, group_tg);
                 }
 
                 number k = group_tg.TagGroupCreateNewLabeledTag(key);
                 
+                // load the settings for this value
                 TagGroup group_values;
                 configuration.TagGroupGetTagAsTagGroup(group, group_values);
                 TagGroup value_settings;
                 group_values.TagGroupGetTagAsTagGroup(key, value_settings);
 
-                self.addValueFromInputToTagGroup(input, value_settings, k, config_vars);
+                // save the value from the input with the value_settings to the key k in the group_tg
+                self.addValueFromInputToTagGroup(input, value_settings, k, group_tg);
+
+                config_vars.TagGroupSetTagAsTagGroup(group, group_tg);
             }
         }
 
