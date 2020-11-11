@@ -292,28 +292,19 @@ class DMView(AbstractView):
             
             time.sleep(0.05)
     
-    def _deleteObservedTags(self) -> None:
+    def deleteObservedTags(self) -> None:
         """Delete all the observed tags."""
-        if DM is not None:
-            if isinstance(self._progress_dialog_progress_tagname, str):
-                DM.GetPersistentTagGroup().DeleteTagWithLabel(
-                    self._progress_dialog_progress_tagname
-                )
-            
-            if isinstance(self._progress_dialog_text_tagname, str):
-                DM.GetPersistentTagGroup().DeleteTagWithLabel(
-                    self._progress_dialog_text_tagname
-                )
-            
-            if isinstance(self._progress_dialog_success_tagname, str):
-                DM.GetPersistentTagGroup().DeleteTagWithLabel(
-                    self._progress_dialog_success_tagname
-                )
-            
-            if isinstance(self._progress_dialog_kill_tagname, str):
-                DM.GetPersistentTagGroup().DeleteTagWithLabel(
-                    self._progress_dialog_kill_tagname
-                )
+        if isinstance(self._progress_dialog_progress_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_progress_tagname)
+        
+        if isinstance(self._progress_dialog_text_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_text_tagname)
+        
+        if isinstance(self._progress_dialog_success_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_success_tagname)
+        
+        if isinstance(self._progress_dialog_kill_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_kill_tagname)
         
     def showRunning(self) -> None:
         """Show the progress dialog.
@@ -341,7 +332,7 @@ class DMView(AbstractView):
                 id_
             )
             self._progress_dialog_success = None
-            self._deleteObservedTags()
+            self.deleteObservedTags()
             # self._createKillDialog()
             self._createRunningDialog()
         
@@ -353,7 +344,7 @@ class DMView(AbstractView):
     
     def hideRunning(self) -> None:
         """Hides the progress dialog."""
-        self._deleteObservedTags()
+        self.deleteObservedTags()
 
         self._progress_dialog_progress_tagname = None
         self._progress_dialog_text_tagname = None
