@@ -225,7 +225,8 @@ class PyJEMMicroscope(MicroscopeInterface):
                 "Focus (absolut)", 
                 min_value=-1, 
                 max_value=1000, 
-                unit="µm", # micrometer
+                # unit="µm", # micrometer
+                unit="um", # micrometer
                 format=Datatype.int,
                 # step by one increases the focus (in LOWMag-Mode) by 3 microns
                 calibration=focus_calibration_factor
