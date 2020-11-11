@@ -877,6 +877,26 @@ class AbstractConfiguration:
         
         return self._keyExists(key[0], key[1])
     
+    def asDict(self) -> dict:
+        """Get the configuration values as a dict.
+
+        Returns
+        -------
+        dict
+            A 2d-dict representing the current configuration values, the outer 
+            keys are the group names, the inner keys are the keys
+        """
+
+        config_dict = {}
+        for group in self.getGroups():
+            if not group in config_dict:
+                config_dict[group] = {}
+            
+            for key in self.getKeys(group):
+                config_dict[group][key] = self.getValue(group, key)
+        
+        return config_dict
+    
     def loadFromMapping(self, config: typing.Mapping) -> None:
         """Load the given `config` dict.
 

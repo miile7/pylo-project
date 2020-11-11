@@ -1,5 +1,6 @@
 import io
 import os
+import copy
 import time
 import typing
 import datetime
@@ -322,6 +323,9 @@ class Measurement:
                 if not self.running:
                     # stop() is called
                     return
+
+                # check all thread exceptions
+                self.raiseThreadErrors()
                 
                 # fire event before recording
                 before_record()
@@ -329,9 +333,6 @@ class Measurement:
                 if not self.running:
                     # stop() is called
                     return
-
-                # the asynchronous threads to set the values at the micrsocope
-                measurement_variable_threads = []
 
                 if self.logging:
                     # add the values to reach to the current log
@@ -342,6 +343,9 @@ class Measurement:
                 self.controller.view.print("Approaching step {}: {}.".format(
                     self._step_index, step_descr
                 ))
+
+                # the asynchronous threads to set the values at the micrsocope
+                measurement_variable_threads = []
 
                 for variable_name in step:
                     # set each measurement variable
@@ -371,21 +375,28 @@ class Measurement:
                 # Wait for all measurement variable threads to finish
                 for thread in measurement_variable_threads:
                     thread.join()
-                    
-                    if (isinstance(thread, ExceptionThread) and  
-                        len(thread.exceptions)):
-                        for error in thread.exceptions:
-                            raise error
+                
+                # check all thread exceptions
+                self.raiseThreadErrors(*measurement_variable_threads)
                 
                 self.controller.view.print("Done.", inset="  ")
                 
                 if not self.running:
                     # stop() is called
                     return
+
+                # get the actual values
+                variable_values = {}
+                for variable_name in step:
+                    variable_values[variable_name] = (
+                        self.controller.microscope.getMeasurementVariableValue(variable_name)
+                    )
                 
                 self.controller.view.print("Recording image...", inset="  ")
-                # record measurement
-                self.current_image = self.controller.camera.recordImage()
+                # record measurement, add the real values to the image
+                self.current_image = self.controller.camera.recordImage(
+                    self.createTagsDict(variable_values)
+                )
                 name = self.formatName()
                 
                 if not self.running:
@@ -393,13 +404,7 @@ class Measurement:
                     return
                 
                 if self.logging:
-                    # add the actual values to the current log
-                    variable_values = {}
-                    for variable_name in step:
-                        variable_values[variable_name] = (
-                            self.controller.microscope.getMeasurementVariableValue(variable_name)
-                        )
-                    
+                    # add the real values to the log
                     self.addToLog(variable_values, "Recording image", name, 
                                   datetime.datetime.now().isoformat())
                 
@@ -424,18 +429,8 @@ class Measurement:
                 self.controller.view.print("Saving image as {}...".format(name), 
                                            inset="  ")
 
-                # checking image savings for errors
-                for thread in self._image_save_threads:
-                    if (isinstance(thread, ExceptionThread) and 
-                        len(thread.exceptions) > 0):
-                        for error in thread.exceptions:
-                            raise error
-                
-                # check log thread for errors
-                if (isinstance(self._log_thread, ExceptionThread) and 
-                    len(self._log_thread.exceptions)):
-                    for error in self._log_thread.exceptions:
-                        raise error
+                # check all thread exceptions
+                self.raiseThreadErrors()
 
                 self.controller.view.progress = self._step_index + 1
 
@@ -465,11 +460,9 @@ class Measurement:
             # stop log thread
             if isinstance(self._log_thread, LogThread):
                 self._log_thread.finishAndStop()
-
-                if (isinstance(self._log_thread, ExceptionThread) and 
-                    len(self._log_thread.exceptions)):
-                    for error in self._log_thread.exceptions:
-                        raise error
+                
+            # check all thread exceptions
+            self.raiseThreadErrors(*reset_threads)
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
@@ -478,10 +471,9 @@ class Measurement:
             # wait for all machine reset threads to finish
             for thread in reset_threads:
                 thread.join()
-
-                if isinstance(thread, ExceptionThread) and len(thread.exceptions):
-                    for error in thread.exceptions:
-                        raise error
+            
+            # check all thread exceptions
+            self.raiseThreadErrors(*reset_threads)
 
             self.controller.view.print("Everything done, finished.")
 
@@ -529,6 +521,79 @@ class Measurement:
 
         # fire stop event
         after_stop()
+    
+    def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
+        """Check all thread collections of this class plus the 
+        `additional_threads` if they contain exceptions and if so, raise them.
+
+        Raises
+        ------
+        Exception
+            Any exception that is contained in one of the threads
+
+        Paramteres
+        ----------
+        additional_threads : ExceptionThread
+            Additional threads to check
+        """
+
+        for thread in (*self._image_save_threads, self._log_thread, *additional_threads):
+            if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
+                for error in thread.exceptions:
+                    print("Measurement.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                    raise error
+    
+    def createTagsDict(self, step: dict) -> dict:
+        """Get the tags dictionary by the given step.
+
+        Paramters
+        ---------
+        step : dict
+            A dict containing the ids of all measurement variables as the key
+            and the current value as the value
+        
+        Returns
+        -------
+        dict
+            The tags dict to save in the image
+        """
+
+        from .config import PROGRAM_NAME
+
+        beautified_step = {}
+        for var_id, val in step.items():
+            var = self.controller.microscope.getMeasurementVariableById(var_id)
+
+            if var.has_calibration and var.calibrated_name is not None:
+                name = str(var.calibrated_name)
+            else:
+                name = str(var.name)
+
+            if var.has_calibration and var.calibrated_unit is not None:
+                name += " (in {})".format(var.calibrated_unit)
+            elif var.unit is not None:
+                name += " (in {})".format(var.unit)
+            
+            if var.has_calibration:
+                val = var.ensureCalibratedValue(val)
+            
+            if var.has_calibration and isinstance(var.calibrated_format, Datatype):
+                val = var.calibrated_format.format(val)
+            elif isinstance(var.format, Datatype):
+                val = var.format.format(val)
+
+            beautified_step[name] = val
+
+        tags = {
+            "Measurement Step": {
+                "Human readable": copy.deepcopy(step),
+                "Machine values": beautified_step
+            },
+            "Acquire time": datetime.datetime.now().isoformat(),
+            "{} configuration".format(PROGRAM_NAME): self.controller.configuration.asDict()
+        }
+
+        return tags
     
     def setupLog(self, variable_ids: typing.List[str], 
                  before_columns: typing.Optional[typing.List[str]]=[], 

@@ -1,3 +1,5 @@
+import typing
+
 from ..vulnerable_machine import VulnerableMachine
 
 class CameraInterface(VulnerableMachine):
@@ -22,8 +24,14 @@ class CameraInterface(VulnerableMachine):
         self.tags = {}
         self.controller = controller
     
-    def recordImage(self) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
         """Get the image of the current camera.
+
+        Parameters
+        ----------
+        additional_tags : dict, optional
+            Additonal tags to add to the image, note that they will be 
+            overwritten by other tags if there are set tags in this method
 
         Returns
         -------

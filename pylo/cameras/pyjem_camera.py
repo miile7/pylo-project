@@ -1,3 +1,5 @@
+import typing
+
 from PIL import Image as PILImage
 import numpy as np
 
@@ -57,7 +59,14 @@ class PyJEMCamera(CameraInterface):
             The controller
         """
 
+        self._detector_name = None
+        self._detector = None
+        self._image_size = None
+
         super().__init__(controller)
+    
+    def _loadSettings(self) -> None:
+        """Load the settings from the configuration."""
 
         self._detector_name = self.controller.configuration.getValue(
             CONFIG_PYJEM_CAMERA_GROUP, "detector-name"
@@ -67,8 +76,14 @@ class PyJEMCamera(CameraInterface):
         )
         self._detector = Detector(self._detector_name)
     
-    def recordImage(self) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
         """Get the image of the current camera.
+
+        Parameters
+        ----------
+        additional_tags : dict, optional
+            Additonal tags to add to the image, note that they will be 
+            overwritten by other tags if there are set tags in this method
 
         Returns
         -------
@@ -76,13 +91,21 @@ class PyJEMCamera(CameraInterface):
             The image object
         """
 
+        if None in (self._detector, self._detector_name, self._image_size):
+            self._loadSettings()
+        
+        if isinstance(additional_tags, dict):
+            tags = copy.deepcopy(additional_tags)
+        else:
+            tags = {}
+
         stream = self._detector.snapshot_rawdata()
         image_data = PILImage.frombytes(
             'L', (self._image_size, self._image_size), stream, 'raw'
         )
         image_data = np.array(image_data)
 
-        return Image(image_data)
+        return Image(image_data, tags)
     
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration"):
