@@ -876,6 +876,23 @@ class AbstractConfiguration:
             raise TypeError("Only tuples of the form 'group, key' are supported.")
         
         return self._keyExists(key[0], key[1])
+    
+    def loadFromMapping(self, config: typing.Mapping) -> None:
+        """Load the given `config` dict.
+
+        The `config` has to be a mapping where each key is the group name and 
+        each value is another mapping containing the key name as the key and 
+        the value as the value to set.
+
+        Parameters
+        ----------
+        config : mapping
+            A 2d-mapping containing the groups, keys and values to set
+        """
+
+        for group in config:
+            for key in config[group]:
+                self.setValue(group, key, config[group][key])
         
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
