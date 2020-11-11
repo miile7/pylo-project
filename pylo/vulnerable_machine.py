@@ -1,4 +1,5 @@
 import inspect
+import traceback
 
 from .events import emergency
 from .blocked_function import BlockedFunction
@@ -42,6 +43,18 @@ class VulnerableMachine:
         Calling this function will make all functions (except the 
         resolveEmergencyState() function) to throw a BlockedFunctionError.
         """
+
+        msg = "CRITICAL ERROR -- EMERGENCY STATE IS EXECUTED!"
+
+        print("")
+        print("+{}+".format("-" * (len(msg) + 2)))
+        print("| {} |".format(msg))
+        print("+{}+".format("-" * (len(msg) + 2)))
+        print("")
+        print("Setting {} to emergency state.".format(self.__class__.__name__))
+        print("")
+        traceback.print_stack()
+        print("")
 
         self._in_emergency_state = True
         self.resetToSafeState()
