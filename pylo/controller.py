@@ -12,6 +12,7 @@ from .events import before_init
 from .events import before_start
 from .events import series_ready
 
+from .datatype import Datatype
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
@@ -703,14 +704,14 @@ class Controller:
 
         try:
             while running and self.measurement.running:
-                self._checkThreadsForErrors()
+                self.raiseThreadErrors()
                 time.sleep(0.05)
             
             # if the measurement detects an error, Measurement.running will be 
             # False, so the while-loop is not executed and if an exception 
             # occurres before starting the measurement, the loop will not be 
             # running too
-            self._checkThreadsForErrors()
+            self.raiseThreadErrors()
             
             # finished
             stop_program = True
@@ -720,6 +721,7 @@ class Controller:
             try:
                 # stop before the error, mostly the view raises the python 
                 # error too so the program would not end then
+                print("Controller.waitForProgram(): Error detected:", e.__class__.__name__, e)
                 self.stopProgramLoop()
                 self.view.showError(e, self._getFixForError(e))
             except StopProgram:
@@ -733,25 +735,26 @@ class Controller:
             raise RuntimeError("Cannot wait for the program if the program " + 
                                "has not started or has already finished.")
     
-    def _checkThreadsForErrors(self) -> None:
-        """Check the measurement thread and the running thread for errors and 
-        raise them if there are some.
+    def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
+        """Check all thread collections of this class plus the 
+        `additional_threads` if they contain exceptions and if so, raise them.
 
         Raises
         ------
         Exception
-            When an error in the threads occurres, this error will be raised
+            Any exception that is contained in one of the threads
+
+        Paramteres
+        ----------
+        additional_threads : ExceptionThread
+            Additional threads to check
         """
 
-        if (isinstance(self._measurement_thread, ExceptionThread) and 
-            len(self._measurement_thread.exceptions) > 0):
-            for error in self._measurement_thread.exceptions:
-                raise error
-
-        if (isinstance(self._running_thread, ExceptionThread) and 
-            len(self._running_thread.exceptions) > 0):
-            for error in self._running_thread.exceptions:
-                raise error
+        for thread in (self._measurement_thread, self._running_thread, *additional_threads):
+            if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
+                for error in thread.exceptions:
+                    print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                    raise error
     
     def _getFixForError(self, error: Exception) -> typing.Union[None, str]:
         """Get a possible fix for the given error.

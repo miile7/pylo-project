@@ -322,6 +322,9 @@ class Measurement:
                 if not self.running:
                     # stop() is called
                     return
+
+                # check all thread exceptions
+                self.raiseThreadErrors()
                 
                 # fire event before recording
                 before_record()
@@ -329,9 +332,6 @@ class Measurement:
                 if not self.running:
                     # stop() is called
                     return
-
-                # the asynchronous threads to set the values at the micrsocope
-                measurement_variable_threads = []
 
                 if self.logging:
                     # add the values to reach to the current log
@@ -342,6 +342,9 @@ class Measurement:
                 self.controller.view.print("Approaching step {}: {}.".format(
                     self._step_index, step_descr
                 ))
+
+                # the asynchronous threads to set the values at the micrsocope
+                measurement_variable_threads = []
 
                 for variable_name in step:
                     # set each measurement variable
@@ -371,11 +374,9 @@ class Measurement:
                 # Wait for all measurement variable threads to finish
                 for thread in measurement_variable_threads:
                     thread.join()
-                    
-                    if (isinstance(thread, ExceptionThread) and  
-                        len(thread.exceptions)):
-                        for error in thread.exceptions:
-                            raise error
+                
+                # check all thread exceptions
+                self.raiseThreadErrors(*measurement_variable_threads)
                 
                 self.controller.view.print("Done.", inset="  ")
                 
@@ -424,18 +425,8 @@ class Measurement:
                 self.controller.view.print("Saving image as {}...".format(name), 
                                            inset="  ")
 
-                # checking image savings for errors
-                for thread in self._image_save_threads:
-                    if (isinstance(thread, ExceptionThread) and 
-                        len(thread.exceptions) > 0):
-                        for error in thread.exceptions:
-                            raise error
-                
-                # check log thread for errors
-                if (isinstance(self._log_thread, ExceptionThread) and 
-                    len(self._log_thread.exceptions)):
-                    for error in self._log_thread.exceptions:
-                        raise error
+                # check all thread exceptions
+                self.raiseThreadErrors()
 
                 self.controller.view.progress = self._step_index + 1
 
@@ -465,11 +456,9 @@ class Measurement:
             # stop log thread
             if isinstance(self._log_thread, LogThread):
                 self._log_thread.finishAndStop()
-
-                if (isinstance(self._log_thread, ExceptionThread) and 
-                    len(self._log_thread.exceptions)):
-                    for error in self._log_thread.exceptions:
-                        raise error
+                
+            # check all thread exceptions
+            self.raiseThreadErrors(*reset_threads)
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
@@ -478,10 +467,9 @@ class Measurement:
             # wait for all machine reset threads to finish
             for thread in reset_threads:
                 thread.join()
-
-                if isinstance(thread, ExceptionThread) and len(thread.exceptions):
-                    for error in thread.exceptions:
-                        raise error
+            
+            # check all thread exceptions
+            self.raiseThreadErrors(*reset_threads)
 
             self.controller.view.print("Everything done, finished.")
 
@@ -529,6 +517,27 @@ class Measurement:
 
         # fire stop event
         after_stop()
+    
+    def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
+        """Check all thread collections of this class plus the 
+        `additional_threads` if they contain exceptions and if so, raise them.
+
+        Raises
+        ------
+        Exception
+            Any exception that is contained in one of the threads
+
+        Paramteres
+        ----------
+        additional_threads : ExceptionThread
+            Additional threads to check
+        """
+
+        for thread in (*self._image_save_threads, self._log_thread, *additional_threads):
+            if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
+                for error in thread.exceptions:
+                    print("Measurement.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                    raise error
     
     def setupLog(self, variable_ids: typing.List[str], 
                  before_columns: typing.Optional[typing.List[str]]=[], 
