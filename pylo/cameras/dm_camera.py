@@ -73,8 +73,32 @@ class DMCamera(CameraInterface):
             The controller
         """
 
+        super(DMCamera, self).__init__(controller)
+
+        self.show_images = None
+        self.exposure_time = None
+        self.binning_x = None
+        self.binning_y = None
+        self.process_level = None
+        self.ccd_area = None
+        self.tags = {}
+
+        from ..config import OFFLINE_MODE
+
+        if DM is not None and not OFFLINE_MODE:
+            self.camera = DM.GetActiveCamera()
+            self.camera.PrepareForAcquire()
+        else:
+            self.camera = None
+        
+        # the workspace id to show the images in if they should be displayed
+        self._workspace_id = None
+    
+    def _loadSettings(self) -> None:
+        """Load the settings from the configuration."""
+        
         (self.show_images, self.exposure_time, self.binning_x, self.binning_y, 
-            self.process_level, *self.ccd_area) = controller.getConfigurationValuesOrAsk(
+            self.process_level, *self.ccd_area) = self.controller.getConfigurationValuesOrAsk(
             (CONFIG_DM_CAMERA_GROUP, "show-images"),
             (CONFIG_DM_CAMERA_GROUP, "exposure-time"),
             (CONFIG_DM_CAMERA_GROUP, "binning-x"),
@@ -87,8 +111,6 @@ class DMCamera(CameraInterface):
             fallback_default=True, save_if_not_exists=True
         )
 
-        super(DMCamera, self).__init__(controller)
-
         self.tags = {
             "exposureTime": self.exposure_time,
             "binning": {"x": self.binning_x, "y": self.binning_y},
@@ -97,18 +119,6 @@ class DMCamera(CameraInterface):
                         "bottom": self.ccd_area[2], "left": self.ccd_area[3]}
         }
 
-        from ..config import OFFLINE_MODE
-
-        if DM is not None and not OFFLINE_MODE:
-            self.camera = DM.GetActiveCamera()
-            self.camera.PrepareForAcquire()
-        else:
-            self.camera = None
-        
-        # the workspace id to show the images in if they should be displayed
-        self._workspace_id = None
-        if self.show_images:
-            self._ensureWorkspace()
     
     def recordImage(self) -> "DMImage":
         """Get the image of the current camera.
@@ -118,6 +128,11 @@ class DMCamera(CameraInterface):
         DMImage
             The image object
         """
+
+        if (None in (self.show_images, self.exposure_time, self.binning_x, 
+                     self.binning_y, self.process_level, self.ccd_area, 
+                     self.tags)):
+            self._loadSettings()
         
         tags = {"camera": copy.deepcopy(self.tags)}
 
@@ -128,7 +143,7 @@ class DMCamera(CameraInterface):
         
         # save the image tags
         tags.update(execdmscript.convert_from_taggroup(image.GetTagGroup()))
-        
+
         # make sure the workspace exists before creating the image
         if self.show_images:
             self._ensureWorkspace()
