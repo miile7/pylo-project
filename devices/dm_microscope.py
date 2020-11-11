@@ -352,7 +352,7 @@ class DMMicroscope(MicroscopeInterface):
             The actual current of the objective lense at the microscope,
             measured in objective fine lense steps
         """
-        pass
+        raise NotImplementedError("The objective lens current is not yet implemented!")
     
     def _setXTilt(self, value: float) -> None:
         """Set the x tilt in degrees.
