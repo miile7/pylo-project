@@ -120,8 +120,14 @@ class DMCamera(CameraInterface):
         }
 
     
-    def recordImage(self) -> "DMImage":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "DMImage":
         """Get the image of the current camera.
+
+        Parameters
+        ----------
+        additional_tags : dict, optional
+            Additonal tags to add to the image, note that they will be 
+            overwritten by other tags if there are set tags in this method
 
         Returns
         -------
@@ -134,7 +140,12 @@ class DMCamera(CameraInterface):
                      self.tags)):
             self._loadSettings()
         
-        tags = {"camera": copy.deepcopy(self.tags)}
+        if isinstance(additional_tags, dict):
+            tags = copy.deepcopy(additional_tags)
+        else:
+            tags = {}
+        
+        tags["camera"] = copy.deepcopy(self.tags)
 
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
