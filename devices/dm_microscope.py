@@ -199,8 +199,8 @@ class DMMicroscope(MicroscopeInterface):
         #         calibration=magnetic_field_calibration_factor,
         #         calibrated_format=float
         #     ),
-        #     self._getObjectiveLenseCurrent,
-        #     self._setObjectiveLenseCurrent
+        #     self._getObjectiveLensCurrent,
+        #     self._setObjectiveLensCurrent
         # )
         # save current focus, there is no get function
         self._focus = 0
@@ -254,7 +254,7 @@ class DMMicroscope(MicroscopeInterface):
         else:
             raise IOError("Cannot get the optics mode.")
 
-    def _setObjectiveLenseCurrent(self, value: float) -> None:
+    def _setObjectiveLensCurrent(self, value: float) -> None:
         """Set the objective lense current.
 
         The value corresponds to I/O output value without carry.
@@ -267,7 +267,7 @@ class DMMicroscope(MicroscopeInterface):
         """
         raise NotImplementedError("The objective lens current is not yet implemented!")
     
-    def _getObjectiveLenseCurrent(self) -> float:
+    def _getObjectiveLensCurrent(self) -> float:
         """Get the objective lense current in the current units.
 
         Returns

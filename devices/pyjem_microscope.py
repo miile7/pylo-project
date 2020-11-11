@@ -252,8 +252,8 @@ class PyJEMMicroscope(MicroscopeInterface):
                 calibration=magnetic_field_calibration_factor,
                 calibrated_format=float
             ),
-            self._getObjectiveLenseCurrent,
-            self._setObjectiveLenseCurrent
+            self._getObjectiveLensCurrent,
+            self._setObjectiveLensCurrent
         )
 
         # lenses
@@ -492,7 +492,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         # self._lense_control.SetPLFocus(value)
         self._focus = value
 
-    def _setObjectiveLenseCurrent(self, value : float) -> None:
+    def _setObjectiveLensCurrent(self, value : float) -> None:
         """Set the objective lense current.
 
         The value corresponds to I/O output value without carry.
@@ -580,7 +580,7 @@ class PyJEMMicroscope(MicroscopeInterface):
 
         return self._focus
     
-    def _getObjectiveLenseCurrent(self) -> float:
+    def _getObjectiveLensCurrent(self) -> float:
         """Get the objective lense current in the current units.
 
         Returns
