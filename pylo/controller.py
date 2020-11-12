@@ -270,6 +270,22 @@ class Controller:
                 )
             except KeyError:
                 pass
+
+            try:
+                restart_required = self.configuration.getRestartRequired(
+                    group, key
+                )
+
+                if restart_required:
+                    restart_required_msg = ("The program will be restarted " + 
+                                            "automatically after confirmation.")
+                    if (not "description" in input_param or 
+                        not isinstance(input_param["description"], str)):
+                        input_param["description"] = restart_required_msg
+                    else:
+                        input_param["description"] += restart_required_msg
+            except KeyError:
+                pass
             
             try:
                 # try to get the datatype
