@@ -1,3 +1,4 @@
+import copy
 import typing
 
 from .datatype import Datatype
@@ -44,6 +45,7 @@ class AbstractConfiguration:
         
         This calls the loadConfiguration() function automatically."""
         self.configuration = {}
+        self.marked_states = {}
         self.loadConfiguration()
     
     def _keyExists(self, group: str, key: str) -> bool:
@@ -154,6 +156,10 @@ class AbstractConfiguration:
         
         self.addConfigurationOption(group, key, **kwargs)
 
+        if len(self.marked_states) > 0:
+            for state_id in self.marked_states:
+                self.marked_states[state_id]["set"][(group, key)] = self.getValue(group, key)
+
         self.configuration[group][key]["value"] = [value]
     
     def addConfigurationOption(self, group: str, key: str, 
@@ -205,6 +211,16 @@ class AbstractConfiguration:
             self.configuration[group] = {}
         if not key in self.configuration[group]:
             self.configuration[group][key] = {}
+        
+            if len(self.marked_states) > 0:
+                for state_id in self.marked_states:
+                    if (group, key) in self.marked_states[state_id]["del"]:
+                        # remove deleting if the key was deleted and then added
+                        # in this state
+                        del self.marked_states[state_id]["del"][(group, key)]
+                    else:
+                        self.marked_states[state_id]["add"].append((group, key))
+
         
         if not "value" in self.configuration[group][key]:
             self.configuration[group][key]["value"] = []
@@ -643,11 +659,195 @@ class AbstractConfiguration:
         """
 
         if self._keyExists(group, key):
+            if len(self.marked_states) > 0:
+                for state_id in self.marked_states:
+                    if (group, key) not in self.marked_states[state_id]["add"]:
+                        # do not save if the value was added and then deleted
+                        # in this state mark
+                        self.marked_states[state_id]["del"][(group, key)] = copy.deepcopy(self.configuration[group][key])
+
             del self.configuration[group][key]
 
             if len(self.configuration[group]):
                 # group is empty, delete it too
                 del self.configuration[group]
+    
+    def markState(self) -> int:
+        """Mark the current state of the configuration.
+
+        This will allow to observe all changes that are made after this state.
+        The returned number is the state id to find the saved state.
+
+        Note that only the final change can be generated. So this is not a 
+        history of all changes but only a comparism between this marked state
+        and the state when the other state functions are called.
+
+        Make sure to drop marks after they are not needed anymore. They will 
+        add a lot of values to the internal memory.
+
+        See Also
+        --------
+        AbstractConfiguration.dropStateMark()
+
+        Returns
+        -------
+        int
+            The state id to identify the marked position
+        """
+        for i in range(len(self.marked_states) + 1):
+            if not i in self.marked_states:
+                state_id = i
+                break
+        
+        self.marked_states[state_id] = {
+            "add": [],
+            "del": {},
+            "set": {}
+        }
+        return state_id
+    
+    def getChanges(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+        """Get the keys and groups that changed their value sice the `state_id`.
+
+        This will return a list of tuples where each tuple defines the element 
+        that changed. The tuple contains the group at index 0 and the key at 
+        index 1.
+
+        This will only contain the keys and when the values changed. If an 
+        element is added, this will not be shown here.
+
+        Raises
+        ------
+        KeyError
+            When the `state_id` does not exist
+        
+        Parameters
+        ----------
+        state_id : int
+            The state id that is returned by `AbstractConfiguration.markState()`
+        
+        Returns
+        -------
+        list of tuples
+            The changed elements where the list contains tuples with the group 
+            at index 0 and the key at index 1
+        """
+        if not state_id in self.marked_states:
+            raise KeyError("The state '{}' does not exist.".format(state_id))
+
+        return list(self.marked_states[state_id]["set"].keys())
+    
+    def getAdditions(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+        """Get the keys and groups were added sice the `state_id`.
+
+        This will return a list of tuples where each tuple defines the element 
+        that was added. The tuple contains the group at index 0 and the key at 
+        index 1.
+
+        Raises
+        ------
+        KeyError
+            When the `state_id` does not exist
+        
+        Parameters
+        ----------
+        state_id : int
+            The state id that is returned by `AbstractConfiguration.markState()`
+        
+        Returns
+        -------
+        list of tuples
+            The added elements where the list contains tuples with the group at
+            index 0 and the key at index 1
+        """
+        if not state_id in self.marked_states:
+            raise KeyError("The state '{}' does not exist.".format(state_id))
+
+        return copy.deepcopy(self.marked_states[state_id]["add"])
+    
+    def getDeletions(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+        """Get the keys and groups were deleted sice the `state_id`.
+
+        This will return a list of tuples where each tuple defines the element 
+        that was deleted. The tuple contains the group at index 0 and the key 
+        at index 1.
+
+        Raises
+        ------
+        KeyError
+            When the `state_id` does not exist
+        
+        Parameters
+        ----------
+        state_id : int
+            The state id that is returned by `AbstractConfiguration.markState()`
+        
+        Returns
+        -------
+        list of tuples
+            The deleted elements where the list contains tuples with the group at
+            index 0 and the key at index 1
+        """
+        if not state_id in self.marked_states:
+            raise KeyError("The state '{}' does not exist.".format(state_id))
+
+        return list(self.marked_states[state_id]["add"].keys())
+    
+    def resetChanges(self, state_id: int) -> None:
+        """Reset all the changes since the `state_id`.
+
+        This will add all the deleted elements, remove all the added elements
+        and rewind all the changed elements.
+
+        Make sure to drop marks after they are not needed anymore. They will 
+        add a lot of values to the internal memory.
+
+        Raises
+        ------
+        KeyError
+            When the `state_id` does not exist
+        
+        Parameters
+        ----------
+        state_id : int
+            The state id that is returned by `AbstractConfiguration.markState()`
+        """
+        if not state_id in self.marked_states:
+            raise KeyError("The state '{}' does not exist.".format(state_id))
+
+        for group, key in self.marked_states[state_id]["add"]:
+            self.removeElement(group, key)
+        
+        for group, key, value in self.marked_states[state_id]["set"].items():
+            self.setValue(group, key, value)
+        
+        for group, key, config in self.marked_states[state_id]["del"].items():
+            if not group in self.configuration:
+                self.configuration[group] = {}
+            
+            self.configuration[group][key] = config
+    
+    def dropStateMark(self, state_id: int) -> None:
+        """Delete all saved changes for the `state_id`.
+
+        The `state_id` can no longer be used. Note that state ids will be
+        re-used, so once a mark is deleted using the `state_id` creates
+        unexcepcted behaviour.
+
+        Raises
+        ------
+        KeyError
+            When the `state_id` does not exist
+        
+        Parameters
+        ----------
+        state_id : int
+            The state id that is returned by `AbstractConfiguration.markState()`
+        """
+        if not state_id in self.marked_states:
+            raise KeyError("The state '{}' does not exist.".format(state_id))
+
+        del self.marked_states[state_id]
     
     def getGroups(self) -> typing.Tuple[str]:
         """Get all groups that exist.
