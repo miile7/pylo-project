@@ -183,6 +183,10 @@ class DMView(AbstractView):
                                "the dialogs values.")
 
         return results[3]
+    
+    def clear(self) -> None:
+        """Clear the current text output."""
+        self._out = ""
 
     def print(self, *values: object, sep: typing.Optional[str]=" ", 
               end: typing.Optional[str]="\n", inset: typing.Optional[str]="") -> None:
@@ -315,7 +319,6 @@ class DMView(AbstractView):
 
         running = self.show_running
         super().showRunning()
-        self._updateRunning()
 
         if not running:
             id_ = int(time.time() * 100)
@@ -333,6 +336,7 @@ class DMView(AbstractView):
             )
             self._progress_dialog_success = None
             self.deleteObservedTags()
+            self._updateRunning()
             # self._createKillDialog()
             self._createRunningDialog()
         

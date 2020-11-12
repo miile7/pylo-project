@@ -119,7 +119,6 @@ class DMCamera(CameraInterface):
                         "bottom": self.ccd_area[2], "left": self.ccd_area[3]}
         }
 
-    
     def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "DMImage":
         """Get the image of the current camera.
 
@@ -188,6 +187,9 @@ class DMCamera(CameraInterface):
             # either the workspace id does not exist or it exists but the user 
             # closed the workspace already
             self._createNewWorkspace(activate_new)
+
+            # reset shown images if a new workspace is created
+            DMImage.shown_images_counter = 0
         elif force_active:
             setvars = {
                 "wsid": self._workspace_id

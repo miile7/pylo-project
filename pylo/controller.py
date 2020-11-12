@@ -634,6 +634,8 @@ class Controller:
             self._measurement_thread.start()
 
             self.view.progress_max = len(self.measurement.steps)
+            self.view.progress = 0
+            self.view.clear()
             
             self._running_thread = ExceptionThread(
                 target=self.view.showRunning, name="running"
