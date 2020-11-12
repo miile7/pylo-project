@@ -1,3 +1,5 @@
+import copy
+import typing
 import random
 import numpy as np
 
@@ -27,11 +29,17 @@ class DummyCamera(CameraInterface):
             The controller
         """
         self.imagesize = (32, 32)
-        self.tags = {}
+        self.tags = {"Camera": "Dummy Camera"}
         self.controller = controller
     
-    def recordImage(self) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
         """Get the image of the current camera.
+
+        Parameters
+        ----------
+        additional_tags : dict, optional
+            Additonal tags to add to the image, note that they will be 
+            overwritten by other tags if there are set tags in this method
 
         Returns
         -------
@@ -42,7 +50,10 @@ class DummyCamera(CameraInterface):
         image_data = np.random.rand(self.imagesize[0], self.imagesize[1])
         image_data = (image_data * 255).astype(dtype=np.uint8)
 
-        image_tags = {}
+        if isinstance(additional_tags, dict):
+            image_tags = copy.deepcopy(additional_tags)
+        else:
+            image_tags = {}
 
         for i in range(random.randint(2, 6)):
             if random.randint(0, 1) == 0:
