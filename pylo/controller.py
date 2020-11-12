@@ -287,8 +287,43 @@ class Controller:
 
         return self.view.askFor(*input_params)
     
-    def _handleLoadCameraAndMicroscopeError(self, kind: str, error: Exception, msg: str, fix: str, **format_args) -> None:
-        """
+    def _handleLoadCameraAndMicroscopeError(self, kind: str, error: typing.Union[Exception, None], msg: str, fix: str, **format_args) -> None:
+        """Show an error for the `Controller._loadCameraAndMicroscope()` 
+        function.
+
+        This will show an error with the view showing the `msg` with the `fix`.
+        The `kind` can either be 'camera' or 'microscope' for defining the used
+        values.
+
+        This will also reset the '<kind>-module' and '<kind>-class' 
+        configuration values in the `CONFIG_SETUP_GROUP` to make sure that they
+        are asked again in the next run.
+
+        The `msg` and the `fix` can contain python string formats. The 
+        supported variables are the following:
+        - 'kind': The `kind` parameter value
+        - 'error': The `error` parameter value
+        - 'config': The `CONFIG_SETUP_GROUP` value
+        - 'path': The path to the location where the `kind` classes should be 
+          placed
+        - 'interface': The interface class name (the full module path) that the
+          class has to implement
+
+        Parameters
+        ----------
+        kind : str
+            Use 'camera' or 'microscope'
+        error : Exception or None
+            The error that was raised
+        msg : str
+            The error message to show, `format()` will be called on this value
+        fix : str
+            The error fix to show, `format()` will be called on this value
+
+        Keyword Arguments
+        -----------------
+        All keyword arguments will be passed to the `str.format()` function 
+        directly.
         """
         if kind == "camera":
             path = os.path.join(os.path.dirname(__file__), "cameras")
@@ -303,7 +338,7 @@ class Controller:
         format_args["error"] = error
         format_args["config"] = CONFIG_SETUP_GROUP
         format_args["path"] = path
-        format_args["interface_name"] = interface_name
+        format_args["interface"] = interface_name
 
         msg = msg.format(**format_args)
         fix = fix.format(**format_args)
@@ -370,6 +405,7 @@ class Controller:
                 args.append((CONFIG_SETUP_GROUP, "camera-module"))
                 args.append((CONFIG_SETUP_GROUP, "camera-class"))
                 load_camera = True
+            
             if not isinstance(self.microscope, MicroscopeInterface):
                 args.append((CONFIG_SETUP_GROUP, "microscope-module"))
                 args.append((CONFIG_SETUP_GROUP, "microscope-class"))
@@ -496,7 +532,7 @@ class Controller:
                         fix = ("Change the '{class_name}' class in the " + 
                                "'{module_name}' module to extend the " + 
                                "{interface} class.")
-                        self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
+                        self._handleLoadCameraAndMicroscopeError(kind, None, msg, 
                                 fix, class_name=class_name, module_name=module_name)
                         
                         error = True
