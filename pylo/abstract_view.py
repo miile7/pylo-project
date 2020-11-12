@@ -161,6 +161,10 @@ class AbstractView:
             The end character to end a line, default: "\n"
         """
         raise NotImplementedError()
+
+    def clear(self) -> None:
+        """Clear the current text output."""
+        raise NotImplementedError()
     
     def showRunning(self) -> None:
         """Show the progress bar and the outputs of the `AbstractView::print()`
