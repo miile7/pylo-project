@@ -171,6 +171,13 @@ if len(non_existing_groups_and_keys) == 0:
           "non_existing_groups_and_keys")
     assert False
 
+state_changes_values = [
+    ("new-added-group-1", "new-added-value-1", "a"),
+    ("new-added-group-1", "new-added-value-2", 1),
+    ("new-added-group-1", "new-added-value-3", False),
+    ("new-added-group-2", "new-added-value-1", -92.89),
+]
+
 class TestConfiguration:
     def setup_method(self):
         # prepare config for autoload
@@ -579,4 +586,84 @@ class TestConfiguration:
             all_keys += self.configuration.getKeys(group)
 
         assert set(keys) == set(all_keys)
+    
+    def test_observe_adding(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
         
+        for group, key, value in state_changes_values:
+            self.configuration.setValue(group, key, value)
+        
+        assert l + len(state_changes_values) == len(self.configuration)
+        assert (list(self.configuration.getAdditions(state_id)) == 
+                [(v[0], v[1]) for v in state_changes_values])
+    
+    def test_observe_adding_options(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
+        
+        for group, key, value in state_changes_values:
+            self.configuration.addConfigurationOption(group, key, value)
+        
+        assert l + len(state_changes_values) == len(self.configuration)
+        assert (list(self.configuration.getAdditions(state_id)) == 
+                [(v[0], v[1]) for v in state_changes_values])
+    
+    def test_observe_changes(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
+
+        changes = {}
+        
+        for group, key, val, args, expected in complete_test_configuration:
+            if "datatype" in args:
+                m = 100
+                for i in range(m):
+                    if args["datatype"] == int:
+                        value = random.randint(0, 100)
+                    elif args["datatype"] == str:
+                        value = chr(random.randint(97, 122))
+                    elif args["datatype"] == bool:
+                        value = (random.randint(0, 1) == 1)
+                    elif args["datatype"] == float:
+                        value = random.random()
+                    elif isinstance(args["datatype"], pylo.OptionDatatype):
+                        value = args["datatype"].options[random.randint(0, len(args["datatype"]))]
+
+                    if value != val:
+                        break
+                
+                if i + 1 == m:
+                    continue
+            else:
+                continue
+            
+            changes[(group, key)] = value
+            self.configuration.setValue(group, key, value)
+        
+        assert (list(self.configuration.getChanges(state_id)) == 
+                [(v[0], v[1]) for v in changes.keys()])
+        
+        for key, value in self.configuration.getChanges(state_id):
+            assert self.configuration.getValue(group, key) == value
+    
+    def test_observe_deletes(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+
+        deletes = []
+        
+        for group, key, val, args, expected in complete_test_configuration:
+            if random.randint(0, 1) == 0:
+                deletes.append((group, key))
+                self.configuration.removeElement(group, key)
+        
+        assert (list(self.configuration.getDeletions(state_id)) == 
+                deletes)

@@ -791,7 +791,7 @@ class AbstractConfiguration:
         if not state_id in self.marked_states:
             raise KeyError("The state '{}' does not exist.".format(state_id))
 
-        return list(self.marked_states[state_id]["add"].keys())
+        return list(self.marked_states[state_id]["del"].keys())
     
     def resetChanges(self, state_id: int) -> None:
         """Reset all the changes since the `state_id`.
