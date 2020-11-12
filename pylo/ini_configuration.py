@@ -56,7 +56,7 @@ class IniConfiguration(AbstractConfiguration):
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(self.file_path)
 
         for section in config.sections():
@@ -86,7 +86,8 @@ class IniConfiguration(AbstractConfiguration):
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 
-        config = configparser.ConfigParser(allow_no_value=True)
+        config = configparser.ConfigParser(allow_no_value=True, 
+                                           interpolation=None)
         
         for group in self.getGroups():
             for key in self.getKeys(group):
