@@ -33,7 +33,7 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
-# for importing with import_lib in Controller::_dynamicCreateClass()
+# for importing with import_lib in Controller::_loadCameraAndMicroscope()
 # add pylo/root, the key is the text to display in the help, the value will be
 # added to the sys.path
 import_dirs = {
@@ -111,109 +111,7 @@ class Controller:
         self.measurement = None
         self._measurement_thread = None
         self._running_thread = None
-    
-    def _dynamicCreateClass(self, class_: type, 
-                            constructor_args: typing.Optional[typing.Sequence]=None) -> object:
-        """Dynamically create the an object of the `class_`.
-
-        Raises
-        ------
-        NameError, TypeError
-            When the `class_` is not a class
-
-        Parameters
-        ----------
-        class_ : str
-            The class to create
-        constructor_args : tuple, optional
-            The arguments for the construtor
         
-        Returns
-        -------
-            The object of the class in the module
-        """
-        
-        if isinstance(constructor_args, typing.Sequence):
-            return class_(*constructor_args)
-        else:
-            return class_()
-
-    def _dynamicGetClasses(self, *class_config: typing.Union[typing.Tuple[str, str], 
-                                                    typing.Tuple[str, str, typing.Sequence], 
-                                                    typing.Tuple[str, str, typing.Sequence, typing.Sequence]]) -> type:
-        """Dynamically get the class of the given module and class where the 
-        module and class are loaded form the config.
-
-        If the config does not contain the keys or there are not the values 
-        given, the module and class are asked from the user.
-
-        Raises
-        ------
-        ModuleNotFoundError
-            When the module name saved in `config_key_module` is not a valid 
-            module
-        AttributeError
-            When the class name saved in `class_options` does not exist in the 
-            given module
-        TypeError
-            When the class name saved in `class_options` exists in the module 
-            but is not a class
-
-        Parameters
-        ----------
-        class_config : tuple
-            The load class configuration with the 
-            - index 0: key name in the configuration of the module to load from
-            - index 1: key name in the configuration of the class to load
-            - index 2 (optional): The options of the modules to show to the 
-              user if the key is not given
-            - index 3 (optional): The options of the classes to show to the 
-              user if the key is not given
-        
-        Returns
-        -------
-        list
-            The classes of each of the modules
-        """
-
-        args = []
-        for module_key, class_key, *options in class_config:
-            module_arg = [CONFIG_SETUP_GROUP, module_key]
-            if len(options) > 0 and isinstance(options[0], typing.Sequence):
-                module_arg.append(list(options[0]))
-            module_arg = tuple(module_arg)
-
-            class_arg = [CONFIG_SETUP_GROUP, class_key]
-            if len(options) > 1 and isinstance(options[1], typing.Sequence):
-                class_arg.append(list(options[1]))
-            class_arg = tuple(class_arg)
-            
-            args.append(module_arg)
-            args.append(class_arg)
-
-        names = self.getConfigurationValuesOrAsk(*args)
-
-        module_names = names[::2]
-        class_names = names[1::2]
-        classes = []
-        extensions = (".py", ".py3", ".pyd", ".pyc", ".pyo", ".pyw", ".pyx",
-                    ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
-        
-        for module_name, class_name in zip(module_names, class_names):
-            for ext in extensions:
-                if module_name.endswith(ext):
-                    module_name = module_name[:-1*len(ext)]
-
-            module = importlib.import_module(module_name, "pylo")
-            class_ = getattr(module, class_name)
-
-            if not isinstance(class_, type):
-                raise TypeError("The class '{}' is not a class.".format(class_))
-                
-            classes.append(class_)
-
-        return classes
-    
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
                                     fallback_default: typing.Optional[bool]=False) -> typing.Tuple[typing.Union[str, int, float, bool, None]]:
@@ -389,6 +287,242 @@ class Controller:
 
         return self.view.askFor(*input_params)
     
+    def _handleLoadCameraAndMicroscopeError(self, kind: str, error: Exception, msg: str, fix: str, **format_args) -> None:
+        """
+        """
+        if kind == "camera":
+            path = os.path.join(os.path.dirname(__file__), "cameras")
+            keys = ("camera-module", "camera-class")
+            interface_name = "pylo.cameras.CameraInterface"
+        elif kind == "microscope":
+            path = os.path.join(os.path.dirname(__file__), "microscopes")
+            keys = ("microscope-module", "microscope-class")
+            interface_name = "pylo.microscopes.MicroscopeInterface"
+        
+        format_args["kind"] = kind
+        format_args["error"] = error
+        format_args["config"] = CONFIG_SETUP_GROUP
+        format_args["path"] = path
+        format_args["interface_name"] = interface_name
+
+        msg = msg.format(**format_args)
+        fix = fix.format(**format_args)
+
+        self.view.showError(msg, fix)
+
+        for key in keys:
+            self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
+            
+    def _loadCameraAndMicroscope(self) -> bool:
+        """Load the camera and/or the microscope from the settings.
+
+        This checks if the microscope and/or the camera have to be loaded. If 
+        only one is not set, it will load only this one.
+        
+        For loading it uses the 'microscope-module', 'microscope-class', 
+        'camera-module' and 'camera-class' settings in the `CONFIG_SETUP_GROUP`
+        configuration group. Those define the file and the class name. And 
+        those classes will be loaded and initialized.
+
+        If one or more of the keys are not given in the configuration, this 
+        will ask for the values. If the camera and the microscope are not set
+        and both are missing keys in the configuration, only one dialog will be
+        shown. That is the reason for loading both with one method.
+
+        If there is an error when loading a class, the error will be displayed
+        to the user and the loading will start over again (reloading only the 
+        part that did not work). 
+
+        If the user keeps setting wrong values (or there is an internal error)
+        there is a security counter. After `MAX_LOOP_COUNT` runs the function
+        will stop and return False. It will return True if the load was 
+        successfully.
+
+        If the class(es) have been loaded successfully (so if this method 
+        returned true), the `Controller.camera` and the `Controller.microscope`
+        are valid objects. If not, the not loadable one will be set to None.
+
+        The camera and the controllers configuration options will be asked for 
+        if they are required and not set.
+
+        Returns
+        -------
+        bool
+            Whether the camera and/or the microscope were loaded successfully
+        """
+        # prevent infinite loop
+        security_counter = 0
+        # python extensions to load, remove the extension and let the importer
+        # handle that
+        extensions = (".py", ".py3", ".pyd", ".pyc", ".pyo", ".pyw", ".pyx",
+                    ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
+
+        load_camera = False
+        load_microscope = False
+        while ((not isinstance(self.microscope, MicroscopeInterface) or
+                not isinstance(self.camera, CameraInterface)) and
+                security_counter < MAX_LOOP_COUNT):
+            
+            security_counter += 1
+
+            args = []
+            if not isinstance(self.camera, CameraInterface):
+                args.append((CONFIG_SETUP_GROUP, "camera-module"))
+                args.append((CONFIG_SETUP_GROUP, "camera-class"))
+                load_camera = True
+            if not isinstance(self.microscope, MicroscopeInterface):
+                args.append((CONFIG_SETUP_GROUP, "microscope-module"))
+                args.append((CONFIG_SETUP_GROUP, "microscope-class"))
+                load_microscope = True
+
+            names = list(self.getConfigurationValuesOrAsk(*args))
+            
+            # remove file extensions of module name
+            for ext in extensions:
+                for i in range(0, len(names), 2):
+                    if names[i].endswith(ext):
+                        names[i] = names[i][:-1*len(ext)]
+
+            load_dict = {}
+            if load_camera:
+                # set camera module and class name, make sure to use a list
+                load_dict["camera"] = [names[0], names[1]]
+            
+            if load_microscope and load_camera:
+                # set camera module and class name, make sure to use a list
+                load_dict["microscope"] = [names[2], names[3]]
+            elif load_microscope:
+                # set camera module and class name, make sure to use a list
+                load_dict["microscope"] = [names[0], names[1]]
+
+            loading_error = False
+            for kind, (module_name, class_name) in load_dict.items():
+                msg = ""
+                fix = ""
+                config_keys = tuple()
+                error = False
+
+                try:
+                    module = importlib.import_module(module_name, "pylo")
+                except Exception as e:
+                    msg = "The {kind} module could not be imported: {error}"
+                    fix = ("Change the '{kind}-module' in the '{config}' " + 
+                           "group in the configuration or type in a valid " + 
+                           "value. The value can either be a python file or " + 
+                           "a python module name. In case of a file, place " + 
+                           "that file in the current directory where this " + 
+                           "script is executed or in the '{kind}s' directory.")
+                    self._handleLoadCameraAndMicroscopeError(kind, e, msg, fix)
+                    error = True
+
+                if not error:
+                    try:
+                        class_ = getattr(module, class_name)
+                    except Exception as e:
+                        msg = ("The {kind} module does not define the given " + 
+                               "class {class_name}: {error}")
+                        fix = ("Change the {class_name}-class in the " + 
+                               "'{config}' group in the configuration or " + 
+                               "type in a valid value. The value has to be " + 
+                               "the name of the class that defines the " + 
+                               "{kind}. The {class_name} has to extend the " + 
+                               "{interface} class.")
+                        self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
+                                fix, class_name=class_name)
+                        error = True
+
+                if not error and not loading_error:
+                    # define the configuration options if there are some
+                    if (hasattr(class_, "defineConfigurationOptions") and 
+                        callable(class_.defineConfigurationOptions)):
+                        config_keys_before = list(self.configuration.groupsAndKeys())
+
+                        class_.defineConfigurationOptions(self.configuration)
+
+                        config_keys_after = list(self.configuration.groupsAndKeys())
+                    
+                        # save the key this class sets, if the class cannot be 
+                        # loaded, remove those keys again
+                        # taken from https://stackoverflow.com/a/3462202/5934316
+                        s = set(config_keys_before)
+                        config_keys = [x for x in config_keys_after if x not in s]
+                
+                if error:
+                    # do not break here, check all modules and classes first if 
+                    # they are loadable, if not the user only has one dialog 
+                    # to type in everything again, not multiple dialogs for 
+                    # every missing value
+                    loading_error = True
+                elif not loading_error:
+                    # save the added keys to remove them on later errors if 
+                    # needed
+                    load_dict[kind].append(config_keys)
+                    load_dict[kind].append(class_)
+
+            if loading_error:
+                # there was at least one object that could not be loaded, 
+                # before creating the objects re-ask for this error object
+                continue
+
+            # ask all non-existing but required configuration options 
+            # before initializing the microscope and/or camera but ask for 
+            # both objects together to prevent annoying the user by too many 
+            # dialogs
+            self.askIfNotPresentConfigurationOptions()
+            
+            for kind, (module_name, class_name, config_keys, class_) in load_dict.items():
+                error = False
+                try:
+                    obj = class_(self)
+                except Exception as e:
+                    msg = ("The {kind} module defines the {class_name} " + 
+                           "attribute but an object cannot be created from " + 
+                           "this attribute: {error}")
+                    fix = ("Change the '{class_name}' class in the " + 
+                           "'{module_name}' module. It needs to be a class " + 
+                           "extending the {interface} class.")
+                    self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
+                            fix, class_name=class_name, module_name=module_name)
+                    
+                    error = True
+                
+                if not error:
+                    if ((kind == "camera" and not isinstance(obj, CameraInterface)) or
+                        (kind == "microscope" and not isinstance(obj, MicroscopeInterface))):
+                        msg = ("The {kind} object is not inheriting from " + 
+                               "the {interface} class which is required. " + 
+                               "Therefore the {class_name} class cannot be " + 
+                               "used as a {kind}.")
+                        fix = ("Change the '{class_name}' class in the " + 
+                               "'{module_name}' module to extend the " + 
+                               "{interface} class.")
+                        self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
+                                fix, class_name=class_name, module_name=module_name)
+                        
+                        error = True
+                
+                if not error:
+                    if kind == "camera":
+                        self.camera = obj
+                    elif kind == "microscope":
+                        self.microscope = obj
+                else:
+                    for key in config_keys:
+                        self.configuration.removeElement(key)
+        
+        # show an error that the max loop count is reached and stop the
+        # execution
+        if security_counter + 1 >= MAX_LOOP_COUNT:
+            self.view.showError(("The program is probably trapped in an " + 
+                                "infinite loop when trying to get the " + 
+                                "camera. The execution will be stopped now " + 
+                                "after {} iterations.").format(security_counter),
+                                "This is a bigger issue. Look in the code " + 
+                                "and debug the 'pylo/controller.py' file.")
+            return False
+        else:
+            return True
+
     def startProgramLoop(self) -> None:
         """Start the program loop.
         
@@ -403,161 +537,24 @@ class Controller:
 
         try:
             before_init()
-
-            # the default microscope options
-            default_module_path = os.path.join(os.path.dirname(__file__), 
-                                            "microscopes")
-            modules = filter(lambda x: (x.endswith(".py") and
-                                        x != "microscope_interface.py" and 
-                                        x != "__init__.py"), 
-                            os.listdir(default_module_path))
-
-            # prevent infinite loop
-            camera_class = None
-            microscope_class = None
-            security_counter = 0
-            load_microscope = False
-            load_camera = False
-            # self.camera = None
-            # self.microscope = None
-            while ((not isinstance(self.microscope, MicroscopeInterface) or
-                    not isinstance(self.camera, CameraInterface)) and
-                   security_counter < MAX_LOOP_COUNT):
-                security_counter += 1
-                try:
-                    args = []
-
-                    if not isinstance(self.microscope, MicroscopeInterface):
-                        args.append(("microscope-module", "microscope-class", modules))
-                        load_microscope = True
-                    if not isinstance(self.camera, CameraInterface):
-                        args.append(("camera-module", "camera-class"))
-                        load_camera = True
-
-                    # get the microscope and the camera from the config or 
-                    # from the user
-                    classes = self._dynamicGetClasses(*args)
-
-                    if load_microscope and load_camera:
-                        microscope_class = classes[0]
-                        camera_class = classes[1]
-                    elif load_microscope:
-                        microscope_class = classes[0]
-                    elif load_camera:
-                        camera_class = classes[0]
-                    
-                except (ModuleNotFoundError, AttributeError, NameError, 
-                        TypeError, ImportError) as e:
-                    if isinstance(e, (ModuleNotFoundError, ImportError)):
-                        msg = ("The microscope or the camera module could " + 
-                                "not be found: {}")
-                        fix = ("Change the 'microscope-module' or the " + 
-                               "'camera-module' in the '{}' group in the " + 
-                               "configuration or type in a valid value. The " + 
-                               "value can either be a python file or a " + 
-                               "python module. In case of a file, place " + 
-                               "that file in the current directory where " + 
-                               "this script is executed or in the " + 
-                               "'microscopes' or 'cameras' directory in the " + 
-                               "{} directory ({}).").format(
-                                   CONFIG_SETUP_GROUP, 
-                                    os.path.basename(os.path.dirname(__file__)),
-                                    os.path.dirname(__file__)
-                                )
-                        keys = ("microscope-module", "camera-module")
-                    else:
-                        msg = ("The microscope or the camera module could " + 
-                               "be loaded but the given class either does " + 
-                               "not exist or is not a class: {}")
-                        fix = ("Change the 'microscope-class' or the " + 
-                               "'camera-class' in the '{}' group in the " + 
-                               "configuration or type in a valid value. The " + 
-                               "value has to be the name of the class that " +
-                               "defines the microscope or the camera. The " + 
-                               "microscope class has to extend the class " + 
-                               "'pylo.microscopes.MicroscopeInterface', the " + 
-                               "camera the 'pylo.cameras.CameraInterface'.").format(
-                                   CONFIG_SETUP_GROUP
-                                )
-                        keys = ("microscope-class", "camera-class")
-                    self.view.showError(msg.format(e), fix)
-                    microscope_class = None
-                    camera_class = None
-                    # remove the saved value, this either does not exist or is
-                    # wrong, in both cases the user will be asked in the next run
-                    for key in keys:
-                        self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
-                
-                # define the configuration options if there are some
-                if (microscope_class is not None and 
-                    hasattr(microscope_class, "defineConfigurationOptions")):
-                    config_keys_before = list(self.configuration.groupsAndKeys())
-
-                    microscope_class.defineConfigurationOptions(
-                        self.configuration
-                    )
-
-                    config_keys_after = list(self.configuration.groupsAndKeys())
-                
-                    # taken from https://stackoverflow.com/a/3462202/5934316
-                    s = set(config_keys_before)
-                    microscope_keys = [x for x in config_keys_after if x not in s]
-                else:
-                    microscope_keys = []
-                
-                if (camera_class is not None and
-                    hasattr(camera_class, "defineConfigurationOptions")):
-                    config_keys_before = list(self.configuration.groupsAndKeys())
-
-                    camera_class.defineConfigurationOptions(
-                        self.configuration
-                    )
-                    
-                    config_keys_after = list(self.configuration.groupsAndKeys())
-                
-                    # taken from https://stackoverflow.com/a/3462202/5934316
-                    s = set(config_keys_before)
-                    camera_keys = [x for x in config_keys_after if x not in s]
-                else:
-                    camera_keys = []
-
-                # ask all non-existing but required configuration options
-                self.askIfNotPresentConfigurationOptions()
-                
-                if microscope_class is not None:
-                    try:
-                        self.microscope = self._dynamicCreateClass(
-                            microscope_class, (self, )
-                        )
-                    except Exception as e:
-                        self.view.showError(e)
-                        self.microscope = None
-
-                        for group, key in microscope_keys:
-                            self.configuration.removeElement(group, key)
-                
-                if camera_class is not None:
-                    try:
-                        self.camera = self._dynamicCreateClass(
-                            camera_class, (self, )
-                        )
-                    except Exception as e:
-                        self.view.showError(e)
-                        self.camera = None
-
-                        for group, key in camera_keys:
-                            self.configuration.removeElement(group, key)
-
-            # show an error that the max loop count is reached and stop the
-            # execution
-            if security_counter + 1 >= MAX_LOOP_COUNT:
-                self.view.showError(("The program is probably trapped in an " + 
-                                    "infinite loop when trying to get the " + 
-                                    "camera. The execution will be stopped now " + 
-                                    "after {} iterations.").format(security_counter),
-                                    "This is a bigger issue. Look in the code " + 
-                                    "and debug the 'pylo/controller.py' file.")
-                return
+            
+            if not isinstance(self.microscope, MicroscopeInterface):
+                load_microscope = True
+            else:
+                load_microscope = False
+            
+            if not isinstance(self.camera, CameraInterface):
+                load_camera = True
+            else:
+                load_camera = False
+            
+            if load_microscope or load_camera:
+                # the function will check itself if it has to load something,
+                # this has to be one function so the user will get asked only
+                # once for the microscope AND the camera if both are missing,
+                # if only one is missing, this function will ask for the 
+                # missing one only
+                self._loadCameraAndMicroscope()
 
             if not load_microscope:
                 # microscope is set from outside, load configuration options
@@ -571,7 +568,7 @@ class Controller:
                     callable(self.camera.defineConfigurationOptions)):
                     self.camera.defineConfigurationOptions(self.configuration)
 
-            # ask all non-existing but required configuration options
+            # ask all non-existing but required configuration values
             self.askIfNotPresentConfigurationOptions()
             
             self.measurement = None
@@ -833,12 +830,12 @@ class Controller:
         # create a human readable list separated by comma and the last one
         # with an 'or', parameter is the list
         humanlist = lambda x: ", ".join(x[:-1]) + " or " + x[-1]
-        # the path names where the Controller::_dynamicCreateClass() function 
-        # looks in
+        # the path names where the Controller::_loadCameraAndMicroscope() 
+        # function looks in
         path_names = humanlist(list(map(str, import_dir_keys)))
         # the root path to make other paths relative to this
         root = os.path.realpath(os.path.dirname(__file__))
-        # the paths the Controller::_dynamicCreateClass() function looks in
+        # the paths the Controller::_loadCameraAndMicroscope() function looks in
         paths = list(map(lambda p: str(os.path.realpath(p)).replace(root, ""), 
                          import_dir_values))
         # a callback to create the file paths that are looked in, parameter is 
