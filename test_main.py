@@ -11,4 +11,9 @@ configuration.setValue("setup", "microscope-class", "PyJEMTestMicroscope")
 configuration.setValue("setup", "camera-module", "pylo.cameras")
 configuration.setValue("setup", "camera-class", "DummyCamera")
 
+# change file extension
+configuration.setValue("measurement", "save-file-format", "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.tif")
+# causes a bug when missing, this should be fixed later
+configuration.setValue("pyjem-microscope", "magnetic-field-unit", 1)
+
 pylo.execute(view, configuration)
