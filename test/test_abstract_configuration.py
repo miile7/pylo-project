@@ -542,7 +542,7 @@ class TestConfiguration:
         assert set(visited_keys) == set(keys)
     
     def test_get_group_key_pairs(self):
-        """Test if the getGroupsAndKeys() is correct."""
+        """Test if the groupsAndKeys() is correct."""
 
         # all values plus overwrite groups
         groups = [x[0] for x in complete_test_configuration] + ["overwrite-group"]
@@ -550,7 +550,7 @@ class TestConfiguration:
         
         visited_groups = []
         visited_keys = []
-        for group, key in self.configuration.getGroupsAndKeys():
+        for group, key in self.configuration.groupsAndKeys():
             assert self.configuration._keyExists(group, key)
             
             visited_groups.append(group)

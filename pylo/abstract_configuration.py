@@ -677,24 +677,21 @@ class AbstractConfiguration:
         
         return tuple(self.configuration[group].keys())
     
-    def getGroupsAndKeys(self) -> typing.List[typing.Tuple[str, str]]:
-        """Get all group-key-pairs.
+    def groupsAndKeys(self) -> typing.Generator[typing.Tuple[str, str], None, None]:
+        """Get all group-key-pairs to iterate over.
 
         Returns
         -------
-        list of tuples
+        generator of tuples
             A list of tuples where each tuple contains the group at index 0 and 
             the key at index 1
         """
 
-        group_key_pairs = []
         for group in self.getGroups():
             for key in self.getKeys(group):
-                group_key_pairs.append((group, key))
-        
-        return group_key_pairs
+                yield (group, key)
     
-    def items(self) -> typing.Iterator[typing.Tuple[str, str, Savable, type, Savable, bool, str, bool]]:
+    def items(self) -> typing.Generator[typing.Tuple[str, str, Savable, type, Savable, bool, str, bool], None, None]:
         """Get the items to iterate over.
 
         The returned tuple contains the following values in the following order:

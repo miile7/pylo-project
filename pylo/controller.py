@@ -323,7 +323,7 @@ class Controller:
 
         input_params = []
 
-        for group, key in self.configuration.getGroupsAndKeys():
+        for group, key in self.configuration.groupsAndKeys():
             if self.configuration.getAskIfNotPresent(group, key):
                 try:
                     self.configuration.getValue(
@@ -491,13 +491,13 @@ class Controller:
                 # define the configuration options if there are some
                 if (microscope_class is not None and 
                     hasattr(microscope_class, "defineConfigurationOptions")):
-                    config_keys_before = self.configuration.getGroupsAndKeys()
+                    config_keys_before = list(self.configuration.groupsAndKeys())
 
                     microscope_class.defineConfigurationOptions(
                         self.configuration
                     )
 
-                    config_keys_after = self.configuration.getGroupsAndKeys()
+                    config_keys_after = list(self.configuration.groupsAndKeys())
                 
                     # taken from https://stackoverflow.com/a/3462202/5934316
                     s = set(config_keys_before)
@@ -507,13 +507,13 @@ class Controller:
                 
                 if (camera_class is not None and
                     hasattr(camera_class, "defineConfigurationOptions")):
-                    config_keys_before = self.configuration.getGroupsAndKeys()
+                    config_keys_before = list(self.configuration.groupsAndKeys())
 
                     camera_class.defineConfigurationOptions(
                         self.configuration
                     )
                     
-                    config_keys_after = self.configuration.getGroupsAndKeys()
+                    config_keys_after = list(self.configuration.groupsAndKeys())
                 
                     # taken from https://stackoverflow.com/a/3462202/5934316
                     s = set(config_keys_before)
