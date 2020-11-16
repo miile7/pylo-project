@@ -245,7 +245,7 @@ class AbstractConfiguration:
         for k, v in kwargs.items():
             if k not in supported_args:
                 raise KeyError(("The key '{}' is not supported as a keyword " + 
-                                "argument").format(k))
+                                "argument.").format(k))
             elif (supported_args[k] != typing.Any and 
                   not isinstance(v, supported_args[k])):
                     raise TypeError(("The key '{}' in the kwargs has to be of " + 
@@ -285,10 +285,8 @@ class AbstractConfiguration:
         elif fallback_default and self.defaultExists(group, key):
             return self.configuration[group][key]["default_value"]
         else:
-            raise KeyError(
-                ("The value for the key {} within the group {} has not been " + 
-                "found.").format(key, group)
-            )
+            raise KeyError(("The value for the key '{}' within the group " + 
+                            "'{}' has not been found.").format(key, group))
     
     def _getType(self, group: str, key: str) -> type:
         """Get the type for the group and the key.
@@ -313,15 +311,12 @@ class AbstractConfiguration:
         """
 
         if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}, therefore it " + 
-                 "cannot be overwritten.").format(key, group)
-            )
+            raise KeyError(("The key '{}' does not exist within the group " + 
+                            "'{}' so it cannot be overwritten.").format(key, group))
         elif ("datatype" not in self.configuration[group][key] or
               self.configuration[group][key]["datatype"] == None):
-            raise KeyError(
-                "There is no type for the key {} with the group {}.".format(key, group)
-            )
+            raise KeyError(("There is no datatype for the key '{}' within " + 
+                            "the group '{}'.").format(key, group))
         else:
             return self.configuration[group][key]["datatype"]
     
@@ -400,15 +395,11 @@ class AbstractConfiguration:
         """
 
         if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}.").format(key, 
-                                                                      group)
-            )
+            raise KeyError(("The key '{}' does not exist within the group " + 
+                            "'{}'.").format(key, group))
         elif index not in self.configuration[group][key]:
-            raise KeyError(
-                ("There is no index '{}' for the key {} in the " + 
-                 "group {}.").format(index, key, group)
-            )
+            raise KeyError(("There is no index '{}' for the key {} in the " + 
+                            "group {}.").format(index, key, group))
         else:
             return self.configuration[group][key][index]
     
@@ -563,16 +554,13 @@ class AbstractConfiguration:
         """
 
         if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}, therefore it " + 
-                 "cannot be overwritten.").format(key, group)
-            )
+            raise KeyError(("The key '{}' does not exist within the group " + 
+                            "'{}' so it cannot be overwritten.").format(key, group))
         elif not self.valueExists(group, key):
-            raise KeyError(
-                ("There is no value for the key {} with the group {}, " + 
-                 "therefore cannot be overwritten temporarily. Set an initial " + 
-                 "value before overwriting temporarily.").format(key, group)
-            )
+            raise KeyError(("There is no value for the key '{}' within the " + 
+                            "group '{}Ä, therefore cannot be overwritten " + 
+                            "temporarily. Set an initial value before " + 
+                            "overwriting temporarily.").format(key, group))
         
         self.configuration[group][key]["value"].append(value)
     
@@ -598,16 +586,11 @@ class AbstractConfiguration:
         """
 
         if not self._keyExists(group, key):
-            raise KeyError(
-                ("The key {} does not exist in the group {}, therefore it " + 
-                 "cannot be overwritten.").format(key, group)
-            )
+            raise KeyError(("The key '{}' does not exist within the group " + 
+                            "'{}'.").format(key, group))
         elif not self.valueExists(group, key):
-            raise KeyError(
-                ("There is no value for the key {} with the group {}, " + 
-                 "therefore cannot be overwritten temporarily. Set an initial " + 
-                 "value before overwriting temporarily.").format(key, group)
-            )
+            raise KeyError(("There is no value for the key '{}' with the "+ 
+                            "group '{}', therefore cannot be resetted.").format(key, group))
 
         if count == 0 or len(self.configuration[group][key]) <= 1:
             return
@@ -1057,7 +1040,8 @@ class AbstractConfiguration:
             The Key
         """
         if not isinstance(key, tuple) or len(key) != 2:
-            raise TypeError("Only tuples of the form 'group, key' are supported.")
+            raise TypeError("Only tuples of the form ('group', 'key') are " + 
+                            "supported.")
         
         self.removeElement(key[0], key[1])
     
@@ -1072,7 +1056,8 @@ class AbstractConfiguration:
         index 0 and 1 in the `key`.
         """
         if not isinstance(key, tuple) or len(key) != 2:
-            raise TypeError("Only tuples of the form 'group, key' are supported.")
+            raise TypeError("Only tuples of the form ('group', 'key') are " + 
+                            "supported.")
         
         return self._keyExists(key[0], key[1])
     
