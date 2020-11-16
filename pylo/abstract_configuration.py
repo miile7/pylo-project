@@ -158,7 +158,7 @@ class AbstractConfiguration:
 
         if len(self.marked_states) > 0:
             for state_id in self.marked_states:
-                self.marked_states[state_id]["set"][(group, key)] = self.getValue(group, key)
+                self.marked_states[state_id]["set"][(group, key)] = value
 
         self.configuration[group][key]["value"] = [value]
     
