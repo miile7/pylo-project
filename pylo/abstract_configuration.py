@@ -665,10 +665,12 @@ class AbstractConfiguration:
                         # do not save if the value was added and then deleted
                         # in this state mark
                         self.marked_states[state_id]["del"][(group, key)] = copy.deepcopy(self.configuration[group][key])
+                    else:
+                        self.marked_states[state_id]["add"].remove((group, key))
 
             del self.configuration[group][key]
 
-            if len(self.configuration[group]):
+            if len(self.configuration[group]) == 0:
                 # group is empty, delete it too
                 del self.configuration[group]
     
