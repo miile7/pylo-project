@@ -848,10 +848,13 @@ class AbstractConfiguration:
                         changes.add((group, key))
         
         # return set(changes.keys())
+        # print("AbstractConfiguration.getChanges():", changes)
         return changes
     
     def getAdditions(self, state_id: int, 
-                     compare_values: typing.Optional[bool]=True) -> typing.Set[typing.Tuple[str, str]]:
+                     compare_values: typing.Optional[bool]=True,
+                     use_default: typing.Optional[bool]=False,
+                     compare_as_str: typing.Optional[bool]=True) -> typing.Set[typing.Tuple[str, str]]:
         """Get the keys and groups were added sice the `state_id`.
 
         This will return a set of tuples where each tuple defines the element 
@@ -949,6 +952,17 @@ class AbstractConfiguration:
         compare_values : bool, optional
             The compare mode, if True values will be compared, if False keys 
             will be compared
+        use_default : bool, optional
+            If the value has a default and was not set before, the value will 
+            only be returned if it is set now and different from the default,
+            ignored if `compare_values` is False
+        compare_as_str : bool, optional
+            Whether to also compare the values and the defaults as strings, a 
+            change needs then that the values and their string representation 
+            need to be  different, this is often useful sice the datatypes are 
+            defined in the classes and the values are loaded before, this means 
+            that they will have different types, ignored if `use_default` is 
+            False, default: True
         
         Returns
         -------
@@ -972,11 +986,26 @@ class AbstractConfiguration:
                         # key did not exist before but exists now
                         additions.add((group, key))
                     elif (compare_values and 
-                        #   self._keyExists(group, key, self.marked_states[state_id]) and
                           not self._valueExists(group, key, self.marked_states[state_id]) and
                           self.valueExists(group, key)):
+                        
+                        if use_default and self.defaultExists(group, key):
+                            # check the default value, if there is a default 
+                            # and the value was not set, then this default was
+                            # (eventually) returned so the value did not really
+                            # change
+                            old_val = self.getDefault(group, key)
+                            new_val = self._getValue(group, key, True)
+
+                            if (old_val == new_val or 
+                                (compare_as_str and str(old_val) == str(new_val))):
+                                # old value (=default) is the same as the new 
+                                # value, do not treat as an addition
+                                continue
                     
                         additions.add((group, key))
+        
+        # print("AbstractConfiguration.getAdditions():", additions)
 
         return additions
     
