@@ -548,7 +548,11 @@ class CLIView(AbstractView):
                 if group in config_dict and key in config_dict[group]:
                     value = config_dict[group][key]
                 else:
-                    value = configuration.getValue(group, key, fallback_default=True)
+                    try:
+                        value = configuration.getValue(group, key, 
+                                                       fallback_default=True)
+                    except KeyError:
+                        value = ""
                 
                 try:
                     datatype = configuration.getDatatype(group, key)
