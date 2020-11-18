@@ -1046,9 +1046,15 @@ class DMViewDialog : UIFrame{
         string description = "Create a new measurememt series to measure probes in the lorentz mode ";
         description += "(low mag mode). Select the start properties. The series defines over which ";
         description += "variables the series will be done. On each series point there can be ";
-        description += "another series."
-        TagGroup description_label = DLGCreateLabel(description, 110);
-        description_label.DLGHeight(3);
+        description += "another series.\n"
+        // description += "\n";
+        description += "The 'start' value of the 'series' definition will always overwrite the ";
+        description += "'start' definition. The 'step-width' will be added as many times to the ";
+        description += "series 'start' value as it is less or equal to the 'end'. This means that ";
+        description += "the end value will not be reached necessarily (when 'step-width' is not a ";
+        description += "divider of 'end'-'start').";
+        TagGroup description_label = DLGCreateLabel(description, 135);
+        description_label.DLGHeight(5);
         description_label.DLGAnchor("West");
         description_line.DLGAddElement(description_label);
 
@@ -1063,7 +1069,7 @@ class DMViewDialog : UIFrame{
         // wrapper.DLGAddElement(error_headline);
         TagGroup error_box = DLGCreateBox("Errors");
 
-        error_display = DLGCreateLabel("Currently no errors", 130);
+        error_display = DLGCreateLabel("Currently no errors", 135);
         error_display.DLGHeight(2);
         error_display.DLGExpand("X");
         error_display.DLGFill("X");
@@ -1253,6 +1259,15 @@ class DMViewDialog : UIFrame{
         value_definition.TagGroupGetTagAsString("datatype", type);
         value_definition.TagGroupGetTagAsString("name", name);
 
+        number restart_required = 0;
+        if(value_definition.TagGroupDoesTagExist("restart_required")){
+            value_definition.TagGroupGetTagAsBoolean("restart_required", restart_required);
+        }
+
+        if(restart_required){
+            name += "*"
+        }
+
         TagGroup value_wrapper = DLGCreateGroup();
 
         TagGroup line = DLGCreateGroup();
@@ -1361,6 +1376,9 @@ class DMViewDialog : UIFrame{
             line.DLGAddElement(input);
         }
 
+        if(restart_required){
+            description += " (Changing restarts program)"
+        }
         TagGroup description_label = DLGCreateLabel(description, cw3);
         description_label.DLGHeight(ceil(description.len() / 55));
         description_label.DLGAnchor("East");
@@ -1512,6 +1530,12 @@ class DMViewDialog : UIFrame{
         wrapper.DLGAddElement(inputs_wrapper);
         // wrapper.DLGExpand("X");
         // wrapper.DLGFill("X");
+
+        TagGroup restart_required_text = DLGCreateLabel("*Changing this value will restart the program.");
+        restart_required_text.DLGAnchor("West");
+        restart_required_text.DLGExpand("X");
+        restart_required_text.DLGFill("X");
+        wrapper.DLGAddElement(restart_required_text);
 
         return wrapper;
     }

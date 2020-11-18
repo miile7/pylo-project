@@ -753,5 +753,6 @@ class PyJEMMicroscope(MicroscopeInterface):
             datatype=str, 
             description=("The unit the magnetic field is measured in if the " + 
                 "calibration factor is given."), 
-            restart_required=True
+            restart_required=True,
+            default_value=""
         )

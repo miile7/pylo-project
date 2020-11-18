@@ -507,11 +507,8 @@ class CLIView(AbstractView):
             value
         """
         values = self._showSettingsLoop(configuration, keys)
-
-        if set_in_config:
-            for group in values:
-                for key in values[group]:
-                    configuration.setValue(group, key, values[group][key])
+        
+        configuration.loadFromMapping(values)
         
         return values
 
@@ -546,28 +543,51 @@ class CLIView(AbstractView):
         
         setting_inputs = []
 
-        for group, key, value, datatype, default, ask, description, restart in configuration.items():
+        for group, key in configuration.groupsAndKeys():
             if not isinstance(keys, (list, tuple)) or (group, key) in keys:
                 if group in config_dict and key in config_dict[group]:
-                    val = config_dict[group][key]
-                elif value is not None:
-                    val = value
+                    value = config_dict[group][key]
                 else:
-                    val = default
+                    try:
+                        value = configuration.getValue(group, key, 
+                                                       fallback_default=True)
+                    except KeyError:
+                        value = ""
+                
+                try:
+                    datatype = configuration.getDatatype(group, key)
+                except KeyError:
+                    datatype = str
+                try:
+                    description = configuration.getDescription(group, key)
+                except KeyError:
+                    description = None
+                try:
+                    restart_required = configuration.getRestartRequired(group, key)
+                except KeyError:
+                    restart_required = False
+                
+                if restart_required:
+                    restart_required_msg = ("Changing this value will restart " + 
+                                            "the program!")
+                    if not isinstance(description, str):
+                        description = restart_required_msg
+                    else:
+                        description += " " + restart_required_msg
 
                 setting_inputs.append({
                     "label": "{} ({})".format(key, group),
                     # escape minus
                     "id": "{}-{}".format(group.replace("-", "--"), key.replace("-", "--")),
                     "datatype": datatype,
-                    "value": val,
+                    "value": value,
                     "description": description
                 })
             
                 if not group in config_dict:
                     config_dict[group] = {}
                 
-                config_dict[group][key] = val
+                config_dict[group][key] = value
 
         values, command, _ = self._printSelect(
             "Change settings.",
