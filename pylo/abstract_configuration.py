@@ -847,6 +847,85 @@ class AbstractConfiguration:
         that was added. The tuple contains the group at index 0 and the key at 
         index 1.
 
+        When setting `compare_values` to True, the returned set will contain 
+        keys where either the value or the key did not exist before and that 
+        have a value now.
+
+        When setting `compare_values` to False, the returned set will only 
+        contain keys that did not exist when the state was saved but exist now.
+        The value is ingored in this case. So the key may or may not have a 
+        value.
+
+        Example:
+        ```python
+        >>> # prepare the state to save
+        >>> config.addConfigurationOption("option", "key1")
+        >>> config.setValue("values", "key2", 1)
+
+        >>> state = config.markState()
+
+        >>> # set a value to an option, there was no value before
+        >>> config.setValue("option", "key1", 2)
+
+        >>> # add keys that did not exist before
+        >>> config.addConfigurationOption("option", "key3")
+        >>> config.setValue("values", "key4", 3)
+
+        >>> config.getAdditions(state, True)
+        {("option", "key1"), ("values", "key4")}
+        >>> config.getAdditions(state, False)
+        {("option", "key3"), ("values", "key4")}
+        ```
+
+        Notes
+        -----
+
+        By using set operations, a lot more results can be received from this 
+        function. The following examples summarize some possibilities:
+
+        **Key was not set, key is set now, value is not set**
+
+        ```python
+        >>> config.getAdditions(state, False)
+        {("option", "key3"), ("values", "key4")}
+        ```
+
+        **Key unknown, value is set now**
+
+        ```python
+        >>> config.getAdditions(state, True)
+        {("option", "key1"), ("values", "key4")}
+        ```
+
+        **Key was not set, key is set now, value unknown**
+
+        To get all additions either of added keys or of added values, use the 
+        unify operator for the returned sets:
+        ```python
+        >>> config.getAdditions(state, True) |  config.getAdditions(state, False)
+        {("option", "key1"), ("option", "key3"), ("values", "key4")}
+        ```
+
+        **Key was set, value is set now**
+
+        To get all keys where the key existed and now the value is set for this 
+        key, use the difference:
+        ```python
+        >>> config.getAdditions(state, True) - config.getAdditions(state, False)
+        {("option", "key1")}
+        ```
+        Note that the order is important! Get the added values, then remove the 
+        keys that did not exist before.
+
+        **Key was not set, key and value are set now**
+
+        To get all keys that did not exist before and have a value now, use the 
+        intersection: 
+        ```python
+        >>> config.getAdditions(state, True) & config.getAdditions(state, False)
+        {("values", "key4")}
+        ```
+
         Raises
         ------
         KeyError
@@ -877,10 +956,15 @@ class AbstractConfiguration:
                 additions.update([(group, k) for k in self.getKeys(group)])
             else:
                 for key in self.getKeys(group):
-                    if (key not in self.marked_states[state_id][group] or 
-                        (compare_values and 
-                         not self._valueExists(group, key, self.marked_states[state_id]) and 
-                         self.valueExists(group, key))):
+                    if (not compare_values and 
+                        key not in self.marked_states[state_id][group]):
+                        # key did not exist before but exists now
+                        additions.add((group, key))
+                    elif (compare_values and 
+                        #   self._keyExists(group, key, self.marked_states[state_id]) and
+                          not self._valueExists(group, key, self.marked_states[state_id]) and
+                          self.valueExists(group, key)):
+                    
                         additions.add((group, key))
         
         return additions
