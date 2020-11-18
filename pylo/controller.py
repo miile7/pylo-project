@@ -487,17 +487,12 @@ class Controller:
                     # define the configuration options if there are some
                     if (hasattr(class_, "defineConfigurationOptions") and 
                         callable(class_.defineConfigurationOptions)):
-                        config_keys_before = list(self.configuration.groupsAndKeys())
+                        state_id = self.configuration.markState()
 
                         class_.defineConfigurationOptions(self.configuration)
 
-                        config_keys_after = list(self.configuration.groupsAndKeys())
-                    
-                        # save the key this class sets, if the class cannot be 
-                        # loaded, remove those keys again
-                        # taken from https://stackoverflow.com/a/3462202/5934316
-                        s = set(config_keys_before)
-                        config_keys = [x for x in config_keys_after if x not in s]
+                        config_keys = (self.configuration.getChanges(state_id) | 
+                                       self.configuration.getAdditions(state_id, True))
                 
                 if error:
                     # do not break here, check all modules and classes first if 
@@ -559,8 +554,8 @@ class Controller:
                     elif kind == "microscope":
                         self.microscope = obj
                 else:
-                    for key in config_keys:
-                        self.configuration.removeElement(key)
+                    for group, key in config_keys:
+                        self.configuration.removeElement(group, key)
         
         # show an error that the max loop count is reached and stop the
         # execution
