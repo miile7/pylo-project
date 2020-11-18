@@ -4,6 +4,7 @@ if __name__ == "__main__":
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import copy
 import random
 import pytest
 import pylo
@@ -171,6 +172,13 @@ if len(non_existing_groups_and_keys) == 0:
           "non_existing_groups_and_keys")
     assert False
 
+state_observation_addition_values = [
+    ("new-added-group-1", "new-added-value-1", "a"),
+    ("new-added-group-1", "new-added-value-2", 1),
+    ("new-added-group-1", "new-added-value-3", False),
+    ("new-added-group-2", "new-added-value-1", -92.89),
+]
+
 class TestConfiguration:
     def setup_method(self):
         # prepare config for autoload
@@ -208,6 +216,23 @@ class TestConfiguration:
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 4)
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 5)
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 6)
+    
+    def _getValueForDatatype(self, datatype):
+        """Get a random value for the given `datatype`."""
+        if datatype == int:
+            value = random.randint(0, 100)
+        elif datatype == str:
+            value = chr(random.randint(97, 122))
+        elif datatype == bool:
+            value = (random.randint(0, 1) == 1)
+        elif datatype == float:
+            value = random.random()
+        elif isinstance(datatype, pylo.OptionDatatype):
+            value = datatype.options[random.randint(0, len(datatype))]
+        else:
+            value = None
+        
+        return value
 
     @pytest.mark.parametrize("group,key", all_groups_and_keys_having_values)
     def test_keys_exist(self, group, key):
@@ -364,6 +389,55 @@ class TestConfiguration:
         """Test whether the descriptions are correct."""
         assert (self.configuration[group, key, "description"] == 
                     expected["description"])
+
+    def test_setting_value_does_not_change_options(self):
+        """Test whether changing the value does only change the value."""
+
+        for group, key, value, args, expected in complete_test_configuration:
+            if "datatype" in args:
+                value = self._getValueForDatatype(args["datatype"])
+            elif value is not None:
+                value = self._getValueForDatatype(type(value))
+            else:
+                continue
+
+            self.configuration.setValue(group, key, value)
+        
+        for group, key, value, args, expected in complete_test_configuration:
+            if "datatype" in expected:
+                try:
+                    assert (self.configuration.getDatatype(group, key) == 
+                            expected["datatype"])
+                except KeyError:
+                    pass
+            
+            if "default_value" in expected:
+                try:
+                    assert (self.configuration.getDefault(group, key) == 
+                            expected["default_value"])
+                except KeyError:
+                    pass
+            
+            if "ask_if_not_present" in expected:
+                try:
+                    assert (self.configuration.getAskIfNotPresent(group, key) == 
+                            expected["ask_if_not_present"])
+                except KeyError:
+                    pass
+            
+            if "description" in expected:
+                try:
+                    assert (self.configuration.getDescription(group, key) == 
+                            expected["description"])
+                except KeyError:
+                    pass
+            
+            if "restart_required" in expected:
+                try:
+                    assert (self.configuration.getRestartRequired(group, key) == 
+                            expected["restart_required"])
+                except KeyError:
+                    pass
 
     def test_single_overwriting_value_is_correct(self):
         """Test if value is overwritten correctly and correctly be reset."""
@@ -579,4 +653,289 @@ class TestConfiguration:
             all_keys += self.configuration.getKeys(group)
 
         assert set(keys) == set(all_keys)
+    
+    def test_observe_adding(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
+        test_config = copy.deepcopy(self.configuration.configuration)
         
+        for group, key, value in state_observation_addition_values:
+            self.configuration.setValue(group, key, value)
+        
+        assert l + len(state_observation_addition_values) == len(self.configuration)
+        
+        config_additions = set(self.configuration.getAdditions(state_id))
+        test_additions = set([(v[0], v[1]) for v in state_observation_addition_values])
+
+        # import os
+        # import datetime
+        # from pprint import pprint
+        # with open(os.path.join(os.path.dirname(__file__), "config_additions.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): config_additions - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(config_additions, stream=f)
+        # with open(os.path.join(os.path.dirname(__file__), "test_additions.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): test_additions - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(test_additions, stream=f)
+
+        assert config_additions == test_additions
+        
+        self.configuration.resetChanges(state_id)
+
+        assert self.configuration.configuration == test_config
+    
+    def test_observe_adding_compare_keys(self):
+        """Test the state changes."""
+        
+        for group, key, value in state_observation_addition_values:
+            self.configuration.addConfigurationOption(group, key)
+
+        state_id = self.configuration.markState()
+        test_config = copy.deepcopy(self.configuration.configuration)
+        
+        for group, key, value in state_observation_addition_values:
+            self.configuration.setValue(group, key, value)
+
+        # import os
+        # import datetime
+        # from pprint import pprint
+        # with open(os.path.join(os.path.dirname(__file__), "config_additions.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): config_additions - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(config_additions, stream=f)
+        # with open(os.path.join(os.path.dirname(__file__), "test_additions.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): test_additions - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(test_additions, stream=f)
+
+        # all keys were known before, there are no additions
+        assert len(self.configuration.getAdditions(state_id, compare_values=False)) == 0
+        assert len(self.configuration.getAdditions(state_id, compare_values=True)) == len(state_observation_addition_values)
+        
+        self.configuration.resetChanges(state_id)
+
+        assert self.configuration.configuration == test_config
+    
+    def test_observe_adding_options(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
+        test_config = copy.deepcopy(self.configuration.configuration)
+        
+        for group, key, value in state_observation_addition_values:
+            self.configuration.addConfigurationOption(
+                group, key, datatype=type(value), default_value=value)
+        
+        assert l + len(state_observation_addition_values) == len(self.configuration)
+
+        config_additions = set(self.configuration.getAdditions(state_id))
+        test_additions = set([(v[0], v[1]) for v in state_observation_addition_values])
+        assert config_additions == test_additions
+        
+        self.configuration.resetChanges(state_id)
+
+        assert self.configuration.configuration == test_config
+    
+    def test_observe_changes(self):
+        """Test the state changes."""
+        state_id = self.configuration.markState()
+        test_config = copy.deepcopy(self.configuration.configuration)
+
+        changes = {}
+        for group, key in all_groups_and_keys_having_values:
+            try:
+                val = self.configuration.getValue(group, key)
+                datatype = self.configuration.getDatatype(group, key)
+            except KeyError:
+                continue
+
+            m = 100
+            for i in range(m):
+                if datatype == int:
+                    value = random.randint(0, 100)
+                elif datatype == str:
+                    value = chr(random.randint(97, 122))
+                elif datatype == bool:
+                    value = (random.randint(0, 1) == 1)
+                elif datatype == float:
+                    value = random.random()
+                elif isinstance(datatype, pylo.OptionDatatype):
+                    value = datatype.options[random.randint(0, len(datatype))]
+                else:
+                    # datatype is not known, ignore this value
+                    i = m
+                    break
+
+                if value != val:
+                    # make sure the value changed
+                    break
+            
+            if i + 1 >= m:
+                # did not find a value that is different from the original, 
+                # do not track this change (since it is not a change)
+                continue
+        
+            changes[(group, key)] = value
+            self.configuration.setValue(group, key, value)
+        
+        config_changes = set(self.configuration.getChanges(state_id))
+        test_changes = set([(v[0], v[1]) for v in changes])
+
+        # import os
+        # import datetime
+        # from pprint import pprint
+        # with open(os.path.join(os.path.dirname(__file__), "config_changes.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): config_changes - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(config_changes, stream=f)
+        # with open(os.path.join(os.path.dirname(__file__), "test_changes.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): test_changes - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(test_changes, stream=f)
+
+        assert config_changes == test_changes
+        
+        self.configuration.resetChanges(state_id)
+
+        # import os
+        # import datetime
+        # from pprint import pprint
+        # with open(os.path.join(os.path.dirname(__file__), "configuration.configuration.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): configuration.configuration - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(self.configuration.configuration, stream=f)
+        # with open(os.path.join(os.path.dirname(__file__), "test_config.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): test_config - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(test_config, stream=f)
+
+        assert self.configuration.configuration == test_config
+    
+    def test_observe_deletes(self):
+        """Test the state changes."""
+
+        state_id = self.configuration.markState()
+        test_config = copy.deepcopy(self.configuration.configuration)
+        deletes = []
+
+        remove_indices = []
+        while (0 not in remove_indices or 
+               1 not in remove_indices or 
+               2 not in remove_indices):
+            remove_indices = [random.randint(0, 2) for _ in complete_test_configuration]
+        
+        # print("TestConfiguration.test_observe_deletes()")
+        for i, (group, key, val, args, expected) in enumerate(complete_test_configuration):
+            if remove_indices[i] == 1:
+                deletes.append((group, key))
+                # print("  Removing completely", group, key)
+                self.configuration.removeElement(group, key)
+            elif remove_indices[i] == 2:
+                if group != "options-group":
+                    # options do not have a value, deleting the value if it is 
+                    # not set does not have any affect, so it it will not be 
+                    # listed in the configuration changes
+                    deletes.append((group, key))
+                # print("  Removing value of", group, key)
+                self.configuration.removeValue(group, key)
+        
+        config_deletes = set(self.configuration.getDeletions(state_id))
+        test_deletes = set(deletes)
+        
+        # import os
+        # import datetime
+        # from pprint import pprint
+        # with open(os.path.join(os.path.dirname(__file__), "config_deletes.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): config_deletes - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(config_deletes, stream=f)
+        # with open(os.path.join(os.path.dirname(__file__), "test_deletes.log"), "w+") as f:
+        #     print("TestConfiguration.test_reset_changes(): test_deletes - ", datetime.datetime.now().isoformat(), file=f)
+        #     pprint(test_deletes, stream=f)
+        
+        assert config_deletes == test_deletes
+            
+        self.configuration.resetChanges(state_id)
+
+        assert self.configuration.configuration == test_config
+
+    def test_reset_changes(self):
+        """Test changing, deleting and adding values and resetting afterwards
+        recreates the saved state."""
+        state_id = self.configuration.markState()
+        l = len(self.configuration)
+        test_config = copy.deepcopy(self.configuration.configuration)
+
+        set_indices = []
+        while (0 not in set_indices or 
+               1 not in set_indices):
+            set_indices = [random.randint(0, 1) for _ in state_observation_addition_values]
+        
+        # add values
+        for i, (group, key, value) in enumerate(state_observation_addition_values):
+            if set_indices[i] == 0:
+                self.configuration.setValue(group, key, value)
+            else:
+                self.configuration.addConfigurationOption(
+                    group, key, datatype=type(value), default_value=value)
+        
+        # prepare change or delete values
+        setvals = []
+        for group, key, val, args, expected in complete_test_configuration:
+            if "datatype" in args:
+                m = 100
+                for i in range(m):
+                    val = self._getValueForDatatype(args["datatype"])
+
+                    if value != val:
+                        break
+                
+                if i + 1 == m:
+                    continue
+            else:
+                continue
+                
+            setvals.append((group, key, value))
+        
+        set_indices = []
+        while (0 not in set_indices or 
+               1 not in set_indices or 
+               2 not in set_indices or 
+               3 not in set_indices):
+            set_indices = [random.randint(0, 3) for _ in setvals]
+        
+        deletes = {}
+        for i, (group, key, value) in enumerate(setvals):
+            self.configuration.setValue(group, key, value)
+            
+            if set_indices[i] == 0:
+                deletes[(group, key)] = (value, args)
+                self.configuration.removeElement(group, key)
+            elif set_indices[i] == 1:
+                deletes[(group, key)] = (value, args)
+                self.configuration.removeValue(group, key)
+            else:
+                self.configuration.setValue(group, key, value)
+        
+        remove_indices = []
+        while (0 not in remove_indices or 
+               1 not in remove_indices or 
+               2 not in remove_indices or 
+               3 not in remove_indices):
+            remove_indices = [random.randint(0, 3) for _ in setvals]
+        # remove added values again
+        for i, (group, key, value) in enumerate(state_observation_addition_values):
+            if remove_indices[i] == 0:
+                self.configuration.removeElement(group, key)
+        
+        set_indices = []
+        while (0 not in set_indices or 
+               1 not in set_indices or 
+               2 not in set_indices):
+            set_indices = [random.randint(0, 2) for _ in setvals]
+        # add removed values with different values
+        for i, ((group, key), (value, args)) in enumerate(deletes.items()):
+            if set_indices[i] == 0:
+                self.configuration.setValue(group, key, value)
+            elif set_indices[i] == 1:
+                self.configuration.addConfigurationOption(group, key, 
+                    default_value=value, datatype=type(value))
+        
+        self.configuration.resetChanges(state_id)
+
+        assert self.configuration.configuration == test_config

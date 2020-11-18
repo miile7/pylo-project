@@ -182,7 +182,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
         
         self.is_in_safe_state = True
     
-    def recordImage(self):
+    def recordImage(self, *args):
         self.currently_recording_image = True
         self.is_in_safe_state = False
         size = len(self.microscope.supported_measurement_variables) + 1

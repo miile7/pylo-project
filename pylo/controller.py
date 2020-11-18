@@ -270,6 +270,22 @@ class Controller:
                 )
             except KeyError:
                 pass
+
+            try:
+                restart_required = self.configuration.getRestartRequired(
+                    group, key
+                )
+
+                if restart_required:
+                    restart_required_msg = ("The program will be restarted " + 
+                                            "automatically after confirmation.")
+                    if (not "description" in input_param or 
+                        not isinstance(input_param["description"], str)):
+                        input_param["description"] = restart_required_msg
+                    else:
+                        input_param["description"] += restart_required_msg
+            except KeyError:
+                pass
             
             try:
                 # try to get the datatype
@@ -471,17 +487,12 @@ class Controller:
                     # define the configuration options if there are some
                     if (hasattr(class_, "defineConfigurationOptions") and 
                         callable(class_.defineConfigurationOptions)):
-                        config_keys_before = list(self.configuration.groupsAndKeys())
+                        state_id = self.configuration.markState()
 
                         class_.defineConfigurationOptions(self.configuration)
 
-                        config_keys_after = list(self.configuration.groupsAndKeys())
-                    
-                        # save the key this class sets, if the class cannot be 
-                        # loaded, remove those keys again
-                        # taken from https://stackoverflow.com/a/3462202/5934316
-                        s = set(config_keys_before)
-                        config_keys = [x for x in config_keys_after if x not in s]
+                        config_keys = self.configuration.getAdditions(state_id, True)
+                        self.configuration.dropStateMark(state_id)
                 
                 if error:
                     # do not break here, check all modules and classes first if 
@@ -543,8 +554,8 @@ class Controller:
                     elif kind == "microscope":
                         self.microscope = obj
                 else:
-                    for key in config_keys:
-                        self.configuration.removeElement(key)
+                    for group, key in config_keys:
+                        self.configuration.removeElement(group, key)
         
         # show an error that the max loop count is reached and stop the
         # execution
@@ -558,6 +569,77 @@ class Controller:
             return False
         else:
             return True
+    
+    def _configurationChangesNeedRestart(self, state_id: int, 
+                                         show_hint: typing.Optional[bool]=True) -> bool:
+        """Check if there are configuration changes in between the state made
+        at the marked state with the `state_id` that trigger a restart.
+
+        Note that if the `state_id` is not set, this will *not* raise an 
+        Exception but simply ignore the function call. Also not that this 
+        function does not perform the restart, it only checks if there is a 
+        restart required.
+
+        The state with the `state_id` is dropped if the state exists.
+
+        If `show_hint` is True, a hint will be displayed to the user using the 
+        registered `view` object.
+
+        Raises
+        ------
+        StopProgram
+            When a hint is shown and the user cancels the hint
+
+        Parameters
+        ----------
+        state_id : int
+            The state id
+        show_hint : bool, optional
+            Whether to show a hint to the user or not, default: True
+        
+        Returns
+        -------
+        bool
+            Whether the program should restart or not
+        """
+        try:
+            config_changes = (self.configuration.getAdditions(state_id, True, True) | 
+                              self.configuration.getChanges(state_id))
+        except KeyError:
+            return False
+        
+        self.configuration.dropStateMark(state_id)
+        # print("Controller._configurationChangesNeedRestart():", config_changes)
+        # from pprint import pprint
+        # pprint(self.configuration.configuration)
+
+        # check if there is a change that requires a restart
+        restart_required = []
+        for group, key in config_changes:
+            if self.configuration.getRestartRequired(group, key):
+                restart_required.append((group, key))
+        
+        if len(restart_required) > 0:
+            if show_hint:
+                from .config import PROGRAM_NAME
+                restart_settings_text = "\n".join(map(
+                    lambda kg: "- '{}' in group '{}'".format(kg[1], kg[0]), 
+                    restart_required
+                ))
+
+                self.view.showHint(("You changed the following {} settings " + 
+                                    "that require {} to restart to have any " + 
+                                    "effect. Confirm to restart or cancel to " + 
+                                    "stop the execution completely.\n\n" + 
+                                    "The following settings require this " + 
+                                    "restart: \n\n{}").format(
+                                        len(restart_required), PROGRAM_NAME,
+                                        restart_settings_text
+                                    ))
+            
+            return True
+        else:
+            return False
 
     def startProgramLoop(self) -> None:
         """Start the program loop.
@@ -572,6 +654,10 @@ class Controller:
         """
 
         try:
+            # mark the initial state to track changes that require a restart 
+            # of the program loop
+            state_id = self.configuration.markState()
+
             before_init()
             
             if not isinstance(self.microscope, MicroscopeInterface):
@@ -612,6 +698,14 @@ class Controller:
             # save the config
             self.configuration.saveConfiguration()
 
+            # not needed to check changes here, the user did not have a chance
+            # of changing anything so all values are startup values
+            # if self._configurationChangesNeedRestart(state_id):
+            #     self.restartProgramLoop()
+            #     return
+            
+            state_id = self.configuration.markState()
+
             # fire init_ready event
             init_ready()
 
@@ -635,6 +729,15 @@ class Controller:
             
                 # fire user_ready event
                 user_ready()
+
+                # save the config again, the view may show options
+                self.configuration.saveConfiguration()
+
+                # get the changes in the configuration, the view shows the 
+                # settings
+                if self._configurationChangesNeedRestart(state_id):
+                    self.restartProgramLoop()
+                    return
 
                 try:
                     self.measurement = Measurement.fromSeries(self, 

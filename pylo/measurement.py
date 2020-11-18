@@ -76,9 +76,10 @@ class Measurement:
         self.steps = steps
 
         # prepare the save directory and the file format
-        self.save_dir, self.name_format = self.controller.getConfigurationValuesOrAsk(
+        self.save_dir, self.name_format, self._log_path = self.controller.getConfigurationValuesOrAsk(
             (CONFIG_MEASUREMENT_GROUP, "save-directory"),
             (CONFIG_MEASUREMENT_GROUP, "save-file-format"),
+            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             fallback_default=True
         )
 
@@ -90,12 +91,11 @@ class Measurement:
                 raise OSError(("The save directory '{}' does not exist and " + 
                                "cannot be created.").format(self.save_dir)) from e
         
-        # get the log path
-        self._log_path, *_ = self.controller.getConfigurationValuesOrAsk(
-            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
-            fallback_default=True
-        )
         self._log_thread = None
+
+        if self._log_path == "":
+            self._log_path = self.controller.configuration.getDefaultValue(
+                CONFIG_MEASUREMENT_GROUP, "log-save-path")
 
         # make sure the parent directory exists
         log_dir = os.path.dirname(self._log_path)
