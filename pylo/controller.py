@@ -603,11 +603,15 @@ class Controller:
             Whether the program should restart or not
         """
         try:
-            config_changes = self.configuration.getAdditions(state_id, True)
+            config_changes = (self.configuration.getAdditions(state_id, True, True) | 
+                              self.configuration.getChanges(state_id))
         except KeyError:
             return False
         
         self.configuration.dropStateMark(state_id)
+        # print("Controller._configurationChangesNeedRestart():", config_changes)
+        # from pprint import pprint
+        # pprint(self.configuration.configuration)
 
         # check if there is a change that requires a restart
         restart_required = []
@@ -694,10 +698,11 @@ class Controller:
             # save the config
             self.configuration.saveConfiguration()
 
-            # get the changes in the configuration
-            if self._configurationChangesNeedRestart(state_id):
-                self.restartProgramLoop()
-                return
+            # not needed to check changes here, the user did not have a chance
+            # of changing anything so all values are startup values
+            # if self._configurationChangesNeedRestart(state_id):
+            #     self.restartProgramLoop()
+            #     return
             
             state_id = self.configuration.markState()
 
@@ -725,7 +730,11 @@ class Controller:
                 # fire user_ready event
                 user_ready()
 
-                # get the changes in the configuration
+                # save the config again, the view may show options
+                self.configuration.saveConfiguration()
+
+                # get the changes in the configuration, the view shows the 
+                # settings
                 if self._configurationChangesNeedRestart(state_id):
                     self.restartProgramLoop()
                     return
