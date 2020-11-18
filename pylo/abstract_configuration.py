@@ -286,22 +286,28 @@ class AbstractConfiguration:
             "ask_if_not_present": False,
             "restart_required": False
         }
-        
-        for k, v in default_kwargs.items():
-            if k not in kwargs:
-                kwargs[k] = v
 
-        for k, v in kwargs.items():
+        for k in list(kwargs.keys()) + list(default_kwargs.keys()):
             if k not in supported_args:
                 raise KeyError(("The key '{}' is not supported as a keyword " + 
                                 "argument.").format(k))
-            elif (supported_args[k] != typing.Any and 
-                  not isinstance(v, supported_args[k])):
-                    raise TypeError(("The key '{}' in the kwargs has to be of " + 
-                                     "type {} but it is {}.").format(
-                                         k, supported_args[k], type(v)))
+            elif k not in kwargs:
+                if k in default_kwargs:
+                    # k has to be a key of the default_kwargs, otherwise it is
+                    # a key in the kwargs
+                    if not k in self.configuration[group][key]:
+                        # only set default if the value is not yet set, 
+                        # otherwise the default overwrites the existing 
+                        # setting
+                        self.configuration[group][key][k] = default_kwargs[k]
             else:
-                self.configuration[group][key][k] = kwargs[k]
+                if (supported_args[k] != typing.Any and 
+                    not isinstance(kwargs[k], supported_args[k])):
+                        raise TypeError(("The key '{}' in the kwargs has to " + 
+                                         "be of type {} but it is {}.").format(
+                                            k, supported_args[k], type(kwargs[k])))
+                else:
+                    self.configuration[group][key][k] = kwargs[k]
     
     def getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True) -> Savable:
@@ -772,7 +778,8 @@ class AbstractConfiguration:
         self.marked_states[state_id] = copy.deepcopy(self.configuration)
         return state_id
     
-    def getChanges(self, state_id: int) -> typing.Set[typing.Tuple[str, str]]:
+    def getChanges(self, state_id: int, 
+                   compare_as_str: typing.Optional[bool]=True) -> typing.Set[typing.Tuple[str, str]]:
         """Get the keys and groups that changed their value sice the `state_id`.
 
         This will return a set of tuples where each tuple defines the element 
@@ -807,6 +814,12 @@ class AbstractConfiguration:
         ----------
         state_id : int
             The state id that is returned by `AbstractConfiguration.markState()`
+        compare_as_str : bool, optional
+            Whether to also compare the values as strings, a change needs then 
+            that the values and their string representation need to be 
+            different, this is often useful sice the datatypes are defined in 
+            the classes and the values are loaded before, this means that they
+            will have different types, default: True
         
         Returns
         -------
@@ -822,19 +835,17 @@ class AbstractConfiguration:
         for group in set(self.marked_states[state_id].keys()) & set(self.getGroups()):
             # intersection of groups
             for key in set(self.marked_states[state_id][group].keys()) & set(self.getKeys(group)):
-                # intersectino of keys
-                if (not self._valueExists(group, key, self.marked_states[state_id]) and 
-                    self.valueExists(group, key)):
-                    # option was existing but no value was given
-                    # changes[group, key] = None
-                    changes.add((group, key))
-                elif (self.valueExists(group, key) and 
-                      self._getValue(group, key, False, self.marked_states[state_id]) != 
-                      self.getValue(group, key, fallback_default=False)):
-                    # both values exist but they are different (if the current
-                    # value does not exist, it is deleted)
-                    # changes[(group, key)] = self._getValue(group, key, False, self.marked_states[state_id])
-                    changes.add((group, key))
+                if (self.valueExists(group, key) and 
+                    self._valueExists(group, key, self.marked_states[state_id])):
+                    old_val =  self._getValue(group, key, False, self.marked_states[state_id])
+                    new_val = self.getValue(group, key, fallback_default=False)
+
+                    if (old_val != new_val and 
+                        (not compare_as_str or str(old_val) != str(new_val))):
+                        # both values exist but they are different (if the current
+                        # value does not exist, it is deleted)
+                        # changes[(group, key)] = self._getValue(group, key, False, self.marked_states[state_id])
+                        changes.add((group, key))
         
         # return set(changes.keys())
         return changes
@@ -966,7 +977,7 @@ class AbstractConfiguration:
                           self.valueExists(group, key)):
                     
                         additions.add((group, key))
-        
+
         return additions
     
     def getDeletions(self, state_id: int, 

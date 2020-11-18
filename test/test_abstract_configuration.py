@@ -216,6 +216,23 @@ class TestConfiguration:
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 4)
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 5)
         self.configuration.temporaryOverwriteValue("overwrite-group", "value2", 6)
+    
+    def _getValueForDatatype(self, datatype):
+        """Get a random value for the given `datatype`."""
+        if datatype == int:
+            value = random.randint(0, 100)
+        elif datatype == str:
+            value = chr(random.randint(97, 122))
+        elif datatype == bool:
+            value = (random.randint(0, 1) == 1)
+        elif datatype == float:
+            value = random.random()
+        elif isinstance(datatype, pylo.OptionDatatype):
+            value = datatype.options[random.randint(0, len(datatype))]
+        else:
+            value = None
+        
+        return value
 
     @pytest.mark.parametrize("group,key", all_groups_and_keys_having_values)
     def test_keys_exist(self, group, key):
@@ -372,6 +389,55 @@ class TestConfiguration:
         """Test whether the descriptions are correct."""
         assert (self.configuration[group, key, "description"] == 
                     expected["description"])
+
+    def test_setting_value_does_not_change_options(self):
+        """Test whether changing the value does only change the value."""
+
+        for group, key, value, args, expected in complete_test_configuration:
+            if "datatype" in args:
+                value = self._getValueForDatatype(args["datatype"])
+            elif value is not None:
+                value = self._getValueForDatatype(type(value))
+            else:
+                continue
+
+            self.configuration.setValue(group, key, value)
+        
+        for group, key, value, args, expected in complete_test_configuration:
+            if "datatype" in expected:
+                try:
+                    assert (self.configuration.getDatatype(group, key) == 
+                            expected["datatype"])
+                except KeyError:
+                    pass
+            
+            if "default_value" in expected:
+                try:
+                    assert (self.configuration.getDefault(group, key) == 
+                            expected["default_value"])
+                except KeyError:
+                    pass
+            
+            if "ask_if_not_present" in expected:
+                try:
+                    assert (self.configuration.getAskIfNotPresent(group, key) == 
+                            expected["ask_if_not_present"])
+                except KeyError:
+                    pass
+            
+            if "description" in expected:
+                try:
+                    assert (self.configuration.getDescription(group, key) == 
+                            expected["description"])
+                except KeyError:
+                    pass
+            
+            if "restart_required" in expected:
+                try:
+                    assert (self.configuration.getRestartRequired(group, key) == 
+                            expected["restart_required"])
+                except KeyError:
+                    pass
 
     def test_single_overwriting_value_is_correct(self):
         """Test if value is overwritten correctly and correctly be reset."""
@@ -814,16 +880,7 @@ class TestConfiguration:
             if "datatype" in args:
                 m = 100
                 for i in range(m):
-                    if args["datatype"] == int:
-                        value = random.randint(0, 100)
-                    elif args["datatype"] == str:
-                        value = chr(random.randint(97, 122))
-                    elif args["datatype"] == bool:
-                        value = (random.randint(0, 1) == 1)
-                    elif args["datatype"] == float:
-                        value = random.random()
-                    elif isinstance(args["datatype"], pylo.OptionDatatype):
-                        value = args["datatype"].options[random.randint(0, len(args["datatype"]))]
+                    val = self._getValueForDatatype(args["datatype"])
 
                     if value != val:
                         break
