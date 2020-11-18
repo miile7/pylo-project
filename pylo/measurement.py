@@ -77,9 +77,9 @@ class Measurement:
 
         # prepare the save directory and the file format
         self.save_dir, self.name_format, self._log_path = self.controller.getConfigurationValuesOrAsk(
-            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             (CONFIG_MEASUREMENT_GROUP, "save-directory"),
             (CONFIG_MEASUREMENT_GROUP, "save-file-format"),
+            (CONFIG_MEASUREMENT_GROUP, "log-save-path"),
             fallback_default=True
         )
 
@@ -92,6 +92,10 @@ class Measurement:
                                "cannot be created.").format(self.save_dir)) from e
         
         self._log_thread = None
+
+        if self._log_path == "":
+            self._log_path = self.controller.configuration.getDefaultValue(
+                CONFIG_MEASUREMENT_GROUP, "log-save-path")
 
         # make sure the parent directory exists
         log_dir = os.path.dirname(self._log_path)
