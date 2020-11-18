@@ -1087,7 +1087,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope or the camera module could not be found" in str(e[0]):
+            if "The microscope module could not be imported" in str(e[0]):
                 found = True
                 break
         
@@ -1105,7 +1105,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "the given class either does not exist or is not a class" in str(e[0]):
+            if "The microscope module does not define the given class" in str(e[0]):
                 found = True
                 break
         
@@ -1123,7 +1123,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope or the camera module could not be found" in str(e[0]):
+            if "The camera module could not be imported" in str(e[0]):
                 found = True
                 break
         
@@ -1141,7 +1141,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "the given class either does not exist or is not a class" in str(e[0]):
+            if "The camera module does not define the given class" in str(e[0]):
                 found = True
                 break
         
