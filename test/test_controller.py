@@ -60,10 +60,13 @@ class DummyViewShowsError(AssertionError):
 
 class DummyView(pylo.AbstractView):
     def __init__(self):
+        self.reset()
         super().__init__()
-        self.clear()
     
     def clear(self):
+        pass
+
+    def reset(self):
         self.shown_create_measurement_times = []
         # contains the comparator at index 0 (one or more strings that have to
         # be in the name it is asked for) or a callable, contains the repsonse
@@ -156,12 +159,12 @@ class DummyConfiguration(pylo.AbstractConfiguration):
         return super().getValue(group, key, fallback_default)
     
     def loadConfiguration(self):
-        self.clear()
+        self.reset()
     
     def saveConfiguration(self):
         pass
     
-    def clear(self):
+    def reset(self):
         self.request_log = []
         self.configuration = {}
 
@@ -173,9 +176,9 @@ use_dummy_images = False
 class DummyCamera(pylo.cameras.CameraInterface):
     def __init__(self, controller):
         super().__init__(controller)
-        self.clear()
+        self.reset()
     
-    def clear(self):
+    def reset(self):
         self.init_time = time.time()
         self.recorded_images = []
     
@@ -195,9 +198,9 @@ measurement_duration_time = -1
 class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
-        self.clear()
+        self.reset()
 
-    def clear(self):
+    def reset(self):
         self.init_time = time.time()
         self.performed_steps = []
 
@@ -256,7 +259,7 @@ def controller():
 
     measurement_duration_time = -1
     pylo.config.CONFIGURATION = DummyConfiguration()
-    pylo.config.CONFIGURATION.clear()
+    pylo.config.CONFIGURATION.reset()
     pylo.config.VIEW = DummyView()
     controller = pylo.Controller()
 
@@ -273,8 +276,8 @@ def controller():
     pylo.after_record.clear()
     pylo.measurement_ready.clear()
 
-    controller.view.clear()
-    controller.configuration.clear()
+    controller.view.reset()
+    controller.configuration.reset()
 
 class TestController:
     @classmethod
