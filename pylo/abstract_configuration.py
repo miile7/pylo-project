@@ -48,7 +48,7 @@ class AbstractConfiguration:
         self.marked_states = {}
         self.loadConfiguration()
     
-    def _keyExists(self, group: str, key: str) -> bool:
+    def _keyExists(self, group: str, key: str, configuration: typing.Optional[dict]=None) -> bool:
         """Get whether there is the key and the group.
 
         This does not check if there is a value!
@@ -59,16 +59,21 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name for the value
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
         
         Returns
         -------
         bool
             Whether the key exists within the group or not
         """
+        if not isinstance(configuration, dict):
+            configuration = self.configuration
 
-        return (group in self.configuration and 
-                isinstance(self.configuration[group], dict) and
-                key in self.configuration[group])
+        return (group in configuration and 
+                isinstance(configuration[group], dict) and
+                key in configuration[group])
     
     def valueExists(self, group: str, key: str) -> bool:
         """Get whether there is a value for the group and the key.
@@ -85,10 +90,34 @@ class AbstractConfiguration:
         bool
             Whether the value exists or not
         """
-        return (self._keyExists(group, key) and 
-                "value" in self.configuration[group][key] and 
-                isinstance(self.configuration[group][key]["value"], list) and
-                len(self.configuration[group][key]["value"]) > 0)
+        return self._valueExists(group, key)
+    
+    def _valueExists(self, group: str, key: str, configuration: typing.Optional[dict]=None) -> bool:
+        """Get whether there is a value for the group and the key in the given
+        `configuration`.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
+        
+        Returns
+        -------
+        bool
+            Whether the value exists or not
+        """
+        if not isinstance(configuration, dict):
+            configuration = self.configuration
+
+        return (self._keyExists(group, key, configuration) and 
+                "value" in configuration[group][key] and 
+                isinstance(configuration[group][key]["value"], list) and
+                len(configuration[group][key]["value"]) > 0)
     
     def defaultExists(self, group: str, key: str) -> bool:
         """Get whether there is a *default* value for the group and the key. 
@@ -107,8 +136,41 @@ class AbstractConfiguration:
         bool
             Whether the default value exists or not
         """
-        return (self._keyExists(group, key) and 
-                "default_value" in self.configuration[group][key])
+        return self._defaultExists(group, key)
+    
+    def _defaultExists(self, group: str, key: str, configuration: typing.Optional[dict]=None) -> bool:
+        """Get whether there is a *default* value for the group and the key for 
+        the given `configuration`.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found and either there is no default
+            or the fallback_default is False
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        fallback_default : bool
+            Whether to use the default value if there is a default value but 
+            no value
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
+        
+        Returns
+        -------
+        any
+            The value
+        """
+        if not isinstance(configuration, dict):
+            configuration = self.configuration
+        
+        return (self._keyExists(group, key, configuration) and 
+                "default_value" in configuration[group][key])
     
     def setValue(self, group: str, key: str, value: Savable,
                  **kwargs: typing.Union[type, Savable, bool, str]) -> None:
@@ -155,10 +217,6 @@ class AbstractConfiguration:
         """
         
         self.addConfigurationOption(group, key, **kwargs)
-
-        if len(self.marked_states) > 0:
-            for state_id in self.marked_states:
-                self.marked_states[state_id]["set"][(group, key)] = value
 
         self.configuration[group][key]["value"] = [value]
     
@@ -211,15 +269,6 @@ class AbstractConfiguration:
             self.configuration[group] = {}
         if not key in self.configuration[group]:
             self.configuration[group][key] = {}
-        
-            if len(self.marked_states) > 0:
-                for state_id in self.marked_states:
-                    if (group, key) in self.marked_states[state_id]["del"]:
-                        # remove deleting if the key was deleted and then added
-                        # in this state
-                        del self.marked_states[state_id]["del"][(group, key)]
-                    else:
-                        self.marked_states[state_id]["add"].append((group, key))
 
         
         if not "value" in self.configuration[group][key]:
@@ -279,16 +328,52 @@ class AbstractConfiguration:
         any
             The value
         """
+        return self._getValue(group, key, fallback_default)
+    
+    def _getValue(self, group: str, key: str, 
+                 fallback_default: typing.Optional[bool]=True,
+                 configuration: typing.Optional[dict]=None) -> Savable:
+        """Get the value for the given group and key for the given 
+        `configuration`.
 
-        if self.valueExists(group, key):
-            return self._parseValue(group, key, self.configuration[group][key]["value"][-1])
-        elif fallback_default and self.defaultExists(group, key):
-            return self.configuration[group][key]["default_value"]
+        Raises
+        ------
+        KeyError
+            When the group and key are not found and either there is no default
+            or the fallback_default is False
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        fallback_default : bool
+            Whether to use the default value if there is a default value but 
+            no value
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
+        
+        Returns
+        -------
+        any
+            The value
+        """
+        if not isinstance(configuration, dict):
+            configuration = self.configuration
+
+        if self._valueExists(group, key, configuration):
+            return self._parseValue(group, key, 
+                                    configuration[group][key]["value"][-1],
+                                    configuration)
+        elif fallback_default and self._defaultExists(group, key, configuration):
+            return configuration[group][key]["default_value"]
         else:
             raise KeyError(("The value for the key '{}' within the group " + 
                             "'{}' has not been found.").format(key, group))
     
-    def _getType(self, group: str, key: str) -> type:
+    def _getType(self, group: str, key: str, configuration: typing.Optional[dict]=None) -> type:
         """Get the type for the group and the key.
 
         Raises
@@ -303,24 +388,30 @@ class AbstractConfiguration:
             The name of the group
         key : str
             The key name
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
 
         Returns
         -------
         type
             The datatype
         """
+        if not isinstance(configuration, dict):
+            configuration = self.configuration
 
-        if not self._keyExists(group, key):
+        if not self._keyExists(group, key, configuration):
             raise KeyError(("The key '{}' does not exist within the group " + 
                             "'{}' so it cannot be overwritten.").format(key, group))
-        elif ("datatype" not in self.configuration[group][key] or
-              self.configuration[group][key]["datatype"] == None):
+        elif ("datatype" not in configuration[group][key] or
+              configuration[group][key]["datatype"] == None):
             raise KeyError(("There is no datatype for the key '{}' within " + 
                             "the group '{}'.").format(key, group))
         else:
-            return self.configuration[group][key]["datatype"]
+            return configuration[group][key]["datatype"]
     
-    def _parseValue(self, group: str, key: str, value: Savable) -> Savable:
+    def _parseValue(self, group: str, key: str, value: Savable, 
+                    configuration: typing.Optional[dict]=None) -> Savable:
         """Parse the value to the datatype defined by the group and key, if 
         there is no datatype the original value will be returned.
 
@@ -332,6 +423,9 @@ class AbstractConfiguration:
             The key name
         value : str, int, float, bool or None
             The value to parse
+        configuration : dict
+            The configuration dict, if not given the 
+            `AbstractConfiguration.configuration` will be used
 
         Returns
         -------
@@ -341,7 +435,7 @@ class AbstractConfiguration:
         """
 
         try:
-            datatype = self._getType(group, key)
+            datatype = self._getType(group, key, configuration)
         except KeyError:
             datatype = None
         
@@ -558,7 +652,7 @@ class AbstractConfiguration:
                             "'{}' so it cannot be overwritten.").format(key, group))
         elif not self.valueExists(group, key):
             raise KeyError(("There is no value for the key '{}' within the " + 
-                            "group '{}Ä, therefore cannot be overwritten " + 
+                            "group '{}', therefore cannot be overwritten " + 
                             "temporarily. Set an initial value before " + 
                             "overwriting temporarily.").format(key, group))
         
@@ -642,21 +736,12 @@ class AbstractConfiguration:
         """
 
         if self._keyExists(group, key):
-            if len(self.marked_states) > 0:
-                for state_id in self.marked_states:
-                    if (group, key) not in self.marked_states[state_id]["add"]:
-                        # do not save if the value was added and then deleted
-                        # in this state mark
-                        self.marked_states[state_id]["del"][(group, key)] = copy.deepcopy(self.configuration[group][key])
-                    else:
-                        self.marked_states[state_id]["add"].remove((group, key))
-
             del self.configuration[group][key]
 
             if len(self.configuration[group]) == 0:
                 # group is empty, delete it too
                 del self.configuration[group]
-    
+
     def markState(self) -> int:
         """Mark the current state of the configuration.
 
@@ -684,22 +769,34 @@ class AbstractConfiguration:
                 state_id = i
                 break
         
-        self.marked_states[state_id] = {
-            "add": [],
-            "del": {},
-            "set": {}
-        }
+        self.marked_states[state_id] = copy.deepcopy(self.configuration)
         return state_id
     
-    def getChanges(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+    def getChanges(self, state_id: int) -> typing.Set[typing.Tuple[str, str]]:
         """Get the keys and groups that changed their value sice the `state_id`.
 
-        This will return a list of tuples where each tuple defines the element 
+        This will return a set of tuples where each tuple defines the element 
         that changed. The tuple contains the group at index 0 and the key at 
         index 1.
 
-        This will only contain the keys and when the values changed. If an 
-        element is added, this will not be shown here.
+        This will only include values that existed before and are existing now.
+        To get the values that were added or deleted use the 
+        `AbstractConfiguration.getAdditions()` or 
+        `AbstractConfiguration.getDeletions()` functions with the 
+        `compare_values=True` and add their values to the result of this 
+        function.
+
+        Example for getting new values (including added values)
+        ```python
+        state_id = configuration.markState()
+
+        # do something
+
+        changes = (configuration.getChanges(state_id) | 
+                   configuration.getAdditions(state_id, compare_values=True))
+
+        configuration.dropStateMark(state_id)
+        ```
 
         Raises
         ------
@@ -713,19 +810,40 @@ class AbstractConfiguration:
         
         Returns
         -------
-        list of tuples
-            The changed elements where the list contains tuples with the group 
+        set of tuples
+            The changed elements where the set contains tuples with the group 
             at index 0 and the key at index 1
         """
         if not state_id in self.marked_states:
             raise KeyError("The state '{}' does not exist.".format(state_id))
 
-        return list(self.marked_states[state_id]["set"].keys())
+        # changes = {}
+        changes = set()
+        for group in set(self.marked_states[state_id].keys()) & set(self.getGroups()):
+            # intersection of groups
+            for key in set(self.marked_states[state_id][group].keys()) & set(self.getKeys(group)):
+                # intersectino of keys
+                if (not self._valueExists(group, key, self.marked_states[state_id]) and 
+                    self.valueExists(group, key)):
+                    # option was existing but no value was given
+                    # changes[group, key] = None
+                    changes.add((group, key))
+                elif (self.valueExists(group, key) and 
+                      self._getValue(group, key, False, self.marked_states[state_id]) != 
+                      self.getValue(group, key, fallback_default=False)):
+                    # both values exist but they are different (if the current
+                    # value does not exist, it is deleted)
+                    # changes[(group, key)] = self._getValue(group, key, False, self.marked_states[state_id])
+                    changes.add((group, key))
+        
+        # return set(changes.keys())
+        return changes
     
-    def getAdditions(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+    def getAdditions(self, state_id: int, 
+                     compare_values: typing.Optional[bool]=True) -> typing.Set[typing.Tuple[str, str]]:
         """Get the keys and groups were added sice the `state_id`.
 
-        This will return a list of tuples where each tuple defines the element 
+        This will return a set of tuples where each tuple defines the element 
         that was added. The tuple contains the group at index 0 and the key at 
         index 1.
 
@@ -738,22 +856,40 @@ class AbstractConfiguration:
         ----------
         state_id : int
             The state id that is returned by `AbstractConfiguration.markState()`
+        compare_values : bool, optional
+            The compare mode, if True values will be compared, if False keys 
+            will be compared
         
         Returns
         -------
-        list of tuples
-            The added elements where the list contains tuples with the group at
+        set of tuples
+            The added elements where the set contains tuples with the group at
             index 0 and the key at index 1
         """
         if not state_id in self.marked_states:
             raise KeyError("The state '{}' does not exist.".format(state_id))
 
-        return copy.deepcopy(self.marked_states[state_id]["add"])
+        additions = set()
+        for group in self.getGroups():
+            if not group in self.marked_states[state_id]:
+                # add all keys for this group, the whole group was not there
+                # before
+                additions.update([(group, k) for k in self.getKeys(group)])
+            else:
+                for key in self.getKeys(group):
+                    if (key not in self.marked_states[state_id][group] or 
+                        (compare_values and 
+                         not self._valueExists(group, key, self.marked_states[state_id]) and 
+                         self.valueExists(group, key))):
+                        additions.add((group, key))
+        
+        return additions
     
-    def getDeletions(self, state_id: int) -> typing.List[typing.Tuple[str, str]]:
+    def getDeletions(self, state_id: int, 
+                     compare_values: typing.Optional[bool]=True) -> typing.Set[typing.Tuple[str, str]]:
         """Get the keys and groups were deleted sice the `state_id`.
 
-        This will return a list of tuples where each tuple defines the element 
+        This will return a set of tuples where each tuple defines the element 
         that was deleted. The tuple contains the group at index 0 and the key 
         at index 1.
 
@@ -766,19 +902,35 @@ class AbstractConfiguration:
         ----------
         state_id : int
             The state id that is returned by `AbstractConfiguration.markState()`
+        compare_values : bool, optional
+            The compare mode, if True values will be compared, if False keys 
+            will be compared
         
         Returns
         -------
-        list of tuples
-            The deleted elements where the list contains tuples with the group at
+        set of tuples
+            The deleted elements where the set contains tuples with the group at
             index 0 and the key at index 1
         """
         if not state_id in self.marked_states:
             raise KeyError("The state '{}' does not exist.".format(state_id))
 
-        return list(self.marked_states[state_id]["del"].keys())
+        # deletions = {}
+        deletions = set()
+        for group in self.marked_states[state_id]:
+            for key in self.marked_states[state_id][group]:
+                if ((self._keyExists(group, key, self.marked_states[state_id]) and 
+                     not self._keyExists(group, key)) or 
+                    (compare_values and
+                     self._valueExists(group, key, self.marked_states[state_id]) and 
+                     not self.valueExists(group, key))):
+                    # deletions[(group, key)] = copy.deepcopy(self._getValue(group, key, self.marked_states[state_id]))
+                    deletions.add((group, key))
+        
+        # return set(deletions.keys())
+        return deletions
     
-    def resetChanges(self, state_id: int) -> None:
+    def resetChanges(self, state_id: int, delete_state: typing.Optional[bool]=True) -> None:
         """Reset all the changes since the `state_id`.
 
         This will add all the deleted elements, remove all the added elements
@@ -796,21 +948,17 @@ class AbstractConfiguration:
         ----------
         state_id : int
             The state id that is returned by `AbstractConfiguration.markState()`
+        delete_state : bool, optional
+            Whether to delete the marked state after the value are resetted to 
+            it, default: True
         """
         if not state_id in self.marked_states:
             raise KeyError("The state '{}' does not exist.".format(state_id))
+        
+        self.configuration = self.marked_states[state_id]
 
-        for group, key in self.marked_states[state_id]["add"]:
-            self.removeElement(group, key)
-        
-        for group, key, value in self.marked_states[state_id]["set"].items():
-            self.setValue(group, key, value)
-        
-        for group, key, config in self.marked_states[state_id]["del"].items():
-            if not group in self.configuration:
-                self.configuration[group] = {}
-            
-            self.configuration[group][key] = config
+        if delete_state:
+            self.dropStateMark(state_id)
     
     def dropStateMark(self, state_id: int) -> None:
         """Delete all saved changes for the `state_id`.
