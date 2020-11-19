@@ -349,8 +349,8 @@ class DMMicroscope(MicroscopeInterface):
         value : int
             The focus value
         """
-        # self.dm_microscope.SetFocus(value)
-        self.dm_microscope.SetCalibratedFocus(value)
+        self.dm_microscope.SetFocus(value)
+        # self.dm_microscope.SetCalibratedFocus(value)
     
     def _getFocus(self) -> float:
         """Get the current focus as an absolute value.
@@ -364,8 +364,8 @@ class DMMicroscope(MicroscopeInterface):
         float
             The focus
         """
-        # return self.dm_microscope.GetFocus()
-        return self.dm_microscope.GetCalibratedFocus()
+        return self.dm_microscope.GetFocus()
+        # return self.dm_microscope.GetCalibratedFocus()
 
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
