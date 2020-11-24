@@ -180,6 +180,37 @@ class AbstractView:
         """Update the running indicator, the progress has updated."""
         raise NotImplementedError()
 
+    def askForDecision(self, text: str, options: typing.Optional[typing.Sequence[str]]=("Ok", "Cancel")) -> int:
+        """Ask for a decision between the given `options`.
+
+        The `options` are shown to the user depending on the view 
+        implementation. In most of the times this are the buttons shown on a 
+        dialog.
+
+        The selected index will be returned.
+
+        Raises
+        ------
+        ValueError
+            When the `options` is empty
+        StopProgram
+            When the view is closed in another way (e.g. the close icon of a 
+            dialog is clicked)
+        
+        Parameters
+        ----------
+        text : str
+            A text that is shown to the users to explain what they are deciding
+        options : sequence of str
+            The texts to show to the users they can select from
+        
+        Returns
+        -------
+        int
+            The selected index
+        """
+        raise NotImplementedError()
+
     def askFor(self, *inputs: AskInput) -> tuple:
         """Ask for the specific input when the program needs to know something 
         from the user. 
