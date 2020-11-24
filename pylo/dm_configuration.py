@@ -11,6 +11,21 @@ try:
 except (ModuleNotFoundError, ImportError) as e:
     DM = None
 
+# for development only
+try:
+    import dev_constants
+    load_from_dev = True
+except (ModuleNotFoundError, ImportError) as e:
+    load_from_dev = False
+
+if load_from_dev:
+    import sys
+    if hasattr(dev_constants, "execdmscript_path"):
+        if not dev_constants.execdmscript_path in sys.path:
+            sys.path.insert(0, dev_constants.execdmscript_path)
+
+import execdmscript
+
 from .abstract_configuration import AbstractConfiguration
 
 class DMConfiguration(AbstractConfiguration):
@@ -21,36 +36,12 @@ class DMConfiguration(AbstractConfiguration):
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
         
-        if DM is not None:
-            s, groups = DM.GetPersistentTagGroup().GetTagAsString(
-                "{}:{{{{groups}}}}".format(
-                    DM_CONFIGURATION_PERSISTENT_TAG_NAME
-                )
-            )
+        try:
+            tags = execdmscript.get_persistent_tag(DM_CONFIGURATION_PERSISTENT_TAG_NAME)
+        except KeyError:
+            tags = {}
 
-            if s:
-                groups = groups.split(DMConfiguration.delimiter)
-
-                for group in groups:
-                    s, keys = DM.GetPersistentTagGroup().GetTagAsString(
-                        "{}:{}:{{{{keys}}}}".format(
-                            DM_CONFIGURATION_PERSISTENT_TAG_NAME, group
-                        )
-                    )
-
-                    if s:
-                        keys = keys.split(DMConfiguration.delimiter)
-
-                        for key in keys:
-                            s, value = DM.GetPersistentTagGroup().GetTagAsString(
-                                "{}:{}:{}".format(
-                                    DM_CONFIGURATION_PERSISTENT_TAG_NAME, 
-                                    group, key
-                                )
-                            )
-
-                            if s:
-                                self.setValue(group, key, value)
+        self.loadFromMapping(tags)
     
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
@@ -91,12 +82,3 @@ class DMConfiguration(AbstractConfiguration):
                             keys[group] = []
                         
                         keys[group].append(key)
-        
-        for group in keys:
-            DM.GetPersistentTagGroup().SetTagAsString("{}:{}:{{{{keys}}}}".format(
-                DM_CONFIGURATION_PERSISTENT_TAG_NAME, group
-            ), DMConfiguration.delimiter.join(keys[group]))
-        
-        DM.GetPersistentTagGroup().SetTagAsString("{}:{{{{groups}}}}".format(
-            DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        ), DMConfiguration.delimiter.join(list(keys.keys())))
