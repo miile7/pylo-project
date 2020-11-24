@@ -96,8 +96,9 @@ try:
 	tests = [
 		# "error",
 		# "hint",
-		"create-measurement",
+		# "create-measurement",
 		# "show-settings",
+		"ask-for-decision",
 		# "ask-for",
 		# "show-running",
 	]
@@ -122,6 +123,13 @@ try:
 		print("")
 		print("Showing create Measurement")
 		pprint.pprint(view.showCreateMeasurement(controller))
+
+	if "ask-for-decision" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Ask for decision")
+		print(view.askForDecision("Please click on one of the buttons.", ("Button 1", "Button 2", "Button 3", "Button 4")))
 
 	if "show-settings" in tests:
 		print("")

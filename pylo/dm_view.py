@@ -87,7 +87,7 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with execdmscript.exec_dmscript("showAlert(msg, 1);", setvars={"msg": hint}):
+        with execdmscript.exec_dmscript("showAlert(msg, 2);", setvars={"msg": hint}):
             pass
 
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
@@ -132,6 +132,124 @@ class DMView(AbstractView):
 
         with execdmscript.exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
             pass
+
+    def askForDecision(self, text: str, options: typing.Optional[typing.Sequence[str]]=("Ok", "Cancel")) -> int:
+        """Ask for a decision between the given `options`.
+
+        The `options` are shown to the user depending on the view 
+        implementation. In most of the times this are the buttons shown on a 
+        dialog.
+
+        The selected index will be returned.
+
+        Raises
+        ------
+        ValueError
+            When the `options` is empty
+        StopProgram
+            When the view is closed in another way (e.g. the close icon of a 
+            dialog is clicked)
+        
+        Parameters
+        ----------
+        text : str
+            A text that is shown to the users to explain what they are deciding
+        options : sequence of str
+            The texts to show to the users they can select from
+        
+        Returns
+        -------
+        int
+            The selected index
+        """
+
+        if len(options) == 0:
+            raise ValueError("The options must not be empty.")
+        elif len(options) == 2:
+            dmscript = "number index = TwoButtonDialog(text, button0, button1);"
+            readvars = {
+                "index": int
+            }
+            setvars = {
+                "text": text,
+                "button0": options[0],
+                "button1": options[1]
+            }
+        
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars, readvars=readvars) as script:
+                index = script["index"]
+        else:
+            id_ = "__pylo_pressed_button_{}".format(int(time.time() * 100))
+            setvars = {
+                "text": text,
+                "persistent_tag_name": id_,
+                "title": "Please select"
+            }
+
+            dmscript_button_pressed_handlers = []
+            dmscript_button_creations = []
+
+            for i, o in enumerate(options):
+                setvars["button{}".format(i)] = o
+                dmscript_button_pressed_handlers.append(
+                    ("void button{i}_pressed(object self){{" + 
+                        "self.button_pressed({i});" + 
+                    "}}").format(i=i))
+                dmscript_button_creations.append(
+                    ("b = DLGCreatePushButton(button{i}, \"button{i}_pressed\");" + 
+                     "b.DLGWidth(80);" + 
+                     "wrapper.DLGAddElement(b);").format(i=i))
+
+            dmscript = "\n".join([
+                "class ButtonDialog : UIFrame{",
+                    "void button_pressed(object self, number i){",
+                        "if(GetPersistentTagGroup().TagGroupDoesTagExist(persistent_tag_name)){",
+                            "GetPersistentTagGroup().TagGroupDeleteTagWithLabel(persistent_tag_name);",
+                        "}",
+                        "GetPersistentTagGroup().TagGroupCreateNewLabeledTag(persistent_tag_name);",
+                        "GetPersistentTagGroup().TagGroupSetTagAsShort(persistent_tag_name, i);",
+                        "self.close();",
+                        "exit(0);",
+                    "}",
+                    ""] + 
+                    dmscript_button_pressed_handlers + 
+                    [""
+                    "object init(object self){",
+                        "TagGroup dlg, dlg_items, wrapper, label, b;",
+                        "dlg = DLGCreateDialog(title, dlg_items);",
+                        "",
+                        "dlg_items.DLGAddElement(DLGCreateLabel(text));",
+                        "",
+                        "wrapper = DLGCreateGroup();",
+                        "wrapper.DLGTableLayout({}, 1, 1);".format(len(options)),
+                        "dlg_items.DLGAddElement(wrapper);",
+                        ""] + 
+                        dmscript_button_creations + 
+                        ["",
+                        "self.super.init(dlg);",
+                        "return self;",
+                    "}",
+                "}",
+                "alloc(ButtonDialog).init().display(title);"
+            ])
+
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars):
+                pass
+            
+            while DM is not None:
+                s, v = DM.GetPersistentTagGroup().GetTagAsShort(id_)
+
+                if s:
+                    index = v
+                    DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
+                    break
+                
+                time.sleep(0.1)
+        
+        if 0 <= index and index < len(options):
+            return index
+        else:
+            raise StopProgram()
     
     def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
         """Ask for the specific input when the program needs to know something 
