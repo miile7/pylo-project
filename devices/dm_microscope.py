@@ -29,8 +29,10 @@ if load_from_dev:
             sys.path.insert(0, dev_constants.execdmscript_path)
 
 import execdmscript
-    
+
+from ..events import microscope_ready
 from ..datatype import Datatype
+from ..stop_program import StopProgram
 from .microscope_interface import MicroscopeInterface
 from ..measurement_variable import MeasurementVariable
 
@@ -179,12 +181,32 @@ class DMMicroscope(MicroscopeInterface):
             self._getXTilt,
             self._setXTilt
         )
-        
-        self.registerMeasurementVariable(
-            MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
-            self._getYTilt,
-            self._setYTilt
-        )
+
+        self.holders = ("Default holder", "Tilt holder") 
+        self.installed_probe_holder, *_ = self.controller.view.askFor({
+            "name": "Installed probe holder",
+            "datatype": Datatype.options(self.holders),
+            "description": ("Please select the holder that is currently " + 
+                            "installed and used for the measurement. If you " +
+                            "want to use a different holder, change it now. " + 
+                            "\n\n" + 
+                            "Note that entering a wrong holder will " + 
+                            "initialize the microscope wrong which may " + 
+                            "cause damage.")
+        })
+
+        print("DMMicroscope.__init__(), holder:", self.installed_probe_holder)
+        self.holder_confirmed = True
+        if self.installed_probe_holder == "Tilt holder":
+            self.registerMeasurementVariable(
+                MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
+                self._getYTilt,
+                self._setYTilt
+            )
+            # extra ask for the user if the tilt holder really is installed, 
+            # just to be extra sure
+            self.holder_confirmed = False
+        microscope_ready.append(self._confirmHolder)
 
         # self.registerMeasurementVariable(
         #     MeasurementVariable(
@@ -211,6 +233,27 @@ class DMMicroscope(MicroscopeInterface):
             self.dm_microscope = DM.Py_Microscope()
         else:
             self.dm_microscope = None
+    
+    def _confirmHolder(self) -> None:
+        """Show a confirm dialog with the view if the holder is not yet
+        confirmed.
+
+        Raises
+        ------
+        StopProgram
+            If the user clicks 'cancel'
+        """
+
+        if not self.holder_confirmed:
+            button = self.controller.view.askForDecision(
+                ("Please confirm, that the probe holder '{}' really is " + 
+                 "installed at the microscope.").format(self.installed_probe_holder),
+                ("Yes, it is installed", "Cancel"))
+            
+            if button == 0:
+                self.holder_confirmed = True
+            else:
+                raise StopProgram()
     
     def setInLorentzMode(self, lorentz_mode : bool) -> None:
         """Set the microscope to be in lorentz mode.
@@ -325,6 +368,7 @@ class DMMicroscope(MicroscopeInterface):
         value : int or float
             The value to set the y tilt in degrees.
         """
+        self._confirmHolder()
         self.dm_microscope.SetStageBeta(value)
         # self.dm_microscope.SetStageAlpha(value)
     
