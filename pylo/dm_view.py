@@ -756,8 +756,8 @@ class DMView(AbstractView):
             for input_definition in ask_for_values:
                 if "datatype" in input_definition:
                     if isinstance(input_definition["datatype"], OptionDatatype):
-                        input_definition["datatype"] = "options"
                         input_definition["options"] = input_definition["datatype"].options
+                        input_definition["datatype"] = "options"
                     elif not isinstance(input_definition["datatype"], str):
                         if hasattr(input_definition["datatype"], "name"):
                             input_definition["datatype"] = input_definition["datatype"].name
