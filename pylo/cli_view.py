@@ -611,6 +611,74 @@ class CLIView(AbstractView):
             return config_dict
         else:
             return self._showSettingsLoop(configuration, keys, config_dict)
+            
+    def askForDecision(self, text: str, options: typing.Optional[typing.Sequence[str]]=("Ok", "Cancel")) -> int:
+        """Ask for a decision between the given `options`.
+
+        The `options` are shown to the user depending on the view 
+        implementation. In most of the times this are the buttons shown on a 
+        dialog.
+
+        The selected index will be returned.
+
+        Raises
+        ------
+        ValueError
+            When the `options` is empty
+        StopProgram
+            When the view is closed in another way (e.g. the close icon of a 
+            dialog is clicked)
+        
+        Parameters
+        ----------
+        text : str
+            A text that is shown to the users to explain what they are deciding
+        options : sequence of str
+            The texts to show to the users they can select from
+        
+        Returns
+        -------
+        int
+            The selected index
+        """
+
+        if len(options) == 0:
+            raise ValueError("The options are empty.")
+        
+        # get the first letters to check if they are unique
+        commands = [s[0].lower() for s in options]
+        use_indices = False
+        if len(commands) != len(set(commands)):
+            # there are duplicates, use the indices instead
+            commands = range(len(commands))
+            use_indices = True
+        
+        options_text = ["Type in"]
+        for c, o in zip(commands, options):
+            options_text.append("- [{}] for {}".format(c, o))
+
+        self.clear()
+        self.printTitle()
+
+        self.print(text)
+        self.print()
+        self.print("\n".join(options_text))
+        user_input = self.input("Enter {}: ".format(human_concat_list(commands)))
+
+        if use_indices:
+            try:
+                user_input = int(user_input)
+            except (ValueError, TypeError):
+                pass
+        else:
+            user_input = user_input.lower()
+
+        if user_input not in commands:
+            self.error = ("The command '{}' is invalid. Please enter a " + 
+                          "valid command listed below.").format(user_input)
+            return self.askForDecision(text, options)
+        else:
+            return commands.index(user_input)
 
     def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
         """Ask for the specific input when the program needs to know something 

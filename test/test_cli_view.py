@@ -1087,6 +1087,95 @@ class TestCLIView:
             assert type(r) == type(expected[i])
     
     @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("text,options,user_inputs,expected", [
+        ("Example text", ("Yes", "No"), ("y", ), 0),
+        ("Example text 2", ("Yes", "No"), ("Y", ), 0),
+        ("Example text 3", ("Yes", "No"), ("N", ), 1),
+        ("Example text 4", ("Yes", "No"), ("n", ), 1),
+        ("Example text 5", ("Yes", "Yep", "no", "Nope"), (0, ), 0),
+        ("Example text 6", ("Yes", "Yep", "no", "Nope"), (3, ), 3),
+    ])
+    def test_ask_for_decision(self, cliview, text, options, user_inputs, expected):
+        """Test if asking for decision works."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview.askForDecision(text, options)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        out = get_compare_text(writer.out_buffer)
+
+        # check if text is printed
+        assert text in out
+        
+        # check if names and descriptions are shown
+        for option in options:
+            assert option in out
+
+        # check results
+        assert results == expected
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("text,options,user_inputs,expected", [
+        ("Example text", ("Yes", "No"), ("a", 0, "y"), 0),
+        ("Example text 2", ("Yes", "No"), (1, 1, "m", "m", "M", "n"), 1),
+        ("Example text 5", ("Yes", "Yep", "no", "Nope"), ("y", 1), 1),
+        ("Example text 6", ("Yes", "Yep", "no", "Nope"), ("n", 2), 2),
+    ])
+    def test_ask_for_decision_invalid_inputs(self, cliview, text, options, user_inputs, expected):
+        """Test if asking for decision works."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview.askForDecision(text, options)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        out = get_compare_text(writer.out_buffer)
+
+        # check if text is printed
+        assert text in out
+
+        # check that an error was printed
+        assert "invalid" in out
+        # check that the error was printed for each invalid input
+        assert out.count("invalid") >= len(user_inputs) - 1
+        # check that the response was asked for each input
+        assert self.response_counter == len(user_inputs)
+        
+        # check if names and descriptions are shown
+        for option in options:
+            assert option in out
+
+        # check results
+        assert results == expected
+    
+    @pytest.mark.usefixtures("cliview")
     @pytest.mark.parametrize("ask_definitions,text,user_inputs,expected", [
         (({"name": "Askval1", "datatype": str, "description": "Type in a str"},
           {"name": "Askval2", "datatype": int, "description": "Type in an int"},
