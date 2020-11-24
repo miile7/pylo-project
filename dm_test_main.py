@@ -1,6 +1,37 @@
 import DigitalMicrograph as DM
 
 DM.ClearResults()
+close_tagname = "__pylo_close_loading_dialog"
+# show waiting dialog
+script = "\n".join((
+	"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tagname),
+	"class LoadDialog : UIFrame{",
+		"number update_task;",
+		"",
+		"void checkForClose(object self){",
+			"if(GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(close_tagname),
+				"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tagname),
+				"RemoveMainThreadTask(update_task);",
+				"self.close();",
+			"}",
+		"}",
+		"",
+		"object init(object self){",
+			"TagGroup dlg, dlg_items, text;",
+			"",
+			"dlg = DLGCreateDialog(\"Loading...\", dlg_items);",
+			"dlg_items.DLGAddElement(DLGCreateLabel(\"\\n          Loading... This can take a while.          \\n\"));",
+			"",
+			"update_task = AddMainThreadPeriodicTask(self, \"checkForClose\", 0.1);",
+			"",
+			"self.super.init(dlg);",
+			"return self;",
+		"}",
+	"}",
+	"alloc(LoadDialog).init().display(\"Loading...\");"
+))
+DM.ExecuteScriptString(script)
+
 print("Starting, this can take a while...")
 print("")
 
@@ -75,6 +106,10 @@ try:
 	# use the DMCamera as the camera
 	configuration.setValue("setup", "camera-module", "pylo.cameras")
 	configuration.setValue("setup", "camera-class", "DMTestCamera")
+
+	# remove loading dialog
+	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tagname, True)
+
 	print("Done.")
 	print("Starting...")
 
