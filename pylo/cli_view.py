@@ -643,7 +643,7 @@ class CLIView(AbstractView):
         """
 
         if len(options) == 0:
-            raise ValueError("The options are empty.")
+            raise ValueError("The options must not be empty.")
         
         # get the first letters to check if they are unique
         commands = [s[0].lower() for s in options]
