@@ -77,7 +77,7 @@ def convertImageSaveToMeasurementVariable(var, value, steps=255):
     """
     return value / steps * (var.max_value - var.min_value) + var.min_value
 
-class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope(pylo.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
 
@@ -169,7 +169,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.is_in_safe_state = True
 
 dummy_camera_name = "DummyCamera for testing"
-class DummyCamera(pylo.cameras.CameraInterface):
+class DummyCamera(pylo.CameraInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.microscope = controller.microscope

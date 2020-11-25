@@ -92,7 +92,7 @@ class DummyView(pylo.AbstractView):
     def askFor(self, *args):
         return ["ASK_FOR_DEFAULT_OUTPUT"] * len(args)
 
-class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope(pylo.MicroscopeInterface):
     def __init__(self):
         self.supported_measurement_variables = [
             pylo.MeasurementVariable("focus", "Focus", 0, 0xfa,

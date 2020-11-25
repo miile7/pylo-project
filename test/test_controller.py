@@ -173,7 +173,7 @@ class DummyImage(pylo.Image):
         pass
 
 use_dummy_images = False
-class DummyCamera(pylo.cameras.CameraInterface):
+class DummyCamera(pylo.CameraInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.reset()
@@ -195,7 +195,7 @@ class DummyCamera(pylo.cameras.CameraInterface):
         pass
 
 measurement_duration_time = -1
-class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope(pylo.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.reset()
@@ -1307,9 +1307,9 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        # assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
+        # assert (isinstance(controller.microscope, pylo.MicroscopeInterface) == 
         #         for_camera)
-        assert not isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert not isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1327,8 +1327,8 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert isinstance(controller.microscope, pylo.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1346,8 +1346,8 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert isinstance(controller.microscope, pylo.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.slow()

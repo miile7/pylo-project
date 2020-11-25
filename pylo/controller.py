@@ -16,11 +16,11 @@ from .datatype import Datatype
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
+from .camera_interface import CameraInterface
 from .exception_thread import ExceptionThread
-from .cameras.camera_interface import CameraInterface
+from .microscope_interface import MicroscopeInterface
 from .blocked_function_error import BlockedFunctionError
 from .abstract_configuration import AbstractConfiguration
-from .microscopes.microscope_interface import MicroscopeInterface
 
 from .config import MAX_LOOP_COUNT
 from .config import MEASUREMENT_START_TIMEOUT
@@ -344,11 +344,11 @@ class Controller:
         if kind == "camera":
             path = os.path.join(os.path.dirname(__file__), "cameras")
             keys = ("camera-module", "camera-class")
-            interface_name = "pylo.cameras.CameraInterface"
+            interface_name = "pylo.CameraInterface"
         elif kind == "microscope":
             path = os.path.join(os.path.dirname(__file__), "microscopes")
             keys = ("microscope-module", "microscope-class")
-            interface_name = "pylo.microscopes.MicroscopeInterface"
+            interface_name = "pylo.MicroscopeInterface"
         
         format_args["kind"] = kind
         format_args["error"] = error
