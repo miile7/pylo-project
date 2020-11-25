@@ -178,6 +178,16 @@ class DMView(AbstractView):
         
             with execdmscript.exec_dmscript(dmscript, setvars=setvars, readvars=readvars) as script:
                 index = script["index"]
+
+                # for dm-script the buttons are the "confirm" and the "cancel"
+                # buttons, so the left button (button0 in this case) is always
+                # true, the right button (button1 in this case) is always false
+                # which are, converted to int, 0 and 1 in the exact other way
+                # than this function is retunring its values
+                if index == 0:
+                    index = 1
+                elif index == 1:
+                    index = 0
         else:
             id_ = "__pylo_pressed_button_{}".format(int(time.time() * 100))
             setvars = {
