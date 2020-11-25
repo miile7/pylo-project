@@ -396,6 +396,11 @@ class Controller:
         The camera and the controllers configuration options will be asked for 
         if they are required and not set.
 
+        Raises
+        ------
+        StopProgram
+            When a `StopProgram` error is raised
+
         Returns
         -------
         bool
@@ -456,6 +461,8 @@ class Controller:
 
                 try:
                     module = importlib.import_module(module_name, "pylo")
+                except StopProgram as e:
+                    raise e
                 except Exception as e:
                     msg = "The {kind} module could not be imported: {error}"
                     fix = ("Change the '{kind}-module' in the '{config}' " + 
@@ -470,6 +477,8 @@ class Controller:
                 if not error:
                     try:
                         class_ = getattr(module, class_name)
+                    except StopProgram as e:
+                        raise e
                     except Exception as e:
                         msg = ("The {kind} module does not define the given " + 
                                "class {class_name}: {error}")
@@ -521,6 +530,8 @@ class Controller:
                 error = False
                 try:
                     obj = class_(self)
+                except StopProgram as e:
+                    raise e
                 except Exception as e:
                     msg = ("The {kind} module defines the {class_name} " + 
                            "attribute but an object cannot be created from " + 
