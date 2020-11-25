@@ -103,59 +103,6 @@ class DMMicroscope(MicroscopeInterface):
         if (not isinstance(focus_calibration_factor, (int, float)) or 
             math.isclose(focus_calibration_factor, 0)):
             focus_calibration_factor = None
-        
-        # the factor to get from the objective fine lense value to the 
-        # objective coarse lense value
-        try:
-            self.objective_lense_coarse_fine_stepwidth = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "objective-lense-coarse-fine-stepwidth"
-                )
-            )
-        except KeyError:
-            self.objective_lense_coarse_fine_stepwidth = None
-        
-        if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
-            math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
-            self.objective_lense_coarse_fine_stepwidth = None
-
-        # the factor to multiply the lense current with to get the magnetic
-        # field
-        try:
-            magnetic_field_calibration_factor = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "objective-lense-magnetic-field-calibration"
-                )
-            )
-        except KeyError:
-            magnetic_field_calibration_factor = None
-        
-        if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
-            math.isclose(magnetic_field_calibration_factor, 0)):
-            magnetic_field_calibration_factor = None
-        
-        if magnetic_field_calibration_factor is not None:
-            # the units of the magnetic field that results when multiplying with 
-            # the magnetic_field_calibration_factor
-            try:
-                magnetic_field_unit = (
-                    self.controller.configuration.getValue(
-                        CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                        "magnetic-field-unit"
-                    )
-                )
-            except KeyError:
-                magnetic_field_unit = None
-        else:
-            magnetic_field_unit = None
-
-        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
-            max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
-                              0xFFFF)
-        else:
-            max_ol_current = 0xFFFF
 
         # limits taken from 
         # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
@@ -174,6 +121,76 @@ class DMMicroscope(MicroscopeInterface):
             self._getFocus,
             self._setFocus
         )
+        
+        # # the factor to get from the objective fine lense value to the 
+        # # objective coarse lense value
+        # try:
+        #     self.objective_lense_coarse_fine_stepwidth = (
+        #         self.controller.configuration.getValue(
+        #             CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #             "objective-lense-coarse-fine-stepwidth"
+        #         )
+        #     )
+        # except KeyError:
+        #     self.objective_lense_coarse_fine_stepwidth = None
+        
+        # if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
+        #     math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
+        #     self.objective_lense_coarse_fine_stepwidth = None
+
+        # # the factor to multiply the lense current with to get the magnetic
+        # # field
+        # try:
+        #     magnetic_field_calibration_factor = (
+        #         self.controller.configuration.getValue(
+        #             CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #             "objective-lense-magnetic-field-calibration"
+        #         )
+        #     )
+        # except KeyError:
+        #     magnetic_field_calibration_factor = None
+        
+        # if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
+        #     math.isclose(magnetic_field_calibration_factor, 0)):
+        #     magnetic_field_calibration_factor = None
+        
+        # if magnetic_field_calibration_factor is not None:
+        #     # the units of the magnetic field that results when multiplying with 
+        #     # the magnetic_field_calibration_factor
+        #     try:
+        #         magnetic_field_unit = (
+        #             self.controller.configuration.getValue(
+        #                 CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #                 "magnetic-field-unit"
+        #             )
+        #         )
+        #     except KeyError:
+        #         magnetic_field_unit = None
+        # else:
+        #     magnetic_field_unit = None
+
+        # if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+        #     max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
+        #                       0xFFFF)
+        # else:
+        #     max_ol_current = 0xFFFF
+        
+        # self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "ol-current", 
+        #         "Objective Lense Current", 
+        #         unit="hex",
+        #         format=Datatype.hex_int,
+        #         min_value=0x0,
+        #         max_value=max_ol_current,
+        #         calibrated_unit=magnetic_field_unit,
+        #         calibrated_name="Magnetic Field",
+        #         calibration=magnetic_field_calibration_factor,
+        #         calibrated_format=float
+        #     ),
+        #     self._getObjectiveLensCurrent,
+        #     self._setObjectiveLensCurrent
+        # )
         
         # tilt limits depend on holder
         self.registerMeasurementVariable(
@@ -195,11 +212,10 @@ class DMMicroscope(MicroscopeInterface):
                             "cause damage.")
         })
 
-        print("DMMicroscope.__init__(), holder:", self.installed_probe_holder)
         self.holder_confirmed = True
         if self.installed_probe_holder == "Tilt holder":
             self.registerMeasurementVariable(
-                MeasurementVariable("y-tilt", "Y Tilt", 0, 0, "deg"),
+                MeasurementVariable("y-tilt", "Y Tilt", -15, 15, "deg"),
                 self._getYTilt,
                 self._setYTilt
             )
@@ -208,22 +224,6 @@ class DMMicroscope(MicroscopeInterface):
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
 
-        # self.registerMeasurementVariable(
-        #     MeasurementVariable(
-        #         "ol-current", 
-        #         "Objective Lense Current", 
-        #         unit="hex",
-        #         format=Datatype.hex_int,
-        #         min_value=0x0,
-        #         max_value=max_ol_current,
-        #         calibrated_unit=magnetic_field_unit,
-        #         calibrated_name="Magnetic Field",
-        #         calibration=magnetic_field_calibration_factor,
-        #         calibrated_format=float
-        #     ),
-        #     self._getObjectiveLensCurrent,
-        #     self._setObjectiveLensCurrent
-        # )
         # save current focus, there is no get function
         self._focus = 0
 
