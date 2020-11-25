@@ -68,7 +68,7 @@ except ExecutionOutsideEnvironmentError:
     DMImage = None
     DMConfiguration = None
 
-controller = None
+# controller = None
 
 import typing
 
@@ -96,9 +96,9 @@ def get_controller(view: typing.Optional[AbstractView]=None,
         The current controller
     """
 
-    global controller
-    if controller is None or not isinstance(controller, Controller):
-        controller = Controller(view, configuration)
+    # global controller
+    # if controller is None or not isinstance(controller, Controller):
+    controller = Controller(view, configuration)
     
     return controller
 
