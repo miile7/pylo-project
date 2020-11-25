@@ -39,9 +39,21 @@ class DMConfiguration(AbstractConfiguration):
         try:
             tags = execdmscript.get_persistent_tag(DM_CONFIGURATION_PERSISTENT_TAG_NAME)
         except KeyError:
-            tags = {}
+            tags = None
 
-        self.loadFromMapping(tags)
+        if isinstance(tags, dict):
+            # old saving causes problems when loading, remove values
+            if "{{groups}}" in tags:
+                del tags["{{groups}}"]
+            
+            for group in tags:
+                if isinstance(tags[group], dict):
+                    if "{{keys}}" in tags[group]:
+                        del tags[group]["{{keys}}"]
+                else:
+                    del tags[group]
+
+            self.loadFromMapping(tags)
     
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
