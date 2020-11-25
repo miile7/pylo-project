@@ -91,12 +91,8 @@ class DMMicroscope(MicroscopeInterface):
         # the user entered values will be divided by this factor and then 
         # passed to the PyJEM functions
         try:
-            focus_calibration_factor = (
-                self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
-                    "focus-calibration"
-                )
-            )
+            focus_calibration_factor = self.controller.configuration.getValue(
+                CONFIG_PYJEM_MICROSCOPE_GROUP, "focus-calibration")
         except KeyError:
             focus_calibration_factor = None
 
@@ -104,23 +100,32 @@ class DMMicroscope(MicroscopeInterface):
             math.isclose(focus_calibration_factor, 0)):
             focus_calibration_factor = None
 
-        # limits taken from 
-        # PyJEM/doc/interface/TEM3.html#PyJEM.TEM3.EOS3.SetObjFocus
         self.registerMeasurementVariable(
             MeasurementVariable(
-                "focus", 
-                "Focus (absolut)", 
-                min_value=-1, 
-                max_value=1000, 
-                # unit="µm", # micrometer
-                unit="um", # micrometer
-                format=Datatype.int,
-                # step by one increases the focus (in LOWMag-Mode) by 3 microns
-                calibration=focus_calibration_factor
+                "om-current", 
+                "Objective mini lens current", 
+                min_value=0x0, 
+                max_value=0xFFFF, 
+                unit="hex",
+                format=Datatype.hex_int,
+                calibration=focus_calibration_factor,
+                calibrated_name="Focus",
+                calibrated_unit="um", # micrometer
+                calibrated_format=Datatype.int
             ),
-            self._getFocus,
-            self._setFocus
+            self._getObjectiveMiniLensCurrent,
+            self._setObjectiveMiniLensCurrent
         )
+        # GMS needs some time here, don't know why but this fixes the bug, if 
+        # the sleeping is removed, the dialog will never show up but the 
+        # program will wait for interaction so it freezes
+        time.sleep(0.1)
+        button = self.controller.view.askForDecision(("Please set the focus " + 
+            "to zero manually now. This will be  saved as the reference value."),
+            ("Focus is 0 now", "Cancel"))
+        
+        if button == 1:
+            raise StopProgram()
         
         # # the factor to get from the objective fine lense value to the 
         # # objective coarse lense value
@@ -194,7 +199,7 @@ class DMMicroscope(MicroscopeInterface):
         
         # tilt limits depend on holder
         self.registerMeasurementVariable(
-            MeasurementVariable("x-tilt", "X Tilt", -10, 10, "deg"),
+            MeasurementVariable("x-tilt", "X Tilt", -15, 15, "deg"),
             self._getXTilt,
             self._setXTilt
         )
@@ -219,13 +224,13 @@ class DMMicroscope(MicroscopeInterface):
                 self._getYTilt,
                 self._setYTilt
             )
+            x_tilt = self.getMeasurementVariableById("x-tilt")
+            x_tilt.min_value = -25
+            x_tilt.max_value = 25
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
-
-        # save current focus, there is no get function
-        self._focus = 0
 
         from ..config import OFFLINE_MODE
 
@@ -405,31 +410,57 @@ class DMMicroscope(MicroscopeInterface):
         return self.dm_microscope.GetStageBeta()
         # return self.dm_microscope.GetStageAlpha()
     
-    def _setFocus(self, value: float) -> None:
-        """Set the focus to the given value.
+    def _setObjectiveMiniLensCurrent(self, value: int) -> None:
+        """Set the objective mini lens current to the given current value.
+        
+        The value is equal to the 'hex' value for the lens current but as an 
+        integer. This also only works in LowMAG mode sice this uses the 
+        `DigitalMicrograph.Py_Microscope.SetFocus()` which is directed to the 
+        mini lens only in LowMAG mode.
 
-        Typical values are between -1 and 50.
+        Raises
+        ------
+        RuntimeError
+            When the microscope is not in the LowMag mode.
 
         Parameters
         ----------
         value : int
-            The focus value
+            The objectiv mini lens current value
         """
+        if not self.getInLorentzMode():
+            raise RuntimeError("The objective mini lens current (and " + 
+                               "therefore the focus) can only beused if the " + 
+                               "microscope is in the LowMAG mode. But the " + 
+                               "microscope is not in the LowMag mode.")
+        
         self.dm_microscope.SetFocus(value)
         # self.dm_microscope.SetCalibratedFocus(value)
     
-    def _getFocus(self) -> float:
-        """Get the current focus as an absolute value.
+    def _getObjectiveMiniLensCurrent(self) -> int:
+        """Get the objective mini lens current.
+        
+        The value is equal to the 'hex' value for the lens current but as an 
+        integer. This also only works in LowMAG mode sice this uses the 
+        `DigitalMicrograph.Py_Microscope.SetFocus()` which is directed to the 
+        mini lens only in LowMAG mode.
 
-        Note that this is the only value that cannot be received from the 
-        microscope. To get the absolute value, the focus is saved internally 
-        by adding the differences.
+        Raises
+        ------
+        RuntimeError
+            When the microscope is not in the LowMag mode.
 
         Returns
         -------
-        float
+        int
             The focus
         """
+        if not self.getInLorentzMode():
+            raise RuntimeError("The objective mini lens current (and " + 
+                               "therefore the focus) can only beused if the " + 
+                               "microscope is in the LowMAG mode. But the " + 
+                               "microscope is not in the LowMag mode.")
+        
         return self.dm_microscope.GetFocus()
         # return self.dm_microscope.GetCalibratedFocus()
 
