@@ -852,9 +852,8 @@ class Controller:
             self.raiseThreadErrors()
             
             # finished
-            stop_program = True
         except StopProgram:
-            stop_program = True
+            pass
         except Exception as e:
             try:
                 # stop before the error, mostly the view raises the python 
@@ -863,13 +862,11 @@ class Controller:
                 self.stopProgramLoop()
                 self.view.showError(e, self._getFixForError(e))
             except StopProgram:
-                stop_program = True
+                pass
         
         self.stopProgramLoop()
 
-        if stop_program:
-            return
-        elif not running and raise_error_when_not_started:
+        if not running and raise_error_when_not_started:
             raise RuntimeError("Cannot wait for the program if the program " + 
                                "has not started or has already finished.")
     
