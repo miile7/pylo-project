@@ -1849,14 +1849,16 @@ class DMViewDialog : UIFrame{
             TagGroup options;
             settings.TagGroupGetTagAsTagGroup("options", options);
 
-            string str_value;
-            if(options.TagGroupCountTags())
+            string str_value = "";
+            if(options.TagGroupCountTags() > value){
+                options.TagGroupGetIndexedTagAsString(value, str_value);
+            }
 
             if(target.TagGroupCountTags() <= index){
-                target.TagGroupInsertTagAsBoolean(index, value);
+                target.TagGroupInsertTagAsString(index, str_value);
             }
             else{
-                target.TagGroupSetIndexedTagAsBoolean(index, value);
+                target.TagGroupSetIndexedTagAsString(index, str_value);
             }
         }
         else{
