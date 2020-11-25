@@ -1,6 +1,10 @@
 import re
 import typing
 
+if hasattr(typing, "Literal"):
+    device_kinds = typing.Literal["camera", "microscope"]
+else:
+    device_kinds = str
 class Device:
     """This class wraps a device, e.g. a camera or a microscope.
 
@@ -13,16 +17,16 @@ class Device:
     configuration_group : str
         The group name this device should use to save persistent values in the 
         configuration
-    configuration_defaults : dict
+    config_defaults : dict
         The default values that this device has which can be used internally,
         optiona, default: {}
     description : str
         A description for this device, currently not used, default: ""
     """
 
-    def __init__(self, kind: str, name: typing.Optional[str]=None, 
+    def __init__(self, kind: device_kinds, name: typing.Optional[str]=None, 
                  configuration_group: typing.Optional[str]=None, 
-                 configuration_defaults: typing.Optional[dict]={}, 
+                 config_defaults: typing.Optional[dict]={}, 
                  description: typing.Optional[str]="") -> None:
         """Create a new device.
 
@@ -38,7 +42,7 @@ class Device:
             The group name this device should use to save persistent values in
             the configuration, if not a str the `name` is used where camel case
             is converted to minuses, default: None
-        configuration_defaults : dict, optional
+        config_defaults : dict, optional
             The default values that this device has which can be used internally,
             optiona, default: {}
         description : str, optional
@@ -57,5 +61,5 @@ class Device:
                 re.findall(r"[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", name)))
         self.configuration_group = configuration_group
 
-        self.configuration_defaults = configuration_defaults
+        self.config_defaults = config_defaults
         self.description = description
