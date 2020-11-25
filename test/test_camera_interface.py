@@ -16,7 +16,7 @@ pylo.config.CONFIGURATION = DummyConfiguration()
 
 class TestCameraInterface:
     def test_for_not_implemented(self):
-        camera = pylo.CameraInterface(pylo.Controller())
+        camera = pylo.CameraInterface(controller=pylo.Controller())
 
         with pytest.raises(NotImplementedError):
             camera.recordImage()

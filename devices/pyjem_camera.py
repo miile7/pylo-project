@@ -36,8 +36,8 @@ if OFFLINE_MODE == True or error is not None:
     from PyJEM.offline.detector import Detector
     from PyJEM.offline.detector.function import get_attached_detector
 
-from .camera_interface import CameraInterface
-from ..image import Image
+from pylo import CameraInterface
+from pylo import Image
 
 CONFIG_PYJEM_CAMERA_GROUP = "pyjem-camera"
 
@@ -50,20 +50,13 @@ class PyJEMCamera(CameraInterface):
         Any values that should be saved for the camera
     """
 
-    def __init__(self, controller: "Controller") -> None:
-        """Create a new camera interface object.
-        
-        Parameters
-        ----------
-        controller : Controller
-            The controller
-        """
+    def __init__(self, *args, **kwargs) -> None:
+        """Create a new camera interface object."""
+        super().__init__(*args, **kwargs)
 
         self._detector_name = None
         self._detector = None
         self._image_size = None
-
-        super().__init__(controller)
     
     def _loadSettings(self) -> None:
         """Load the settings from the configuration."""

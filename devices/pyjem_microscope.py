@@ -43,9 +43,9 @@ if OFFLINE_MODE == True or error is not None:
     from PyJEM.offline.TEM3.lens3 import Lens3
     from PyJEM.offline.TEM3.stage3 import Stage3
 
-from ..datatype import Datatype
-from .microscope_interface import MicroscopeInterface
-from ..measurement_variable import MeasurementVariable
+from pylo import Datatype
+from pylo import MicroscopeInterface
+from pylo import MeasurementVariable
 
 # the group name in the configuration for settings that are related to this
 # microscope
@@ -140,9 +140,9 @@ class PyJEMMicroscope(MicroscopeInterface):
       - FLC: Free lense control, can be on and off for individual leses
     """
     
-    def __init__(self, controller : "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Get the microscope instance"""
-        super().__init__(controller)
+        super().__init__(*args, **kwargs)
 
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False

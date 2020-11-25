@@ -13,9 +13,9 @@ except NameError:
     class ModuleNotFoundError(ImportError):
         pass
 
-from .camera_interface import CameraInterface
-from ..dm_image import DMImage
-from ..execution_outside_environment_error import ExecutionOutsideEnvironmentError
+from pylo import DMImage
+from pylo import CameraInterface
+from pylo import ExecutionOutsideEnvironmentError
 
 try:
     import DigitalMicrograph as DM
@@ -64,16 +64,10 @@ class DMCamera(CameraInterface):
         default: False
     """
 
-    def __init__(self, controller: "Controller") -> None:
-        """Create a new dm camera object.
-        
-        Parameters
-        ----------
-        controller : Controller
-            The controller
-        """
+    def __init__(self, *args, **kwargs) -> None:
+        """Create a new dm camera object."""
 
-        super(DMCamera, self).__init__(controller)
+        super(DMCamera, self).__init__(*args, **kwargs)
 
         self.show_images = None
         self.exposure_time = None

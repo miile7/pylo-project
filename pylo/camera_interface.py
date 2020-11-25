@@ -1,8 +1,9 @@
 import typing
 
-from ..vulnerable_machine import VulnerableMachine
+from .device import Device
+from .vulnerable_machine import VulnerableMachine
 
-class CameraInterface(VulnerableMachine):
+class CameraInterface(Device, VulnerableMachine):
     """This class represents the camera.
 
     Attributes
@@ -13,14 +14,32 @@ class CameraInterface(VulnerableMachine):
         The controller
     """
 
-    def __init__(self, controller: "Controller") -> None:
+    def __init__(self, controller: "Controller", name: str, 
+                 configuration_group: str, 
+                 configuration_defaults: typing.Optional[dict]={}, 
+                 description: typing.Optional[str]="") -> None:
         """Create a new camera interface object.
-        
+
         Parameters
         ----------
         controller : Controller
             The controller
+        name : str
+            The name to show in the GUI and to use to load this device
+        configuration_group : str
+            The group name this device should use to save persistent values in the 
+            configuration
+        configuration_defaults : dict
+            The default values that this device has which can be used internally,
+            optiona, default: {}
+        description : str
+            A description for this device, currently not used, default: ""
         """
+        super(CameraInterface, self).__init__(kind="camera", 
+            name=name, configuration_group=configuration_group,
+            configuration_defaults=configuration_defaults, 
+            description=description)
+        
         self.tags = {}
         self.controller = controller
     

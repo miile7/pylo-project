@@ -27,6 +27,7 @@ class VulnerableMachine:
 
     def __init__(self) -> None:
         """Create the vulnerable machine object"""
+        super(VulnerableMachine, self).__init__()
         self._in_emergency_state = False
 
         # add a listener to the emergency event to go in emergency state 
