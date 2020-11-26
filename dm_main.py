@@ -1,16 +1,16 @@
 import DigitalMicrograph as DM
 
 DM.ClearResults()
-close_tagname = "__pylo_close_loading_dialog"
+close_tag_name = "__pylo_close_loading_dialog"
 # show waiting dialog
 script = "\n".join((
-	"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tagname),
+	"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
 	"class LoadDialog : UIFrame{",
 		"number update_task;",
 		"",
 		"void checkForClose(object self){",
-			"if(GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(close_tagname),
-				"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tagname),
+			"if(GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(close_tag_name),
+				"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
 				"RemoveMainThreadTask(update_task);",
 				"self.close();",
 			"}",
@@ -38,7 +38,7 @@ print("")
 print("Initializing DigitalMicrograph environmnet...")
 
 # the name of the tag is used, this is deleted so it shouldn't matter anyway
-file_tag_name = "__python__file__"
+file_tag_name = "__pylo_python__file__"
 # the dm-script to execute, double curly brackets are used because of the 
 # python format function
 script = ("\n".join((
@@ -65,10 +65,7 @@ if DM.GetPersistentTagGroup():
     s, __file__ = DM.GetPersistentTagGroup().GetTagAsString(file_tag_name);
     if s:
         # delete the created tag again
-        DM.ExecuteScriptString(
-            "GetPersistentTagGroup()." + 
-            "TagGroupDeleteTagWithLabel(\"{}\");".format(file_tag_name)
-        )
+        DM.GetPersistentTagGroup().DeleteTagWithLabel(file_tag_name)
     else:
         del __file__
 
@@ -78,8 +75,8 @@ except NameError:
     # set a default if the __file__ could not be received
     __file__ = ""
 
+import os
 if __file__ != "":
-	import os
 	import sys
 	
 	base_path = str(os.path.dirname(__file__))
@@ -95,6 +92,41 @@ try:
 	print("Preparing...")
 	# pylo.OFFLINE_MODE = True
 
+	# adding device paths
+	# get device paths from dm-script and save them into global tags
+	application_dir_names = ("application", "preference", "plugin")
+	dir_path_tag_name = "__pylo_dir_path_{dirname}"
+	dmscript_template = "\n".join((
+		"if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{tagname}\"){{",
+			"GetPersistentTagGroup().TagGroupCreateNewLabeledTag(\"{tagname}\");",
+		"}}",
+		"GetPersistentTagGroup().TagGroupSetTagAsString(\"{tagname}\", GetApplicationDirectory(\"{dirname}\"));"
+	))
+	# create the script
+	dmscript = []
+	for name in application_dir_names:
+		dmscript.append(dmscript_template.format(tagname=dir_path_tag_name.format(dirname=name),
+												 dirname=name))
+	# execute the script
+	DM.ExecuteScriptString("\n".join(dmscript))
+	# read the values from the global tags
+	for name in application_dir_names:
+		tn = dir_path_tag_name.format(dirname=name)
+		s, dir_path = DM.GetPersistentTagGroup().GetTagAsString(tn)
+		if s and os.path.exists(dir_path):
+			ini_path = os.path.realpath(os.path.join(dir_path, "devices.ini"))
+			if os.path.exists(ini_path) and os.path.isfile(ini_path):
+				# add the values to the ini loader
+				pylo.loader.device_ini_files.append(ini_path)
+		DM.GetPersistentTagGroup().DeleteTagWithLabel(tn)
+	
+	if len(pylo.loader.device_ini_files) > 0:
+		print("Found device files:")
+		for f in pylo.loader.device_ini_files:
+			print("  ", f)
+	else:
+		print("Did not find any device files (devices.ini)")
+
 	# create view and configuration, both using the DM environmnent
 	view = pylo.DMView()
 	configuration = pylo.DMConfiguration()
@@ -107,8 +139,8 @@ try:
 	configuration.setValue("setup", "camera-module", "pylo.cameras")
 	configuration.setValue("setup", "camera-class", "DMCamera")
 
-	# remove loading dialog
-	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tagname, True)
+	# remove loading dialog, dialog deletes tag
+	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tag_name, True)
 
 	print("Done.")
 	print("Starting...")
