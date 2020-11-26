@@ -69,11 +69,17 @@ Default: 0x010e (The image description)
 """)
 TIFF_IMAGE_TAGS_INDEX = 0x010e
 
+__config_docs__("DEFAULT_USER_DIRECTORY",
+"""The path to save program data in.
+Default: os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
+""")
+DEFAULT_USER_DIRECTORY = os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
+
 __config_docs__("DEFAULT_SAVE_DIRECTORY",
 """The path to save the images to if the user does not change it
 Default: os.path.join(os.path.expanduser("~"), "pylo", "measurements")
 """)
-DEFAULT_SAVE_DIRECTORY = os.path.join(os.path.expanduser("~"), "pylo", "measurements", __path_time)
+DEFAULT_SAVE_DIRECTORY = os.path.join(DEFAULT_USER_DIRECTORY, "measurements", __path_time)
 
 __config_docs__("DEFAULT_SAVE_FILE_NAME",
 """The name to use for each file if the user does not change it
@@ -90,9 +96,9 @@ DEFAULT_LOG_PATH = os.path.join(DEFAULT_SAVE_DIRECTORY, "measurement.log")
 
 __config_docs__("DEFAULT_INI_PATH",
 """The path to save the ini configuration to, if used.
-Default: os.path.join(os.path.expanduser("~"), "pylo", "configuration.ini")
+Default: os.path.join(DEFAULT_USER_DIRECTORY, "configuration.ini")
 """)
-DEFAULT_INI_PATH = os.path.join(os.path.expanduser("~"), "pylo", "configuration.ini")
+DEFAULT_INI_PATH = os.path.join(DEFAULT_USER_DIRECTORY, "configuration.ini")
 
 from .abstract_configuration import AbstractConfiguration
 __config_docs__("CONFIGURATION",
@@ -131,9 +137,9 @@ DEFAULT_RELAXATION_TIME = 0
 
 __config_docs__("DM_CONFIGURATION_PERSISTENT_TAG_NAME",
 """The tag name in the persistent tags to use to save all the settings in.
-Default: "pylo"
+Default: PROGRAM_NAME.lower()
 """)
-DM_CONFIGURATION_PERSISTENT_TAG_NAME = "pylo"
+DM_CONFIGURATION_PERSISTENT_TAG_NAME = PROGRAM_NAME.lower()
 
 __config_docs__("DEFAULT_DM_SHOW_IMAGES_ROW_COUNT",
 """The number of rows of images if the `DEFAULT_DM_SHOW_IMAGES` is True, the 
@@ -141,3 +147,23 @@ columns will be calculated automatically.
 Default: 2
 """)
 DEFAULT_DM_SHOW_IMAGES_ROW_COUNT = 2
+
+__config_docs__("DEFAULT_DEVICE_INI_PATHS",
+"""The paths to the device.ini files, note that they may not exist.
+Default: 2
+""")
+DEFAULT_DEVICE_INI_PATHS = [
+    os.path.join(os.path.expanduser("~"), "devices.ini"),
+    os.path.join(DEFAULT_USER_DIRECTORY, "devices.ini"),
+    os.path.realpath(os.path.join(os.getcwd(), "devices.ini"))
+]
+try:
+    # /pylo/devices.ini
+    DEFAULT_DEVICE_INI_PATHS.append(os.path.realpath(os.path.join(
+        os.path.dirname(__file__), "..", "devices.ini")))
+    # /devices.ini
+    DEFAULT_DEVICE_INI_PATHS.append(os.path.realpath(os.path.join(
+        os.path.dirname(__file__), "..", "..", "devices.ini")))
+except NameError:
+    # __file__ does not exist
+    pass
