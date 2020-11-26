@@ -27,9 +27,9 @@ class MicroscopeInterface(Device, VulnerableMachine):
         False
     """
 
-    def __init__(self, controller : "Controller", name: str, 
-                 configuration_group: str, 
-                 configuration_defaults: typing.Optional[dict]={}, 
+    def __init__(self, controller : "Controller", name: typing.Optional[str]=None, 
+                 config_group_name: typing.Optional[str]=None, 
+                 config_defaults: typing.Optional[dict]={}, 
                  description: typing.Optional[str]="") -> None:
         """Get the microscope instance.
 
@@ -39,19 +39,18 @@ class MicroscopeInterface(Device, VulnerableMachine):
             The controller
         name : str
             The name to show in the GUI and to use to load this device
-        configuration_group : str
+        config_group_name : str
             The group name this device should use to save persistent values in the 
             configuration
-        configuration_defaults : dict
+        config_defaults : dict
             The default values that this device has which can be used internally,
             optiona, default: {}
         description : str
             A description for this device, currently not used, default: ""
         """
         super(MicroscopeInterface, self).__init__(kind="microscope", 
-            name=name, configuration_group=configuration_group,
-            configuration_defaults=configuration_defaults, 
-            description=description)
+            name=name, config_group_name=config_group_name,
+            config_defaults=config_defaults, description=description)
         
         self.supported_measurement_variables = []
         self.supports_parallel_measurement_variable_setting = True
