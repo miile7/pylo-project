@@ -64,6 +64,8 @@ class Measurement:
     running : bool
         Whether the measurement is running or not, to stop the measurement 
         immediately set this to False
+    finished : bool
+        Whether the measurement was completely run and finished successfully
         
     Listened Events
     ---------------
@@ -145,6 +147,7 @@ class Measurement:
 
         self.current_image = None
         self.running = False
+        self.finished = False
         self.logging = True
 
         # stop the measurement when the emergency event is fired
@@ -277,6 +280,7 @@ class Measurement:
         measurement_ready
             Fired when the measurement has fully finished
         """
+        self.finished = False
         self.running = True
         
         # self.controller.view.progres_max = len(self.steps)
@@ -481,6 +485,7 @@ class Measurement:
             # reset everything to the state before measuring
             self.running = False
             self._step_index = -1
+            self.finished = True
             measurement_ready()
         except StopProgram:
             self.stop()

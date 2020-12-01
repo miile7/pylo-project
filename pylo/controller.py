@@ -53,7 +53,7 @@ class Controller:
     camera : CameraInterface
         The camera that is used for receiving the images
     measurement : Measurement or None
-        The measurement to do
+        The measurement to do, this only exists while the program is executed
     """
 
     def __init__(self, view: typing.Optional[AbstractView]=None,
@@ -96,9 +96,11 @@ class Controller:
 
         self.microscope = None
         self.camera = None
-        self.measurement = None
-        self._measurement_thread = None
-        self._running_thread = None
+        
+        # all default values are set in the Controller.stopProgramLoop() to 
+        # force the programmer that the stop function resets everything to the 
+        # initial values
+        self.stopProgramLoop()
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
@@ -647,9 +649,12 @@ class Controller:
             running = False
 
         # wait until the measurement has started, this is only for fixing
-        # synchronizing problems because this funciton is started before the 
-        # measurement thread is fully started
-        if running:
+        # synchronizing problems because this function may be started before 
+        # the measurement thread is fully started, for very fast measurements 
+        # (mostly test measurements, there are no IO-operations), the 
+        # measurement may be finished before this function is called to wait 
+        # for the finish, therefore skip the waiting completely
+        if running and not self.measurement.finished:
             start_time = time.time()
 
             # wait until the measurement is running
@@ -657,9 +662,9 @@ class Controller:
                    time.time() < start_time + MEASUREMENT_START_TIMEOUT):
                 time.sleep(MEASUREMENT_START_TIMEOUT / 10)
             
-            if (not self.measurement.running and (
-                not isinstance(self._measurement_thread, ExceptionThread) or 
-                len(self._measurement_thread.exceptions) == 0)):
+            if (not self.measurement.running and not self.measurement.finished and
+                (not isinstance(self._measurement_thread, ExceptionThread) or 
+                 len(self._measurement_thread.exceptions) == 0)):
                 raise RuntimeError("The measurement was told to start by the " + 
                                 "controller but when the controller is " + 
                                 "waiting for the measurement to end, the " + 
@@ -767,7 +772,8 @@ class Controller:
         This funciton will also wait for all threads to join.
         """
 
-        if isinstance(self.measurement, Measurement) and self.measurement.running:
+        if (isinstance(self.measurement, Measurement) and 
+            self.measurement.running):
             self.measurement.stop()
 
         if isinstance(self.view, AbstractView):
@@ -782,6 +788,10 @@ class Controller:
             
         if isinstance(self.measurement, Measurement):
             self.measurement.waitForAllImageSavings()
+        
+        self._measurement_thread = None
+        self._running_thread = None
+        self.measurement = None
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
