@@ -29,7 +29,7 @@ class _DMDummyCamera:
         return img
 
 class DMTestCamera(DMCamera):
-    def __init__(self, controller: "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Create a new dm camera object.
         
         Parameters
@@ -38,9 +38,9 @@ class DMTestCamera(DMCamera):
             The controller
         """
 
-        super(DMTestCamera, self).__init__(controller)
+        super(DMTestCamera, self).__init__(*args, **kwargs)
         self.camera = _DMDummyCamera()
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
-        DMCamera.defineConfigurationOptions(configuration)
+    def defineConfigurationOptions(*args, **kwargs) -> None:
+        DMCamera.defineConfigurationOptions(*args, **kwargs)
