@@ -52,14 +52,47 @@ class Device:
         self.kind = kind
 
         if not isinstance(name, str):
-            name = str(self.__class__.__name__)
+            Device.getNameOfObject(self)
         self.name = name
         
         if not isinstance(config_group_name, str):
-            # split by upper case letters, and join with minus
-            config_group_name = "-".join(map(lambda x: x.lower(), 
-                re.findall(r"[A-Z0-9](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", name)))
+            config_group_name = Device.convertToSnakeCase(self.name)
         self.config_group_name = config_group_name
 
         self.config_defaults = config_defaults
         self.description = description
+
+    @staticmethod
+    def getNameOfObject(obj: object) -> str:
+        """Get the name of the object which is the class name.
+
+        Parameters
+        ----------
+        obj : object
+            The object
+        
+        Returns
+        -------
+        str
+            The class name
+        """
+        return str(obj.__class__.__name__)
+    
+    @staticmethod
+    def convertToSnakeCase(text: str) -> str:
+        """Convert the given `text` to be snake-case (with minus).
+
+        Parameters
+        ----------
+        text : str
+            The text to convert, e.g. CamelCase
+        
+        Returns
+        -------
+        str
+            The snake-cased text
+        """
+        # split by upper case letters, and join with minus
+        return "-".join(map(lambda x: x.lower(), 
+                        re.findall(r"[A-Z0-9](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", 
+                                   text)))

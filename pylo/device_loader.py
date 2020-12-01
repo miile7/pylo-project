@@ -2,6 +2,7 @@ import os
 import sys
 import copy
 import typing
+import inspect
 import importlib
 import configparser
 
@@ -194,13 +195,124 @@ class DeviceLoader:
         
         return installed_names
     
+    def _getDeviceDefinition(self, name: str) -> typing.Union[dict, None]:
+        """Get the device definition dict.
+
+        Go through all the saved device sources and find the device with the 
+        `name`. Then return the dict that is found.
+
+        This will start with the `DeviceLoader._device_objects`, then the 
+        `DeviceLoader._device_class_files` and then load definitions from the 
+        `DeviceLoader.device_ini_files`. The first match with the same name
+        will be returned.
+
+        Parameters
+        ----------
+        name : str
+            The name of the device
+
+        Returns
+        -------
+        dict or None
+            The definition dict or None if the `name` is not found
+        """
+        found_device = None
+        for device in self._device_objects:
+            if ("name" in device and device["name"] == name and 
+                "object" in device):
+                found_device = device
+                break
+        
+        if found_device is None:
+            for device in self._device_class_files + self._getDeviceDefinitionsFromInis():
+                if ("name" in device and device["name"] == name and 
+                    ("class_name" in device or "class" in device) and 
+                    ("file_path" in device or "file" in device)):
+                    if "class" in device:
+                        if "class_name" not in device:
+                            device["class_name"] = device["class"]
+                        del device["class"]
+                    
+                    if "file" in device:
+                        if "file_path" not in device:
+                            device["file_path"] = device["file"]
+                        del device["file"]
+                    
+                    # make ./ relative to the ini file if this comes from the 
+                    # ini file
+                    if ("__relpath" in device and
+                        (device["file_path"].startswith("./") or
+                            device["file_path"].startswith(r".\\"))):
+                        device["file_path"] = os.path.join(device["__relpath"], 
+                                                            device["file_path"])
+
+                    # resolve all variables and links, ect.
+                    device["file_path"] = os.path.expandvars(device["file_path"])
+                    device["file_path"] = os.path.expanduser(device["file_path"])
+                    device["file_path"] = os.path.realpath(device["file_path"])
+                    device["file_path"] = os.path.abspath(device["file_path"])
+                    
+                    found_device = device
+                    break
+        
+        if found_device is not None:
+            if "config_group_name" not in found_device:
+                found_device["config_group_name"] = Device.convertToSnakeCase(
+                    found_device["name"])
+            
+            if "config_defaults" not in found_device:
+                found_device["config_defaults"] = {}
+            
+            if "description" not in found_device:
+                found_device["description"] = ""
+        
+        return found_device
+    
+    def getDeviceClassFile(self, name: str, 
+                           find_object_file: typing.Optional[bool]=False) -> typing.Union[str, None]:
+        """Get the absolute file path of the file where the device object for 
+        the given `name` is defined in.
+
+        If the device is not found or it is an object and `find_object_file` is
+        False, None is returned.
+
+        This will start with the `DeviceLoader._device_objects`, then the 
+        `DeviceLoader._device_class_files` and then load definitions from the 
+        `DeviceLoader.device_ini_files`. The first match with the same name
+        will be returned.
+
+        Parameters
+        ----------
+        name : str
+            The name of the device
+        find_object_file : bool, optional
+            Whether to return the file also when the device is added as the 
+            object directly, default: False
+
+        Returns
+        -------
+        str or None
+            The absolute path of the python class definition file or None if 
+            not found or an object and `find_object_file` is False
+        """
+
+        device_definition = self._getDeviceDefinition(name)
+
+        if device_definition is None:
+            return None
+        elif "file_path" in device_definition:
+            return device_definition["file_path"]
+        elif "object" in device_definition and find_object_file:
+            return inspect.getfile(device_definition["object"].__class__)
+        else:
+            return None
+    
     def getDevice(self, name: str, controller: typing.Optional["Controller"]=None,
                   *constructor_args: typing.Any, **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
         """Get the device with the given `name`.
 
-        If the `name` does not exist a ValueError is raised. The available 
-        device names can be retrieved by the 
-        `DeviceLoader.getInstalledDeviceNames()`.
+        If the `name` does not exist None is returned. The available device 
+        names can be retrieved by the `DeviceLoader.getInstalledDeviceNames()`.
 
         This function will look in the `DeviceLoader._device_objects` at first,
         then in the `DeviceLoader._device_class_files` and then in the 
@@ -210,8 +322,6 @@ class DeviceLoader:
 
         Raises
         ------
-        ValueError
-            When there is no device with the given `name`
         DeviceImportError
             When class is loaded from the file and the file is not importable
         DeviceClassNotDefined
@@ -237,68 +347,35 @@ class DeviceLoader:
         
         Returns
         -------
-        Device or object
+        Device or object or None
             The device object if the defined device extends the Device class 
-            (should be the case but is not guaranteed) or the object
+            (should be the case but is not guaranteed) or the object or None if
+            no element with the `name` can be found
         """
 
-        for device in self._device_objects:
-            try:
-                if ("name" in device and device["name"] == name and 
-                    "object" in device):
-                    if isinstance(device["object"], Device):
-                        if "kind" in device:
-                            device["object"].kind = device["kind"]
-                        if "name" in device:
-                            device["object"].name = device["name"]
-                        if "config_defaults" in device:
-                            device["object"].config_defaults = device["config_defaults"]
-                        if "description" in device:
-                            device["object"].description = device["description"]
-                    return device["object"]
-            except (TypeError, AttributeError):
-                pass
-        
-        load_device = None
-        for device in self._device_class_files + self._getDeviceDefinitionsFromInis():
-            try:
-                if ("name" in device and device["name"] == name and 
-                    ("class_name" in device or "class" in device) and 
-                    ("file_path" in device or "file" in device)):
-                    if "class" in device:
-                        if "class_name" not in device:
-                            device["class_name"] = device["class"]
-                        del device["class"]
-                    
-                    if "file" in device:
-                        if "file_path" not in device:
-                            device["file_path"] = device["file"]
-                        del device["file"]
-                    
-                    # make ./ relative to the ini file if this comes from the 
-                    # ini file
-                    if ("__relpath" in device and
-                        (device["file_path"].startswith("./") or
-                         device["file_path"].startswith(r".\\"))):
-                        device["file_path"] = os.path.join(device["__relpath"], 
-                                                            device["file_path"])
+        device_definition = self._getDeviceDefinition(name)
 
-                    # resolve all variables and links, ect.
-                    device["file_path"] = os.path.expandvars(device["file_path"])
-                    device["file_path"] = os.path.expanduser(device["file_path"])
-                    device["file_path"] = os.path.realpath(device["file_path"])
-                    device["file_path"] = os.path.abspath(device["file_path"])
-                    
-                    load_device = device
-                    break
-            except TypeError:
-                pass
-        
-        if load_device is not None:
-            return self._loadClass(load_device, controller, *constructor_args,
-                                   **constructor_kwargs)
-        else:
+        if device_definition is None:
             return None
+        elif "object" in device_definition:
+            device = device_definition["object"]
+
+            if isinstance(device_definition["object"], Device):
+                if "kind" in device_definition:
+                    device.kind = device_definition["kind"]
+                if "name" in device_definition:
+                    device.name = device_definition["name"]
+                if "config_group_name" in device_definition:
+                    device.config_defaults = device_definition["config_group_name"]
+                if "config_defaults" in device_definition:
+                    device.config_defaults = device_definition["config_defaults"]
+                if "description" in device_definition:
+                    device.description = device_definition["description"]
+            
+            return device
+
+        return self._loadClass(device_definition, controller, *constructor_args,
+                               **constructor_kwargs)
     
     def _loadClass(self, device: typing.Mapping, 
                    controller: typing.Optional["Controller"]=None,
@@ -417,7 +494,9 @@ class DeviceLoader:
             callable(class_.defineConfigurationOptions)):
             state_id = controller.configuration.markState()
 
-            class_.defineConfigurationOptions(controller.configuration)
+            class_.defineConfigurationOptions(controller.configuration,
+                                              device["config_group_name"],
+                                              device["config_defaults"])
 
             config_keys = controller.configuration.getAdditions(state_id, True)
             controller.configuration.dropStateMark(state_id)
