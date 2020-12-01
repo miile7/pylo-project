@@ -83,7 +83,7 @@ class DMConfiguration(AbstractConfiguration):
                                 callable(datatype.format)):
                                 value = datatype.format(value)
                             
-                            DM.GetPersistentTagGroup().SetTagAsString(path, value)
+                            DM.GetPersistentTagGroup().SetTagAsString(path, str(value))
                         
                         if not group in keys:
                             keys[group] = []
