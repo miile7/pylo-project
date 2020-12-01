@@ -363,31 +363,52 @@ class Controller:
             from . import loader
 
             for name, kind in zip(names, load_kinds):
+                device = None
                 try:
                     device = loader.getDevice(name, self)
-                except ValueError as e:
-                    msg = ("The device '{}' neither is defined one of the " +
-                           "devices.ini nor is added in runtime.").format(name)
-                    fix = ("Check the devices.ini if one of them contains " + 
-                           "the '{}' definition. If so make sure that it is " + 
-                           "not disabled, that its kind is '{}' and that " + 
-                           "the 'file' and 'class' are valid, exist and are " + 
-                           "readable. If the '{}' is not found in one of " +
-                           "the devices.ini files, add it to one of them. " + 
-                           "\n" + 
-                           "The following devices.ini are loaded at the " + 
-                           "moment:\n" + 
-                           "\n".join(map(lambda x: "- '{}'".format(x), 
-                                         loader.device_ini_files)))
-                    self.view.showError(msg, fix)
+                    if device is None:
+                        msg = ("The device '{}' neither is defined one of " +
+                               "the devices.ini nor is added in " + 
+                               "runtime.").format(name)
+                        fix = (("Check the devices.ini if one of them " + 
+                                "contains the '{}' definition. If so make " + 
+                                "sure that it is not disabled, that its " + 
+                                "kind is '{}' and that the 'file' and " + 
+                                "'class' are valid, exist and are readable. " +
+                                "If the '{}' is not found in one of the " + 
+                                "devices.ini files, add it to one of them. " + 
+                                "\n").format(name, kind, name) + 
+                            "The following devices.ini are loaded at the " + 
+                            "moment:\n".format() + 
+                            "\n".join(map(lambda x: "- '{}'".format(x), 
+                                            loader.device_ini_files)))
+                        self.view.showError(msg, fix)
+                except StopProgram as e:
+                    raise e
                 except (DeviceImportError, DeviceClassNotDefined, 
                         DeviceCreationError) as e:
                     self.view.showError(e, self._getFixForError(e))
+                except Exception as e:
+                    msg = ("Creating the '{}' object caused a '{}' Error " + 
+                           "with the message '{}'.").format(name, 
+                                                            e.__class__.__name__,
+                                                            str(e))
+                    fix = ("Fix the error in the '{}' class in the definition " + 
+                           "file '{}'.").format(name, loader.getDeviceClassFile(name))
+                    self.view.showError(msg, fix)
                 
                 if kind == "camera":
-                    self.camera = device
+                    if device is not None:
+                        self.camera = device
+                    else:
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                                                       "camera")
                 elif kind == "microscope":
-                    self.microscope = device
+                    if device is not None:
+                        self.microscope = device
+                    else:
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                                                       "microscope")
 
         # show an error that the max loop count is reached and stop the
         # execution
@@ -822,7 +843,8 @@ class Controller:
                  "`pylo.loader`). The `devices.ini` files can be in one of " + 
                  "the following directories: \n" +  
                  "\n".join(map(lambda x: "- '{}'".format(x), 
-                               DEFAULT_DEVICE_INI_PATHS)))
+                               DEFAULT_DEVICE_INI_PATHS)) + 
+                 "\n")
         
         # add the option for the microscope module
         configuration.addConfigurationOption(
