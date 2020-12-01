@@ -47,6 +47,7 @@ controller_tmp_path = os.path.join(test_root, "tmp-test-controller-{}".format(ra
 
 os.makedirs(controller_tmp_path, exist_ok=True)
 
+pylo.config.DEFAULT_SAVE_FILE_NAME = "{counter}-test-measurement.tif"
 pylo.config.DEFAULT_LOG_PATH = os.path.join(controller_tmp_path, "measurement.log")
 pylo.config.DEFAULT_INI_PATH = os.path.join(controller_tmp_path, "configuration.ini")
 
@@ -169,8 +170,8 @@ class DummyImage(pylo.Image):
 
 use_dummy_images = False
 class DummyCamera(pylo.CameraInterface):
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, *args, **kwargs):
+        super().__init__(controller, *args, **kwargs)
         self.reset()
     
     def reset(self):
@@ -189,10 +190,11 @@ class DummyCamera(pylo.CameraInterface):
     def resetToSafeState(self):
         pass
 
-measurement_duration_time = -1
+pylo.loader.addDeviceFromFile("camera", "DummyCamera", __file__, "DummyCamera")
+
 class DummyMicroscope(pylo.MicroscopeInterface):
-    def __init__(self, controller):
-        super().__init__(controller)
+    def __init__(self, controller, *args, **kwargs):
+        super().__init__(controller, *args, **kwargs)
         self.reset()
 
     def reset(self):
@@ -211,8 +213,9 @@ class DummyMicroscope(pylo.MicroscopeInterface):
     def setMeasurementVariableValue(self, id_, value):
         self.performed_steps.append((id_, value, time.time()))
 
-        if measurement_duration_time > 0:
-            time.sleep(measurement_duration_time)
+        if (hasattr(self.controller, "measurement_duration_time") and 
+            self.controller.measurement_duration_time >= 0):
+            time.sleep(self.controller.measurement_duration_time)
     
     def getMeasurementVariableValue(self, id_):
         for k, v, t in reversed(self.performed_steps):
@@ -224,6 +227,18 @@ class DummyMicroscope(pylo.MicroscopeInterface):
     def resetToSafeState(self):
         pass
 
+pylo.loader.addDeviceFromFile("microscope", "DummyMicroscope", __file__, 
+                              "DummyMicroscope")
+
+# add some invalid devices
+pylo.loader.addDeviceFromFile("microscope", "NoFileDummyMicroscope", 
+                              "filedoesnotexist.py", "DummyMicroscope")
+pylo.loader.addDeviceFromFile("microscope", "NoClassDummyMicroscope", __file__, 
+                              "ClassDoesNotExist")
+pylo.loader.addDeviceFromFile("camera", "NoFileDummyCamera", 
+                              "filedoesnotexist.py", "DummyCamera")
+pylo.loader.addDeviceFromFile("camera", "NoClassDummyCamera", __file__, 
+                              "ClassDoesNotExist")
 configuration_test_setup = [
     ({"group": "test-group", "key": "test-key", "value": "test"}, ),
     ({"group": "test-group2", "key": "test-key", "value": False}, ),
@@ -250,9 +265,6 @@ configuration_test_setup = [
 
 @pytest.fixture()
 def controller():
-    global measurement_duration_time
-
-    measurement_duration_time = -1
     pylo.config.CONFIGURATION = DummyConfiguration()
     pylo.config.CONFIGURATION.reset()
     pylo.config.VIEW = DummyView()
@@ -829,13 +841,11 @@ class TestController:
 
         if change_microscope:
             # define the microscope to use
-            controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
-            controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+            controller.configuration.setValue("setup", "microscope", "DummyMicroscope")
 
         if change_camera:
             # define the camera to use
-            controller.configuration.setValue("setup", "camera-module", "test_controller.py")
-            controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+            controller.configuration.setValue("setup", "camera", "DummyCamera")
 
         if change_save_path:
             controller.configuration.setValue("measurement", "save-directory", save_path)
@@ -923,8 +933,7 @@ class TestController:
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if mircoscope is asked from the configuration
-        assert ("setup", "microscope-module") in requests
-        assert ("setup", "microscope-class") in requests
+        assert ("setup", "microscope") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_camera_from_configuration(self, tmp_path, controller):
@@ -935,8 +944,7 @@ class TestController:
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if camera is asked from the configuration
-        assert ("setup", "camera-module") in requests
-        assert ("setup", "camera-class") in requests
+        assert ("setup", "camera") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_microscope_and_camera_are_valid(self, tmp_path, controller):
@@ -944,8 +952,16 @@ class TestController:
         self.init_start_program_test(controller, tmp_path)
 
         # check mircoscope and camera are valid
-        assert isinstance(controller.microscope, DummyMicroscope)
-        assert isinstance(controller.camera, DummyCamera)
+        # this test does not work, objects have different classes because they
+        # are loaded differently, does not matter in the "real" application
+        # assert isinstance(controller.microscope, DummyMicroscope)
+        # assert isinstance(controller.camera, DummyCamera)
+
+        assert controller.microscope.__class__.__module__ == os.path.basename(__file__)
+        assert controller.microscope.__class__.__name__ == "DummyMicroscope"
+
+        assert controller.camera.__class__.__module__ == os.path.basename(__file__)
+        assert controller.camera.__class__.__name__ == "DummyCamera"
     
     @pytest.mark.usefixtures("controller")
     def test_show_create_measurement_is_executed(self, tmp_path, controller):
@@ -1073,8 +1089,7 @@ class TestController:
     def test_error_shown_microscope_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope-module", "nontexistingmodule")
-        controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+        controller.configuration.setValue("setup", "microscope", "NoFileDummyMicroscope")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -1082,7 +1097,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module could not be imported" in str(e[0]):
+            if "Could not import the device 'NoFileDummyMicroscope'" in str(e[0]):
                 found = True
                 break
         
@@ -1092,15 +1107,15 @@ class TestController:
     def test_error_shown_microscope_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
-        controller.configuration.setValue("setup", "microscope-class", "NonExistingClass")
+        controller.configuration.setValue("setup", "microscope", "NoClassDummyMicroscope")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_microscope=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module does not define the given class" in str(e[0]):
+            if "Could not create the device 'NoClassDummyMicroscope'" in str(e[0]):
                 found = True
                 break
         
@@ -1110,15 +1125,15 @@ class TestController:
     def test_error_shown_camera_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera-module", "nontexistingmodule")
-        controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+        controller.configuration.setValue("setup", "camera", "NoFileDummyCamera")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module could not be imported" in str(e[0]):
+            if "Could not import the device 'NoFileDummyCamera'" in str(e[0]):
                 found = True
                 break
         
@@ -1128,15 +1143,15 @@ class TestController:
     def test_error_shown_camera_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the camera could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera-module", "test_controller.py")
-        controller.configuration.setValue("setup", "camera-class", "NonExistingClass")
+        controller.configuration.setValue("setup", "camera", "NoClassDummyCamera")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module does not define the given class" in str(e[0]):
+            if "Could not create the device 'NoClassDummyCamera'" in str(e[0]):
                 found = True
                 break
         
@@ -1274,10 +1289,8 @@ class TestController:
     
     @pytest.mark.usefixtures("controller")
     @pytest.mark.parametrize("group,key,for_camera", [
-        ("setup", "microscope-module", False),
-        ("setup", "microscope-class", False),
-        ("setup", "camera-module", True),
-        ("setup", "camera-class", True),
+        ("setup", "microscope", False),
+        ("setup", "camera", True),
     ])
     def test_stop_program_exception_stops_in_ask_for_microscope_or_camera(self, tmp_path, controller, group, key, for_camera):
         """Test if the program is stopped if the view raises the StopProgram
@@ -1351,8 +1364,6 @@ class TestController:
         """Test if the program loop is stoppend when calling 
         Controller::stopProgramLoop() in another thread."""
 
-        global measurement_duration_time
-
         # add a listener to the microscope_ready event
         pylo.microscope_ready.clear()
         pylo.measurement_ready.clear()
@@ -1366,12 +1377,13 @@ class TestController:
         # let the microscope take one second to arrange the measuremnet 
         # variable
         measurement_duration_time = 1
+        controller.measurement_duration_time = measurement_duration_time
         
         # program is running
         self.init_start_program_test(controller, tmp_path, wait_for_finish=False)
         
         # wait some time until the measurement should be started
-        time.sleep(measurement_duration_time * 2 / 3)
+        time.sleep(measurement_duration_time * 1 / 2)
 
         # stop the program
         controller.stopProgramLoop()
@@ -1397,8 +1409,6 @@ class TestController:
         """Test if the program loop is stoppend when calling 
         Controller::restartProgramLoop() in another thread."""
 
-        global measurement_duration_time
-
         # add a listener to the microscope_ready event
         pylo.microscope_ready.clear()
         pylo.measurement_ready.clear()
@@ -1412,6 +1422,7 @@ class TestController:
         # let the microscope take one second to arrange the measuremnet 
         # variable
         measurement_duration_time = 1
+        controller.measurement_duration_time = measurement_duration_time
         
         # program is running
         self.init_start_program_test(controller, tmp_path, wait_for_finish=False)
@@ -1456,10 +1467,8 @@ class TestController:
 
         # check if mircoscope and camera are created at least two times, there
         # can be more requests when restarting, ect.
-        assert requests.count(("setup", "microscope-module")) >= 2
-        assert requests.count(("setup", "microscope-class")) >= 2
-        assert requests.count(("setup", "camera-module")) >= 2
-        assert requests.count(("setup", "camera-class")) >= 2
+        assert requests.count(("setup", "microscope")) >= 2
+        assert requests.count(("setup", "camera")) >= 2
 
         # all first events are triggered before the restart
         assert self.before_init_times[0] <= restart_time
@@ -1468,10 +1477,8 @@ class TestController:
         assert self.microscope_ready_times[0] <= restart_time
 
         # all first requests are made before the restart
-        assert min(request_times_dict["setup-microscope-module"]) <= restart_time
-        assert min(request_times_dict["setup-microscope-class"]) <= restart_time
-        assert min(request_times_dict["setup-camera-module"]) <= restart_time
-        assert min(request_times_dict["setup-camera-class"]) <= restart_time
+        assert min(request_times_dict["setup-microscope"]) <= restart_time
+        assert min(request_times_dict["setup-camera"]) <= restart_time
 
         # all second events are triggered after the restart
         assert restart_time <= self.before_init_times[1]
