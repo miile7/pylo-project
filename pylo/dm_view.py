@@ -249,7 +249,7 @@ class DMView(AbstractView):
                     DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
                     break
                 
-                time.sleep(0.1)
+                time.sleep(0.2)
         
         if 0 <= index and index < len(options):
             return index
