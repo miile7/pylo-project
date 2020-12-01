@@ -1431,7 +1431,7 @@ class DMViewDialog : UIFrame{
 
         // the number of variables to show in one row
         number max_cols = 1;
-        number max_rows = 7;
+        number max_rows = 4;
 
         TagGroup tabs = DLGCreateTabList();
         tabs.DLGExpand("X");
