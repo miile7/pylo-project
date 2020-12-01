@@ -1,7 +1,6 @@
 import pytest
 
 import pylo
-import pylo.microscopes
 
 class DummyController(pylo.Controller):
     def __init__(self):
