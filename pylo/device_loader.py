@@ -427,17 +427,13 @@ class DeviceLoader:
         
         # add the kwargs of the device if the class is a device
         if Device in class_.__mro__:
+            allowed_kwargs = ("kind", "name", "config_group_name", 
+                              "config_defaults", "description")
             device_kwargs = copy.deepcopy(device)
-            del device_kwargs["file_path"]
-            del device_kwargs["class_name"]
-            if "class" in device_kwargs:
-                del device_kwargs["class"]
-            if "file" in device_kwargs:
-                del device_kwargs["file"]
-            if "object" in device_kwargs:
-                del device_kwargs["object"]
-            if "__relpath" in device_kwargs:
-                del device_kwargs["__relpath"]
+            keys = tuple(device_kwargs.keys())
+            for k in keys:
+                if k not in allowed_kwargs:
+                    del device_kwargs[k]
             constructor_kwargs.update(device_kwargs)
 
         # add the controller to the args if it is a microscope or camera

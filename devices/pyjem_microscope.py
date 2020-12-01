@@ -18,7 +18,7 @@ if load_from_dev:
         if not dev_constants.pyjem_path in sys.path:
             sys.path.insert(0, dev_constants.pyjem_path)
 
-from ..config import OFFLINE_MODE
+from pylo.config import OFFLINE_MODE
 error = None
 if OFFLINE_MODE != True:
     try:

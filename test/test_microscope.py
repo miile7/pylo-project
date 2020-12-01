@@ -10,8 +10,6 @@ import pytest
 import math
 
 import pylo
-import pylo.cameras
-import pylo.microscopes
 
 pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
 controller = pylo.Controller()
@@ -35,7 +33,7 @@ controller = pylo.Controller()
 #     return plyo.MicroscopeInterface()
 
 def create_pyjem_microscope() -> pylo.MicroscopeInterface:
-    microscope = pylo.PyJEMMicroscope(controller)
+    microscope = pylo.loader.getDevice("PyJEM Microscope", controller)
     controller.microscope = microscope
     return microscope
 
@@ -73,6 +71,8 @@ class TestPyJEMMicroscope:
             
             if len(values) == 0:
                 values.append(random.randint(0, 10))
+            
+            print(values)
             
             for val in values:
                 microscope.setMeasurementVariableValue(var.unique_id, val)
