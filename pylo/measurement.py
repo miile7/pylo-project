@@ -16,6 +16,8 @@ from .events import before_record
 from .events import after_record
 from .events import measurement_ready
 
+from .errors import BlockedFunctionError
+
 from .image import Image
 from .datatype import Datatype
 from .log_thread import LogThread
@@ -23,7 +25,6 @@ from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
 from .measurement_steps import MeasurementSteps
 from .measurement_variable import MeasurementVariable
-from .blocked_function_error import BlockedFunctionError
 
 # from .config import DEFAULT_SAVE_DIRECTORY
 # from .config import DEFAULT_SAVE_FILE_NAME

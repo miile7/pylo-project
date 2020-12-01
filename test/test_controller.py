@@ -16,13 +16,8 @@ import numpy as np
 import pylo
 import pylo.config
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from pylo import FallbackModuleNotFoundError
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -718,7 +713,7 @@ class TestController:
 
         # wait a short time, otherwise the module is sometimes not found
         time.sleep(0.1)
-        with pytest.raises((ModuleNotFoundError, ImportError)):
+        with pytest.raises((FallbackModuleNotFoundError, ImportError)):
             # python <3.6 raises an ImportError
             controller._dynamicGetClasses(("dummy-test-module-name", 
                                            "dummy-test-class-name"))

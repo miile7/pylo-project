@@ -5,19 +5,13 @@ import typing
 import pathlib
 
 from .image import Image
-from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
-
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+from .errors import ExecutionOutsideEnvironmentError
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from .errors import FallbackModuleNotFoundError
 
 try:
     import DigitalMicrograph as DM
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
 if DM is not None:
@@ -26,7 +20,7 @@ if DM is not None:
     try:
         import dev_constants
         load_from_dev = True
-    except (ModuleNotFoundError, ImportError) as e:
+    except (FallbackModuleNotFoundError, ImportError) as e:
         load_from_dev = False
 
     if load_from_dev:

@@ -1,9 +1,10 @@
 import inspect
 import traceback
 
+from .errors import BlockedFunctionError
+
 from .events import emergency
 from .blocked_function import BlockedFunction
-from .blocked_function_error import BlockedFunctionError
 
 class VulnerableMachine:
     """

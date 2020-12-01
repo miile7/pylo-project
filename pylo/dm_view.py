@@ -6,17 +6,13 @@ import textwrap
 import threading
 import traceback
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from .errors import FallbackModuleNotFoundError
+from .errors import ExecutionOutsideEnvironmentError
 
 try:
     import DigitalMicrograph as DM
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
 from .datatype import Datatype
@@ -25,7 +21,6 @@ from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
-from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
 
 from .pylolib import get_datatype_name
 
@@ -35,7 +30,7 @@ if DM is not None:
     try:
         import dev_constants
         load_from_dev = True
-    except (ModuleNotFoundError, ImportError) as e:
+    except (FallbackModuleNotFoundError, ImportError) as e:
         load_from_dev = False
 
     if load_from_dev:

@@ -40,6 +40,13 @@ can add any kind of callable which will be executed when the event is fired.\n\n
 from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
+from .errors import DeviceImportError
+from .errors import DeviceCreationError
+from .errors import BlockedFunctionError
+from .errors import DeviceClassNotDefined
+from .errors import FallbackModuleNotFoundError
+from .errors import ExecutionOutsideEnvironmentError
+
 from .image import Image
 from .device import Device
 from .cli_view import CLIView
@@ -59,9 +66,7 @@ from .measurement_steps import MeasurementSteps
 from .vulnerable_machine import VulnerableMachine
 from .measurement_variable import MeasurementVariable
 from .microscope_interface import MicroscopeInterface
-from .blocked_function_error import BlockedFunctionError
 from .abstract_configuration import AbstractConfiguration
-from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
 
 try:
     from .dm_view import DMView

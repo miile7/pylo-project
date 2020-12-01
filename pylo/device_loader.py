@@ -5,6 +5,10 @@ import typing
 import importlib
 import configparser
 
+from .errors import DeviceImportError
+from .errors import DeviceCreationError
+from .errors import DeviceClassNotDefined
+
 from .device import Device
 from .device import device_kinds
 from .pylolib import path_like
@@ -12,18 +16,6 @@ from .controller import Controller
 from .stop_program import StopProgram
 from .camera_interface import CameraInterface
 from .microscope_interface import MicroscopeInterface
-
-class DeviceImportError(ImportError):
-    def __init__(self, *args, **kwargs):
-        super(DeviceImportError, self).__init__(*args, **kwargs)
-
-class DeviceClassNotDefined(AttributeError):
-    def __init__(self, *args, **kwargs):
-        super(DeviceClassNotDefined, self).__init__(*args, **kwargs)
-
-class DeviceCreationError(RuntimeError):
-    def __init__(self, *args, **kwargs):
-        super(DeviceCreationError, self).__init__(*args, **kwargs)
 
 class DeviceLoader:
     """A class to load devices.
@@ -220,6 +212,17 @@ class DeviceLoader:
         ------
         ValueError
             When there is no device with the given `name`
+        DeviceImportError
+            When class is loaded from the file and the file is not importable
+        DeviceClassNotDefined
+            When class is loaded from the file and the module does not define 
+            the `class_name`
+        DeviceCreationError
+            When class is loaded from the file and the `class_name` object 
+            could not be created
+        StopProgram
+            When class is loaded from the file and the class raises a 
+            `StopProgram` exception anywhere
         
         Parameters
         ----------
