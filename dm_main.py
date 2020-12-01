@@ -97,10 +97,10 @@ try:
 	application_dir_names = ("application", "preference", "plugin")
 	dir_path_tag_name = "__pylo_dir_path_{dirname}"
 	dmscript_template = "\n".join((
-		"if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{tagname}\"){{",
+		"if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{tagname}\")){{",
 			"GetPersistentTagGroup().TagGroupCreateNewLabeledTag(\"{tagname}\");",
 		"}}",
-		"GetPersistentTagGroup().TagGroupSetTagAsString(\"{tagname}\", GetApplicationDirectory(\"{dirname}\"));"
+		"GetPersistentTagGroup().TagGroupSetTagAsString(\"{tagname}\", GetApplicationDirectory(\"{dirname}\", 0));"
 	))
 	# create the script
 	dmscript = []
