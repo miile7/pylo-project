@@ -96,10 +96,10 @@ class Controller:
 
         self.microscope = None
         self.camera = None
-        
-        # all default values are set in the Controller.stopProgramLoop() to 
-        # force the programmer that the stop function resets everything to the 
-        # initial values
+        self.measurement = None
+        self._running_thread = None
+        self._measurement_thread = None
+
         self.stopProgramLoop()
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
@@ -551,13 +551,14 @@ class Controller:
                 
                 measurement_layout = self.view.showCreateMeasurement(self)
                 
-                if(not isinstance(measurement_layout, typing.Sequence) or 
-                len(measurement_layout) <= 1):
-                    self.view.showError("The view returned an invalid measurement.",
-                                        "Try to input your measurement again, if " + 
-                                        "it still doesn't work you have to debug " + 
-                                        "your view in 'pylo/{}'.".format(
-                                            inspect.getfile(self.view.__class__)))
+                if (not isinstance(measurement_layout, typing.Sequence) or 
+                    len(measurement_layout) <= 1):
+                    msg = ("The view returned an invalid measurement. Try " + 
+                           "to input your measurement again, if it still " + 
+                           "doesn't work you have to debug the '{}' view in " + 
+                           "{}.").format(self.view.__class__, 
+                                         inspect.getfile(self.view.__class__))
+                    self.view.showError(msg)
             
                 # fire user_ready event
                 user_ready()
@@ -573,24 +574,24 @@ class Controller:
 
                 try:
                     self.measurement = Measurement.fromSeries(self, 
-                                                              measurement_layout[0], 
-                                                              measurement_layout[1])
+                        measurement_layout[0], measurement_layout[1])
                 except (KeyError, ValueError) as e:
-                    self.view.showError("The measurement could not be initialized " + 
-                                        "because it is not formatted correctly: " + 
-                                        "{}".format(e),
-                                        "Try again and make sure you entered a " + 
-                                        "valid value for this.")
+                    msg = ("The measurement could not be initialized " + 
+                           "because it is not formatted correctly: {}".format(e))
+                    fix = ("Try again and make sure you entered a valid " + 
+                           "value for this. If this error keeps appearing " + 
+                           "even though all values are correct, there is " + 
+                           "an internal problem with the Measurement class.")
+                    self.view.showError(msg, fix)
 
             # show an error that the max loop count is reached and stop the
             # execution
             if security_counter + 1 >= MAX_LOOP_COUNT:
-                self.view.showError(("The program is probably trapped in an " + 
-                                    "infinite loop when trying to initialize the " + 
-                                    "measurement. The execution will be stopped now " + 
-                                    "after {} iterations.").format(security_counter),
-                                    "This is a bigger issue. Look in the code " + 
-                                    "and debug the 'pylo/controller.py' file.")
+                msg = ("The program is probably trapped in an infinite loop " +
+                       "when trying to initialize the measurement. The " + 
+                       "execution will be stopped now  after {} " + 
+                       "iterations.").format(security_counter)
+                self.view.showError(msg)
                 return
             
             # fire series_ready event
@@ -791,7 +792,6 @@ class Controller:
         
         self._measurement_thread = None
         self._running_thread = None
-        self.measurement = None
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
