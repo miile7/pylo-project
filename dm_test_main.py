@@ -1,92 +1,92 @@
 import DigitalMicrograph as DM
 
-DM.ClearResults()
-close_tag_name = "__pylo_close_loading_dialog"
-# show waiting dialog
-script = "\n".join((
-	"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
-	"class LoadDialog : UIFrame{",
-		"number update_task;",
-		"",
-		"void checkForClose(object self){",
-			"if(GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(close_tag_name),
-				"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
-				"RemoveMainThreadTask(update_task);",
-				"self.close();",
+try:
+	DM.ClearResults()
+	close_tag_name = "__pylo_close_loading_dialog"
+	# show waiting dialog
+	script = "\n".join((
+		"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
+		"class LoadDialog : UIFrame{",
+			"number update_task;",
+			"",
+			"void checkForClose(object self){",
+				"if(GetPersistentTagGroup().TagGroupDoesTagExist(\"{}\")){{".format(close_tag_name),
+					"GetPersistentTagGroup().TagGroupDeleteTagWithLabel(\"{}\");".format(close_tag_name),
+					"RemoveMainThreadTask(update_task);",
+					"self.close();",
+				"}",
+			"}",
+			"",
+			"object init(object self){",
+				"TagGroup dlg, dlg_items, text;",
+				"",
+				"dlg = DLGCreateDialog(\"Loading...\", dlg_items);",
+				"dlg_items.DLGAddElement(DLGCreateLabel(\"\\n          Loading... This can take a while.          \\n\"));",
+				"",
+				"update_task = AddMainThreadPeriodicTask(self, \"checkForClose\", 0.1);",
+				"",
+				"self.super.init(dlg);",
+				"return self;",
 			"}",
 		"}",
-		"",
-		"object init(object self){",
-			"TagGroup dlg, dlg_items, text;",
-			"",
-			"dlg = DLGCreateDialog(\"Loading...\", dlg_items);",
-			"dlg_items.DLGAddElement(DLGCreateLabel(\"\\n          Loading... This can take a while.          \\n\"));",
-			"",
-			"update_task = AddMainThreadPeriodicTask(self, \"checkForClose\", 0.1);",
-			"",
-			"self.super.init(dlg);",
-			"return self;",
-		"}",
-	"}",
-	"alloc(LoadDialog).init().display(\"Loading...\");"
-))
-DM.ExecuteScriptString(script)
+		"alloc(LoadDialog).init().display(\"Loading...\");"
+	))
+	DM.ExecuteScriptString(script)
 
-print("Starting, this can take a while...")
-print("")
+	print("Starting, this can take a while...")
+	print("")
 
-print("Initializing DigitalMicrograph environmnet...")
+	print("Initializing DigitalMicrograph environmnet...")
 
-# the name of the tag is used, this is deleted so it shouldn't matter anyway
-file_tag_name = "__pylo_python__file__"
-# the dm-script to execute, double curly brackets are used because of the 
-# python format function
-script = ("\n".join((
-    "DocumentWindow win = GetDocumentWindow(0);",
-    "if(win.WindowIsvalid()){{",
-        "if(win.WindowIsLinkedToFile()){{",
-            "TagGroup tg = GetPersistentTagGroup();",
-            "if(!tg.TagGroupDoesTagExist(\"{tag_name}\")){{",
-                "number index = tg.TagGroupCreateNewLabeledTag(\"{tag_name}\");",
-                "tg.TagGroupSetIndexedTagAsString(index, win.WindowGetCurrentFile());",
-            "}}",
-            "else{{",
-                "tg.TagGroupSetTagAsString(\"{tag_name}\", win.WindowGetCurrentFile());",
-            "}}",
-        "}}",
-    "}}"
-))).format(tag_name=file_tag_name)
+	# the name of the tag is used, this is deleted so it shouldn't matter anyway
+	file_tag_name = "__pylo_python__file__"
+	# the dm-script to execute, double curly brackets are used because of the 
+	# python format function
+	script = ("\n".join((
+		"DocumentWindow win = GetDocumentWindow(0);",
+		"if(win.WindowIsvalid()){{",
+			"if(win.WindowIsLinkedToFile()){{",
+				"TagGroup tg = GetPersistentTagGroup();",
+				"if(!tg.TagGroupDoesTagExist(\"{tag_name}\")){{",
+					"number index = tg.TagGroupCreateNewLabeledTag(\"{tag_name}\");",
+					"tg.TagGroupSetIndexedTagAsString(index, win.WindowGetCurrentFile());",
+				"}}",
+				"else{{",
+					"tg.TagGroupSetTagAsString(\"{tag_name}\", win.WindowGetCurrentFile());",
+				"}}",
+			"}}",
+		"}}"
+	))).format(tag_name=file_tag_name)
 
-# execute the dm script
-DM.ExecuteScriptString(script)
+	# execute the dm script
+	DM.ExecuteScriptString(script)
 
-# read from the global tags to get the value to the python script
-if DM.GetPersistentTagGroup():
-    s, __file__ = DM.GetPersistentTagGroup().GetTagAsString(file_tag_name);
-    if s:
-        # delete the created tag again
-        DM.GetPersistentTagGroup().DeleteTagWithLabel(file_tag_name)
-    else:
-        del __file__
+	# read from the global tags to get the value to the python script
+	if DM.GetPersistentTagGroup():
+		s, __file__ = DM.GetPersistentTagGroup().GetTagAsString(file_tag_name);
+		if s:
+			# delete the created tag again
+			DM.GetPersistentTagGroup().DeleteTagWithLabel(file_tag_name)
+		else:
+			del __file__
 
-try:
-    __file__
-except NameError:
-    # set a default if the __file__ could not be received
-    __file__ = ""
+	try:
+		__file__
+	except NameError:
+		# set a default if the __file__ could not be received
+		__file__ = ""
 
-import os
-if __file__ != "":
-	import sys
-	
-	base_path = str(os.path.dirname(__file__))
-	
-	if base_path not in sys.path:
-		sys.path.insert(0, base_path)
+	import os
+	if __file__ != "":
+		import sys
+		
+		base_path = str(os.path.dirname(__file__))
+		
+		if base_path not in sys.path:
+			sys.path.insert(0, base_path)
 
-print("Initializing python environment...")
+	print("Initializing python environment...")
 
-try:
 	import pylo
 
 	print("Preparing...")
@@ -130,14 +130,6 @@ try:
 	# create view and configuration, both using the DM environmnent
 	view = pylo.DMView()
 	configuration = pylo.DMConfiguration()
-
-	# set the microscope to use the PyJEM microscope
-	configuration.setValue("setup", "microscope-module", "pylo.microscopes")
-	configuration.setValue("setup", "microscope-class", "PyJEMTestMicroscope")
-
-	# use the DMCamera as the camera
-	configuration.setValue("setup", "camera-module", "pylo.cameras")
-	configuration.setValue("setup", "camera-class", "DMTestCamera")
 
 	# remove loading dialog, dialog deletes tag
 	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tag_name, True)
