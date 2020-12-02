@@ -1,3 +1,4 @@
+import math
 import copy
 import typing
 
@@ -455,17 +456,28 @@ class AbstractConfiguration:
                 value = False
             else:
                 try:
-                    value = int(value)
+                    value = float(value)
 
-                    if value == 0:
-                        value = False
-                    elif value == 1:
+                    if math.isclose(value, 1):
                         value = True
+                    else:
+                        value = False
                 except ValueError:
                     pass
         
         if callable(datatype):
-            return datatype(value)
+            try:
+                return datatype(value)
+            except Exception:
+                if (isinstance(datatype, Datatype) and 
+                    datatype.default_parse is not None):
+                    return datatype.default_parse
+                elif datatype in (int, float):
+                    return 0
+                elif datatype == str:
+                    return ""
+                else:
+                    return value
         else:
             return value
     
