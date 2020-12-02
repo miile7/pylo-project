@@ -789,54 +789,8 @@ class CLIView(AbstractView):
             # return tuple(sorted(values.items(), key=lambda x: x[0]))
         else:
             return self._askForLoop(inputs, values, **kwargs)
-
-    def showCustomTags(self, configuration: "AbstractConfiguration") -> typing.Dict[str, str]:
-        """Show a view to let the user add custom tags to each image.
-        
-        Show all tags from the `custom-tags` group in the `configuration` and 
-        let the user add more tags. Each tag has a key and a value and can be 
-        saved persistently or not.
-
-        When confirmed, the tags the user decided are saved and the function 
-        returns all tags as a dict with the key as a string and the value as a
-        string.
-
-        Raises
-        ------
-        StopProgram
-            When the user clicks the cancel button.
-        
-        Parameters
-        ----------
-        configuration : AbstractConfiguration
-            The configuration
-        
-        Returns
-        -------
-        dict
-            The custom tags as key-value pairs
-        """
-        
-        from .config import CUSTOM_TAGS_GROUP_NAME
-        tags = {}
-        try:
-            for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
-                tags[key] = {"value": configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key),
-                             "save": True}
-                # reset complete group
-                configuration.removeElement(CUSTOM_TAGS_GROUP_NAME, key)
-        except KeyError:
-            pass
-        
-        tags = self._showCustomTagsLoop(tags)
-
-        for key, tag in tags.items():
-            if tag["save"]:
-                configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
-        
-        return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
     
-    def _showCustomTagsLoop(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
+    def _showCustomTags(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
         """Show the custom tags loop.
 
         This function will call itself recursively until the users decide that 
