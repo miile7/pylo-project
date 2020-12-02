@@ -238,8 +238,11 @@ class DMView(AbstractView):
                 "alloc(ButtonDialog).init().display(title);"
             ])
 
+            DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
             with execdmscript.exec_dmscript(dmscript, setvars=setvars):
-                pass
+                # wait for dm-script to show the dialog, the user takes longer
+                # to react anyway
+                time.sleep(0.5)
             
             while DM is not None:
                 s, v = DM.GetPersistentTagGroup().GetTagAsShort(id_)
@@ -249,7 +252,7 @@ class DMView(AbstractView):
                     DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
                     break
                 
-                time.sleep(0.2)
+                time.sleep(0.1)
         
         if 0 <= index and index < len(options):
             return index
