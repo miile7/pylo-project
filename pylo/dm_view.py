@@ -603,11 +603,44 @@ class DMView(AbstractView):
 
         return results[2]
     
+    def _showCustomTags(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
+        """Show the custom tags.
+
+        The `tags` is a dict of dicts. Each key is the name of a tag to add.
+        The value is a dict with the following indices:
+        - "value": any, the value of the key to write in each image
+        - "save": bool, whether to save the key into the configuration or not
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        
+        Returns
+        -------
+        dict
+            The `tags` parameter dict modified by the user
+        """
+        results = self._showDialog(custom_tags=tags, dialog_type=0b1000)
+
+        if len(results) <= 4 or results[4] is None:
+            raise RuntimeError("Could not create the tags from " + 
+                               "the dialogs values.")
+
+        return results[4]
+    
     def _showDialog(self, 
                     measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     ask_for_values: typing.Optional[typing.Sequence[AskInput]]=None,
                     ask_for_msg: typing.Optional[str]="",
+                    custom_tags: typing.Optional[dict]={},
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
 
@@ -617,9 +650,11 @@ class DMView(AbstractView):
             Define which dialog to show, use
             - `0b01` for showing the configuration dialog
             - `0b10` for showing the series dialog
-            - `0b01 | 0b10 = 0b11` for showing the series dialog but the user 
-              can switch to the configuration dialog and back
+            - `0b01 | 0b10 | 0b1000 = 0b1011` for showing the series dialog 
+              but the user can switch to the configuration dialog and the 
+              custom tags dialog and back
             - `0b100` for showing the ask for dialog
+            - `0b1000` for showing the custom tags dialog
         """
 
         path = os.path.join(self._rel_path, "dm_view_dialog.s")
@@ -636,6 +671,8 @@ class DMView(AbstractView):
             dialog_startup = "configuration"
         elif (dialog_type & 0b100) > 0:
             dialog_startup = "ask_for"
+        elif (dialog_type & 0b1000) > 0:
+            dialog_startup = "custom_tags"
         else:
             dialog_startup = "series"
         
@@ -785,12 +822,14 @@ class DMView(AbstractView):
             "config_vars": config_vars,
             "ask_vals": ask_vals,
             "message": ask_for_msg,
-            "dialog_startup": dialog_startup
+            "dialog_startup": dialog_startup,
+            "custom_tag_vals": custom_tags
         }
         start = None
         series = None
         config = None
         ask_for_values = None
+        custom_tags = None
         success = None
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
@@ -837,7 +876,7 @@ class DMView(AbstractView):
         
         if success and ((start is not None and series is not None) or 
            config is not None or ask_for_values is not None):
-            return start, series, config, ask_for_values
+            return start, series, config, ask_for_values, custom_tags
         else:
             raise StopProgram
         
