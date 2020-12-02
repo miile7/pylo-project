@@ -1655,9 +1655,6 @@ class DMViewDialog : UIFrame{
 
             custom_tag_inputs.TagGroupInsertTagAsTagGroup(infinity(), inputs_group);
         }
-        
-        // add current column
-        tags_outer_wrapper.DLGAddElement(tags_inner_wrapper);
 
         wrapper.DLGAddElement(tags_outer_wrapper);
 

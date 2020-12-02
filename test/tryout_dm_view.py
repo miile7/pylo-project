@@ -76,10 +76,10 @@ try:
 	tests = [
 		# "error",
 		# "hint",
-		"create-measurement",
+		# "create-measurement",
 		# "show-settings",
 		# "ask-for-decision",
-		# "show-custom-tags",
+		"show-custom-tags",
 		# "ask-for",
 		# "show-running",
 	]

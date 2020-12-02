@@ -657,14 +657,6 @@ class DMView(AbstractView):
             - `0b1000` for showing the custom tags dialog
         """
 
-        path = os.path.join(self._rel_path, "dm_view_dialog.s")
-        sync_vars = {"start": dict, 
-                     "series": dict, 
-                     "configuration": dict, 
-                     "ask_for": list,
-                     "success": bool}
-        libs = (os.path.join(self._rel_path, "pylolib.s"), )
-
         if (dialog_type & 0b01) > 0 and (dialog_type & 0b10) > 0:
             dialog_startup = ""
         elif (dialog_type & 0b01) > 0:
@@ -760,9 +752,12 @@ class DMView(AbstractView):
                     else:
                         var_type_name = get_datatype_name(var_type)
 
-                    if (var_type != str and hasattr(var_type, "format") and 
-                        callable(var_type.format)):
-                        val = var_type.format(val)
+                    if isinstance(var_type, Datatype):
+                        try:
+                            val = var_type.format(val)
+                        except Exception:
+                            if var_type.default_parse is not None:
+                                val = var_type.default_parse
                     
                     try:
                         default_value = configuration.getDefault(group, key)
@@ -825,6 +820,16 @@ class DMView(AbstractView):
             "dialog_startup": dialog_startup,
             "custom_tag_vals": custom_tags
         }
+
+        path = os.path.join(self._rel_path, "dm_view_dialog.s")
+        sync_vars = {"start": dict, 
+                     "series": dict, 
+                     "configuration": dict, 
+                     "ask_for": list,
+                     "custom_tags": dict,
+                     "success": bool}
+        libs = (os.path.join(self._rel_path, "pylolib.s"), )
+
         start = None
         series = None
         config = None
@@ -873,9 +878,15 @@ class DMView(AbstractView):
                 ask_for_values = script["ask_for"]
             except KeyError:
                 ask_for_values = None
+            
+            try:
+                custom_tags = script["custom_tags"]
+            except KeyError:
+                custom_tags = None
         
         if success and ((start is not None and series is not None) or 
-           config is not None or ask_for_values is not None):
+           config is not None or ask_for_values is not None or 
+           custom_tags is not None):
             return start, series, config, ask_for_values, custom_tags
         else:
             raise StopProgram
