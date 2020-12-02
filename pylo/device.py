@@ -51,8 +51,8 @@ class Device:
         super(Device, self).__init__()
         self.kind = kind
 
-        if not isinstance(name, str):
-            Device.getNameOfObject(self)
+        if not isinstance(name, str) or name == "":
+            name = Device.getNameOfObject(self)
         self.name = name
         
         if not isinstance(config_group_name, str):
@@ -92,6 +92,9 @@ class Device:
         str
             The snake-cased text
         """
+        if not isinstance(text, str):
+            return ""
+        
         # split by upper case letters, and join with minus
         return "-".join(map(lambda x: x.lower(), 
                         re.findall(r"[A-Z0-9](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", 
