@@ -94,7 +94,8 @@ class DMImage(Image):
 
         # delete the Py_Image reference, this should be automatically but just
         # to be sure
-        del self._py_image
+        if hasattr(self, "_py_image"):
+            del self._py_image
     
     def _getWorkspaceRect(self) -> typing.Tuple[int, int, int, int]:
         """Get the available workspace area in GMS.
