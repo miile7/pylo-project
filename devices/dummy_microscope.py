@@ -23,7 +23,7 @@ class DummyMicroscope(MicroscopeInterface):
         self.supports_parallel_measurement_variable_setting = False
 
         self.registerMeasurementVariable(
-            MeasurementVariable("focus", "Focus", 0, 100, "nm", int, 3),
+            MeasurementVariable("focus", "Focus", 0, 100, "nm", Datatype.int, 3),
             lambda: self._getVal("focus"), lambda x: self._setVal("focus", x)
         )
         self.registerMeasurementVariable(
@@ -34,7 +34,7 @@ class DummyMicroscope(MicroscopeInterface):
         )
         self.registerMeasurementVariable(
             MeasurementVariable("pressure", "Pressure", 10, 3000, "Pa", 
-                                int, 1020, None, "bar", "Atmospheres", 
+                                Datatype.int, 1020, None, "bar", "Atmospheres", 
                                 calibrated_format=float),
             lambda: self._getVal("pressure"), 
             lambda x: self._setVal("pressure", x)
