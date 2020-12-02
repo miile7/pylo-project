@@ -790,7 +790,148 @@ class CLIView(AbstractView):
         else:
             return self._askForLoop(inputs, values, **kwargs)
 
-    def _printSelect(self, *args: typing.Union[str, dict]) -> typing.Tuple[dict, typing.Union[bool, None], typing.Union[str, None]]:
+    def showCustomTags(self, configuration: "AbstractConfiguration") -> typing.Dict[str, str]:
+        """Show a view to let the user add custom tags to each image.
+        
+        Show all tags from the `custom-tags` group in the `configuration` and 
+        let the user add more tags. Each tag has a key and a value and can be 
+        saved persistently or not.
+
+        When confirmed, the tags the user decided are saved and the function 
+        returns all tags as a dict with the key as a string and the value as a
+        string.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        
+        Returns
+        -------
+        dict
+            The custom tags as key-value pairs
+        """
+        
+        from .config import CUSTOM_TAGS_GROUP_NAME
+        tags = {}
+        try:
+            for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
+                tags[key] = {"value": configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key),
+                             "save": True}
+                # reset complete group
+                configuration.removeElement(CUSTOM_TAGS_GROUP_NAME, key)
+        except KeyError:
+            pass
+        
+        tags = self._showCustomTagsLoop(tags)
+
+        for key, tag in tags.items():
+            if tag["save"]:
+                configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
+        
+        return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
+    
+    def _showCustomTagsLoop(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
+        """Show the custom tags loop.
+
+        This function will call itself recursively until the users decide that 
+        they are done.
+
+        The `tags` is a dict of dicts. Each key is the name of a tag to add.
+        The value is a dict with the following indices:
+        - "value": any, the value of the key to write in each image
+        - "save": bool, whether to save the key into the configuration or not
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        
+        Returns
+        -------
+        dict
+            The `tags` parameter dict modified by the user
+        """
+
+        tag_inputs = ["Define tags to add to every recorded image.",
+                      "To remove tags, edit them and then empty them.",
+                      ""]
+        for key, tag in tags.items():
+            tag_inputs.append({
+                "label": key,
+                "id": key,
+                "datatype": str,
+                "value": tag["value"]
+            })
+            tag_inputs.append({
+                "label": "Save for future".format(key),
+                "id": "save-{}".format(key),
+                "datatype": bool,
+                "value": tag["save"] if "save" in tag else False,
+                "inset": "    "
+            })
+        
+        values, cmd, changed = self._printSelect(
+            *tag_inputs, additional_commands=[{"name": "add"}])
+
+        tags = {}
+        for key, val in values.items():
+            if key.startswith("save-"):
+                k = key.replace("save-", "", 1)
+                s = "save"
+            else:
+                k = key
+                s = "value"
+                val = val
+
+            if k not in tags:
+                tags[k] = {}
+            
+            tags[k][s] = val
+        
+        keys = list(tags.keys())
+        for key in keys:
+            if "value" not in tags[key] or tags[key]["value"] is None:
+                del tags[key]
+                continue
+            elif "save" not in tags[key]:
+                tags[key]["save"] = False
+            
+            tags[key]["value"] = str(tags[key]["value"])
+
+        if cmd == "add":
+            descr = ("This value is the NAME of the key to add to each " + 
+                     "image. The value can be selected in the next step")
+            new_key = self._inputValueLoop({"label": "tag name", 
+                                            "id": "new-tag-name", 
+                                            "datatype": str,
+                                            "value": "",
+                                            "required": False,
+                                            "description": descr})
+            if new_key is not None:
+                tags[new_key] = {"value": "", "save": False}
+            
+            return self._showCustomTagsLoop(tags)
+        elif cmd == True:
+            return tags
+        elif cmd == False:
+            raise StopProgram
+        else:
+            return self._showCustomTagsLoop(tags)
+
+    def _printSelect(self, *args: typing.Union[str, dict], 
+                     additional_commands: typing.Optional[typing.List[typing.Dict[str, typing.Any]]]=None) -> typing.Tuple[dict, typing.Union[bool, None], typing.Union[str, None]]:
         """Show a select overview.
 
         This function offers to change multiple values. Each value will be 
@@ -828,6 +969,25 @@ class CLIView(AbstractView):
         
         The user can edit the value with the number, continue with 'c' and 
         quit with 'q'.
+
+        More commands can be added via the `additional_commands` list. Each 
+        list item has to be a dict with the following keys:
+        - "name": str, (if possible exactly one) word to describe the command,
+          if not given or empty or only one character, this command is ignored
+        - "key": str (optional), the key to use by default this is the first 
+          letter of the "name", only change this if there will be conflicts, if
+          there is a conflict the key will be choosen randomly (and may 
+          influence further commands), note that "q" and "c" are reserved, 
+          keys are case-insensitive
+        - "return": any (optional), the value that will be at index 1 in the 
+          return value, by default this is the command name
+        
+        Parameters
+        ----------
+        *args : dict
+            The arguments dict to define the lines
+        additional_commands : list of dict, optional
+            Additional commands as dicts as written above
         
         Returns
         -------
@@ -925,13 +1085,60 @@ class CLIView(AbstractView):
                 
                 self.print(text, inset=inset)
                 index += 1
+        
+        additional_command_keys = {}
+        long_text_commands = []
+        short_text_commands = []
+        if isinstance(additional_commands, (list, tuple)):
+            for cmd in additional_commands:
+                if ("name" not in cmd or not isinstance(cmd["name"], str) or
+                    len(cmd["name"]) <= 1):
+                    continue
+
+                if ("key" not in cmd or not isinstance(cmd["key"], str) or 
+                    cmd["key"] == ""):
+                    cmd["key"] = cmd["name"][0]
+                
+                cmd["key"] = cmd["key"].lower()
+
+                i = 0
+                while (i < 26 and cmd["key"] in ("c", "q") or 
+                       cmd["key"] in additional_command_keys):
+                    # find a free command, start with lower case "a" until "z"
+                    cmd["key"] = chr(97 + i)
+                    i += 1
+
+                    if i == 26:
+                        cmd["key"] = None
+                
+                if cmd["key"] is not None:
+                    long_text_commands.append("[{}] for {}".format(cmd["key"], 
+                                                                   cmd["name"]))
+                    if cmd["key"] == cmd["name"][0].lower():
+                        short_text_commands.append("[{}]{}".format(cmd["key"], 
+                                                                   cmd["name"][1:]))
+                    else:
+                        short_text_commands.append("[{}] {}".format(cmd["key"],
+                                                                    cmd["name"]))
+                    
+                    if "return" in cmd:
+                        additional_command_keys[cmd["key"]] = cmd["return"]
+                    else:
+                        additional_command_keys[cmd["key"]] = cmd["name"]
+
+        long_text_commands += ["[c] for continue", "[q] for quit"]
+        short_text_commands += ["[c]ontinue", "[q]uit"]
 
         self.print("")
-        self.print("Type in the number to change the value of, type [c] for " + 
-                   "continue and [q] for quit.")
-        user_input = self.input("Number, [c]ontinue or [q]uit: ")
+        self.print(("Type in the number to change the value of, {}.").format(
+            human_concat_list(long_text_commands, surround="", word=" and ")))
+        user_input = self.input("Number, {}: ".format(human_concat_list(
+            short_text_commands, surround="", word=" or ")))
+        user_input = user_input.lower()
 
-        if user_input == "q":
+        if user_input in additional_command_keys:
+            return values, additional_command_keys[user_input], None
+        elif user_input == "q":
             return values, False, None
         elif user_input == "c":
             errors = []
@@ -961,7 +1168,7 @@ class CLIView(AbstractView):
                         self.error += "; "
                 
                 self.error += ")"
-                return self._printSelect(*args)
+                return self._printSelect(*args, additional_commands=additional_commands)
             else:
                 return values, True, None
         else:
@@ -971,7 +1178,7 @@ class CLIView(AbstractView):
                 # error is shown in CLIView::printTitle
                 self.error = ("The input '{}' neither is a number nor a " + 
                               "command so it cannot be interpreted.").format(user_input)
-                return self._printSelect(*args)
+                return self._printSelect(*args, additional_commands=additional_commands)
 
             if 0 <= user_input and user_input <= max_index:
                 index = int(user_input)
@@ -998,7 +1205,7 @@ class CLIView(AbstractView):
                 self.error = ("The input '{}' is out of range. Please type " + 
                               "a number 0 <= number <= {}.").format(user_input,
                                                                     max_index)
-                return self._printSelect(*args)
+                return self._printSelect(*args, additional_commands=additional_commands)
     
     def _inputValueLoop(self, input_definition: dict) -> typing.Any:
         """Get the input for the `input_definition` by asking the user.
