@@ -149,6 +149,7 @@ class Measurement:
         self.running = False
         self.finished = False
         self.logging = True
+        self._image_save_threads = []
 
         # stop the measurement when the emergency event is fired
         emergency.append(self.stop)
@@ -285,6 +286,11 @@ class Measurement:
         
         # self.controller.view.progres_max = len(self.steps)
         self.controller.view.print("Starting measurement...")
+        self.controller.view.print("Used devices:")
+        self.controller.view.print("  Camera: {}".format(
+            self.controller.camera.name))
+        self.controller.view.print("  Microscope: {}".format(
+            self.controller.microscope.name))
         self.controller.view.print(
             "Saving all images to {}.".format(self.save_dir), inset="  "
         )
