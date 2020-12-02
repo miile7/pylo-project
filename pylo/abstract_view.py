@@ -110,6 +110,34 @@ class AbstractView:
         """
         raise NotImplementedError()
 
+    def showCustomTags(self, configuration: "AbstractConfiguration") -> typing.Dict[str, str]:
+        """Show a view to let the user add custom tags to each image.
+        
+        Show all tags from the `custom-tags` group in the `configuration` and 
+        let the user add more tags. Each tag has a key and a value and can be 
+        saved persistently or not.
+
+        When confirmed, the tags the user decided are saved and the function 
+        returns all tags as a dict with the key as a string and the value as a
+        string.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        
+        Returns
+        -------
+        dict
+            The custom tags as key-value pairs
+        """
+        raise NotImplementedError()
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 
