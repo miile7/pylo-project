@@ -317,7 +317,8 @@ class OptionDatatype(Datatype):
 
         super().__init__("optionslist", self.format_options, self.parse_options)
 
-        self.default_parse = self.options[0]
+        if len(self.options) > 0:
+            self.default_parse = self.options[0]
 
     def format_options(self, v: typing.Any, f: typing.Optional[str]="") -> str:
         """Format the given value for the given format.
