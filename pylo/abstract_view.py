@@ -141,8 +141,12 @@ class AbstractView:
         tags = {}
         try:
             for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
-                tags[key] = {"value": configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key),
-                             "save": True}
+                try:
+                    value = configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key)
+                except KeyError:
+                    value = ""
+                tags[key] = {"value": value, "save": True}
+
                 # reset complete group
                 configuration.removeElement(CUSTOM_TAGS_GROUP_NAME, key)
         except KeyError:
@@ -150,8 +154,15 @@ class AbstractView:
         
         tags = self._showCustomTags(tags)
 
+        keys = list(tags.keys())
+        for key in keys:
+            if not "value" in tags[key] or tags[key]["value"] is None:
+                del tags[key]
+            elif not isinstance(tags[key]["value"], str):
+                tags[key]["value"] = str(tags[key]["value"])
+            
         for key, tag in tags.items():
-            if tag["save"]:
+            if "save" in tag and tag["save"]:
                 configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
         
         return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
