@@ -36,8 +36,6 @@ try:
 	print("Starting, this can take a while...")
 	print("")
 
-	print("Initializing DigitalMicrograph environmnet...")
-
 	# the name of the tag is used, this is deleted so it shouldn't matter anyway
 	file_tag_name = "__pylo_python__file__"
 	# the dm-script to execute, double curly brackets are used because of the 
@@ -85,12 +83,14 @@ try:
 		if base_path not in sys.path:
 			sys.path.insert(0, base_path)
 
-	print("Initializing python environment...")
-
 	import pylo
 
-	print("Preparing...")
-	# pylo.OFFLINE_MODE = True
+	title = "Starting {}".format(pylo.config.PROGRAM_NAME)
+	print(title)
+	print("*" * len(title))
+	print("")
+
+	print("Initializing...")
 
 	# adding device paths
 	# get device paths from dm-script and save them into global tags
@@ -131,14 +131,6 @@ try:
 	view = pylo.DMView()
 	configuration = pylo.DMConfiguration()
 
-	# set the microscope to use the PyJEM microscope
-	configuration.setValue("setup", "microscope-module", "pylo.microscopes")
-	configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-
-	# use the DMCamera as the camera
-	configuration.setValue("setup", "camera-module", "pylo.cameras")
-	configuration.setValue("setup", "camera-class", "DMCamera")
-
 	# remove loading dialog, dialog deletes tag
 	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tag_name, True)
 
@@ -147,11 +139,19 @@ try:
 
 	# redirect all print() calls to the debug window
 	DM.SetOutputTo(2)
+	DM.ExecuteScriptString("ClearDebug();")
+	title = "{} runtime debug output".format(pylo.config.PROGRAM_NAME)
+	print(title)
+	print("*" * len(title))
+	print("")
+
 	pylo.execute(view, configuration)
 	# set everything back to the results window
+
+	print("Stopping.")
 	DM.SetOutputTo(0)
 
-	print("Done with everything.")
+	print("Stopping.")
 	print("Exiting.")
 except Exception as e:
 	# dm-script error messages are very bad, use this for getting the error 
