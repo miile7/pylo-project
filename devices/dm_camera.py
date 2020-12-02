@@ -195,7 +195,7 @@ class DMCamera(CameraInterface):
             Whether to set the new workspace as the active one, default: True
         """
 
-        from ..config import PROGRAM_NAME
+        from pylo.config import PROGRAM_NAME
 
         # try to find the workspace with the program name, if there is none 
         # create a new one

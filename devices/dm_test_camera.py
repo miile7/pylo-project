@@ -10,7 +10,9 @@ try:
 except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
-from .dm_camera import DMCamera
+# from .dm_camera import DMCamera
+from pylo import loader
+DMCamera = loader.getDeviceClass("Digital Micrograph Camera")
 
 class _DMDummyCamera:
     def PrepareForAcquire(self):

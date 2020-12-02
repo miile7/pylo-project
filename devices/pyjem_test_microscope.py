@@ -24,12 +24,14 @@ from PyJEM.offline.TEM3.gun3 import GUN3
 from PyJEM.offline.TEM3.lens3 import Lens3
 from PyJEM.offline.TEM3.stage3 import Stage3
 
-from .pyjem_microscope import PyJEMMicroscope
+# from .pyjem_microscope import PyJEMMicroscope
+from pylo import loader
+PyJEMMicroscope = loader.getDeviceClass("PyJEM Microscope")
 
 class PyJEMTestMicroscope(PyJEMMicroscope):
-    def __init__(self, controller : "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Get the microscope instance"""
-        super().__init__(controller)
+        super().__init__(*args, **kwargs)
 
         # force offline use
         self._lense_control = Lens3()
@@ -50,5 +52,5 @@ class PyJEMTestMicroscope(PyJEMMicroscope):
         super().setMeasurementVariableValue(id_, value)
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
-        PyJEMMicroscope.defineConfigurationOptions(configuration)
+    def defineConfigurationOptions(*args, **kwargs) -> None:
+        PyJEMMicroscope.defineConfigurationOptions(*args, **kwargs)

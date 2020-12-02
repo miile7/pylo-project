@@ -307,8 +307,40 @@ class DeviceLoader:
         else:
             return None
     
-    def getDevice(self, name: str, controller: typing.Optional["Controller"]=None,
-                  *constructor_args: typing.Any, **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
+    def getDeviceClass(self, name: str, 
+                       controller: typing.Optional["Controller"]=None) -> typing.Union[type, None]:
+        """Get the device class.
+
+        Note that this is not the class name!
+        
+        Parameters
+        ----------
+        name : str
+            The name of the device
+        controller : Controller, optional
+            The controller object to handle configuration options and to set 
+            as the first parameter for microscopes and cameras, default: None
+        
+        Returns
+        -------
+        type or None
+            The class or None if the device is not found
+        """
+
+        device_definition = self._getDeviceDefinition(name)
+
+        if device_definition is None:
+            return None
+        elif "object" in device_definition:
+            return device_definition["object"].__class__
+        else:
+            class_, *_ = self._loadClass(device_definition, controller)
+            return class_
+    
+    def getDevice(self, name: str, 
+                  controller: typing.Optional["Controller"]=None,
+                  *constructor_args: typing.Any, 
+                  **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
         """Get the device with the given `name`.
 
         If the `name` does not exist None is returned. The available device 
@@ -338,6 +370,9 @@ class DeviceLoader:
         ----------
         name : str
             The name of the device
+        controller : Controller, optional
+            The controller object to handle configuration options and to set 
+            as the first parameter for microscopes and cameras, default: None
         constructor_args : any
             The arguments that are passed to the construcor if the device is 
             created
@@ -374,35 +409,19 @@ class DeviceLoader:
             
             return device
 
-        return self._loadClass(device_definition, controller, *constructor_args,
-                               **constructor_kwargs)
+        return self._loadObject(device_definition, controller, *constructor_args,
+                                **constructor_kwargs)
     
     def _loadClass(self, device: typing.Mapping, 
-                   controller: typing.Optional["Controller"]=None,
-                   *constructor_args: typing.Any, 
-                   **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
+                   controller: typing.Optional["Controller"]=None) -> typing.Tuple[type, str, typing.Union[typing.List[typing.Tuple[str, str]], None]]:
         """
-        Load the class defined by the `device`.
+        Load the class (not the object!) defined by the `device`.
 
         The device has to have a "file_path", "class_name" and "name" index 
         where the first one contains the path to the file to import (either as 
         a string or as a path), the middle one has to contain the class name as
         a string and the last one the name to use for the device.
-
-        Additional device values are set to the returned device if the created
-        object inherits the `Device` class.
-
-        The `constructor_args` and the `constructor_kwargs` are arguments to 
-        pass to the constructor when creating the object.
-
-        If the created object is an instance of the `MicroscopeInterface` or 
-        the `CameraInterface`, the first parameter will always be the 
-        `controller`.
-
-        Note that this does not necessarily return a `Device` object. That
-        depends on whether the loaded class implements the `Device` class or 
-        not. The convention is to do so but there may be exceptions.
-
+        
         If the `class_name` class has a `defineConfigurationOptions()` class 
         method and the `controller` is given, the `defineConfigurationOptions()`
         method will be executed with the controllers configuration object. Also
@@ -415,8 +434,6 @@ class DeviceLoader:
             When the file is not importable
         DeviceClassNotDefined
             When the module does not define the `class_name`
-        DeviceCreationError
-            When the `class_name` object could not be created
         StopProgram
             When the class raises a `StopProgram` exception anywhere
 
@@ -427,20 +444,13 @@ class DeviceLoader:
             the class name at "class_name" and the device name at "device"
         controller : Controller, optional
             The controller object to handle configuration options
-        constructor_args : any
-            The arguments for the object that is created, if the object is a 
-            `MicroscopeInterface` or `CameraInterface` the `controller` will 
-            automatically be set to the first argument if the `controller` is 
-            given
-        constructor_kwargs : any
-            The arguments for the object that is created, if the object is a 
-            `Device` the `device` dict will automatically be added to the 
-            `constructor_kwargs` (and will overwrite same values)
         
         Returns
         -------
-        device or object
-            The created object
+        type, str, list of tuples or None
+            The class, the module name and the configuration groups and keys as 
+            a list of tuples or None if the `controller` is not given or the 
+            class does not define configuration keys
         """
         
         name = device["name"]
@@ -504,6 +514,70 @@ class DeviceLoader:
             # ask all non-existing but required configuration values
             controller.askIfNotPresentConfigurationOptions()
         
+        return class_, module_name, config_keys
+    
+    def _loadObject(self, device: typing.Mapping, 
+                    controller: typing.Optional["Controller"]=None,
+                    *constructor_args: typing.Any, 
+                    **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
+        """
+        Load the object from the `device`.
+
+        The device has to have a "file_path", "class_name" and "name" index 
+        where the first one contains the path to the file to import (either as 
+        a string or as a path), the middle one has to contain the class name as
+        a string and the last one the name to use for the device.
+
+        Additional device values are set to the returned device if the created
+        object inherits the `Device` class.
+
+        The `constructor_args` and the `constructor_kwargs` are arguments to 
+        pass to the constructor when creating the object.
+
+        If the created object is an instance of the `MicroscopeInterface` or 
+        the `CameraInterface`, the first parameter will always be the 
+        `controller`.
+
+        Note that this does not necessarily return a `Device` object. That
+        depends on whether the loaded class implements the `Device` class or 
+        not. The convention is to do so but there may be exceptions.
+
+        Raises
+        ------
+        DeviceImportError
+            When the file is not importable
+        DeviceClassNotDefined
+            When the module does not define the `class_name`
+        DeviceCreationError
+            When the `class_name` object could not be created
+        StopProgram
+            When the class raises a `StopProgram` exception anywhere
+
+        Parameters
+        ----------
+        device : mapping
+            The device definition with the file path at the "file_path" index, 
+            the class name at "class_name" and the device name at "device"
+        controller : Controller, optional
+            The controller object to handle configuration options
+        constructor_args : any
+            The arguments for the object that is created, if the object is a 
+            `MicroscopeInterface` or `CameraInterface` the `controller` will 
+            automatically be set to the first argument if the `controller` is 
+            given
+        constructor_kwargs : any
+            The arguments for the object that is created, if the object is a 
+            `Device` the `device` dict will automatically be added to the 
+            `constructor_kwargs` (and will overwrite same values)
+        
+        Returns
+        -------
+        device or object
+            The created object
+        """
+
+        class_, module_name, config_keys = self._loadClass(device, controller)
+        
         # add the kwargs of the device if the class is a device
         if Device in class_.__mro__:
             allowed_kwargs = ("kind", "name", "config_group_name", 
@@ -541,9 +615,10 @@ class DeviceLoader:
             raise DeviceCreationError(("Could not create the '{}' class " + 
                                        "for the device '{}' from '{}', " + 
                                        "creating raised a '{}' error with " + 
-                                       "the message '{}'.").format(class_name,
-                                       name, module_name, e.__class__.__name__,
-                                       str(e))) from e
+                                       "the message '{}'.").format(
+                                            class_.__name__, device["name"], 
+                                            module_name, e.__class__.__name__, 
+                                            str(e))) from e
         
         return obj
         
