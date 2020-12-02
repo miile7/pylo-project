@@ -53,7 +53,7 @@ class MicroscopeInterface(Device, VulnerableMachine):
             config_defaults=config_defaults, description=description)
         
         self.supported_measurement_variables = []
-        self.supports_parallel_measurement_variable_setting = True
+        self.supports_parallel_measurement_variable_setting = False
         self.controller = controller
         self._measurement_variable_getter_setter_map = {}
 
