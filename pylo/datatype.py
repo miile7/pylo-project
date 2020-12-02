@@ -26,10 +26,13 @@ class Datatype:
         always, if possible
     dirpath : Datatype
         A directory path that will format to an absolute path always
-    optoins : class
+    options : class
         The `OptionDatatype` class so it can be used more intuitively like the 
         other datatypes, this expresses a list of values that are valid, use 
         with `Datatype.options(("opt 1", "opt 2"))`
+    default_parse : any
+        The default parsed value for this datatype if a value is not parsable, 
+        has to be anything else than None, default: None
     """
 
     def __init__(self, name: str, 
@@ -84,6 +87,7 @@ class Datatype:
         self.name = name
         self._format = format
         self._parse = parse
+        self.default_parse = None
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.
@@ -312,6 +316,9 @@ class OptionDatatype(Datatype):
             self.abs_tol = kwargs["abs_tol"]
 
         super().__init__("optionslist", self.format_options, self.parse_options)
+
+        if len(self.options) > 0:
+            self.default_parse = self.options[0]
 
     def format_options(self, v: typing.Any, f: typing.Optional[str]="") -> str:
         """Format the given value for the given format.

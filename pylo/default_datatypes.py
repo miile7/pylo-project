@@ -47,6 +47,7 @@ def format_int(v: typing.Any, f: typing.Optional[str]="") -> str:
     return ("{" + f + "}").format(v)
 
 int_type = Datatype("int", format_int, parse_int)
+int_type.default_parse = 0
 
 def parse_hex(v: typing.Any) -> int:
     """Parse the given value to an integer on the base of 16.
@@ -110,6 +111,7 @@ def format_hex(v: typing.Any, f: typing.Optional[str]="") -> str:
     return Datatype.join_format_spec(f).format(v)
 
 hex_int_type = Datatype("hex", format_hex, parse_hex)
+hex_int_type.default_parse = 0
 
 def parse_dirpath(v: typing.Any) -> str:
     """Parse the given value to be the absolute path of the directory.
@@ -165,6 +167,7 @@ def format_dirpath(v: typing.Any, f: typing.Optional[str]="") -> str:
         return ""
 
 dirpath_type = Datatype("dirpath", format_dirpath, parse_dirpath)
+dirpath_type.default_parse = ""
 
 def parse_filepath(v: typing.Any) -> str:
     """Parse the given value to be the absolute file path.
@@ -214,3 +217,4 @@ def format_filepath(v: typing.Any, f: typing.Optional[str]="") -> str:
         return ""
 
 filepath_type = Datatype("filepath", format_filepath, parse_filepath)
+filepath_type.default_parse = ""

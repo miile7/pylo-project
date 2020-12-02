@@ -1,7 +1,6 @@
 import pytest
 
 import pylo
-import pylo.microscopes
 
 class DummyController(pylo.Controller):
     def __init__(self):
@@ -9,7 +8,7 @@ class DummyController(pylo.Controller):
 
 class TestMicroscopeInterface:
     def setup_method(self, method):
-        self.microscope = pylo.microscopes.MicroscopeInterface(DummyController())
+        self.microscope = pylo.MicroscopeInterface(DummyController())
         self.microscope.supported_measurement_variables.append(
             pylo.MeasurementVariable("test-var-1", "Test Variable 1", 0, 10, "ut")
         )

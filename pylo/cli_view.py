@@ -43,8 +43,8 @@ class CLIView(AbstractView):
         self.error = ""
 
         super().__init__()
-        self.clear()
-        self.printTitle()
+        # self.clear()
+        # self.printTitle()
     
     def clear(self) -> None:
         """Clear the current command line."""

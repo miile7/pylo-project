@@ -12,39 +12,27 @@ from .events import before_init
 from .events import before_start
 from .events import series_ready
 
+from .errors import DeviceImportError
+from .errors import DeviceCreationError
+from .errors import BlockedFunctionError
+from .errors import DeviceClassNotDefined
+
 from .datatype import Datatype
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
+from .camera_interface import CameraInterface
 from .exception_thread import ExceptionThread
-from .cameras.camera_interface import CameraInterface
-from .blocked_function_error import BlockedFunctionError
+from .microscope_interface import MicroscopeInterface
 from .abstract_configuration import AbstractConfiguration
-from .microscopes.microscope_interface import MicroscopeInterface
 
 from .config import MAX_LOOP_COUNT
 from .config import MEASUREMENT_START_TIMEOUT
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
-
-# for importing with import_lib in Controller::_loadCameraAndMicroscope()
-# add pylo/root, the key is the text to display in the help, the value will be
-# added to the sys.path
-import_dirs = {
-    "root": os.path.dirname(__file__),
-    "microscopes": os.path.join(os.path.dirname(__file__), "microscopes"),
-    "cameras": os.path.join(os.path.dirname(__file__), "cameras"),
-    "current working directory": os.getcwd()
-}
-for v in import_dirs.values():
-    if not v in sys.path:
-        sys.path.append(v)
+class TooManyRepetitionsError(RuntimeError):
+    """Show that statements are repeated too many times. There is no more 
+    progress expected."""
+    pass
 
 CONFIG_SETUP_GROUP = "setup"
 
@@ -65,7 +53,7 @@ class Controller:
     camera : CameraInterface
         The camera that is used for receiving the images
     measurement : Measurement or None
-        The measurement to do
+        The measurement to do, this only exists while the program is executed
     """
 
     def __init__(self, view: typing.Optional[AbstractView]=None,
@@ -109,8 +97,10 @@ class Controller:
         self.microscope = None
         self.camera = None
         self.measurement = None
-        self._measurement_thread = None
         self._running_thread = None
+        self._measurement_thread = None
+
+        self.stopProgramLoop()
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
@@ -302,104 +292,47 @@ class Controller:
             input_params.append(input_param)
 
         return self.view.askFor(*input_params)
-    
-    def _handleLoadCameraAndMicroscopeError(self, kind: str, error: typing.Union[Exception, None], msg: str, fix: str, **format_args) -> None:
-        """Show an error for the `Controller._loadCameraAndMicroscope()` 
-        function.
-
-        This will show an error with the view showing the `msg` with the `fix`.
-        The `kind` can either be 'camera' or 'microscope' for defining the used
-        values.
-
-        This will also reset the '<kind>-module' and '<kind>-class' 
-        configuration values in the `CONFIG_SETUP_GROUP` to make sure that they
-        are asked again in the next run.
-
-        The `msg` and the `fix` can contain python string formats. The 
-        supported variables are the following:
-        - 'kind': The `kind` parameter value
-        - 'error': The `error` parameter value
-        - 'config': The `CONFIG_SETUP_GROUP` value
-        - 'path': The path to the location where the `kind` classes should be 
-          placed
-        - 'interface': The interface class name (the full module path) that the
-          class has to implement
-
-        Parameters
-        ----------
-        kind : str
-            Use 'camera' or 'microscope'
-        error : Exception or None
-            The error that was raised
-        msg : str
-            The error message to show, `format()` will be called on this value
-        fix : str
-            The error fix to show, `format()` will be called on this value
-
-        Keyword Arguments
-        -----------------
-        All keyword arguments will be passed to the `str.format()` function 
-        directly.
-        """
-        if kind == "camera":
-            path = os.path.join(os.path.dirname(__file__), "cameras")
-            keys = ("camera-module", "camera-class")
-            interface_name = "pylo.cameras.CameraInterface"
-        elif kind == "microscope":
-            path = os.path.join(os.path.dirname(__file__), "microscopes")
-            keys = ("microscope-module", "microscope-class")
-            interface_name = "pylo.microscopes.MicroscopeInterface"
-        
-        format_args["kind"] = kind
-        format_args["error"] = error
-        format_args["config"] = CONFIG_SETUP_GROUP
-        format_args["path"] = path
-        format_args["interface"] = interface_name
-
-        msg = msg.format(**format_args)
-        fix = fix.format(**format_args)
-
-        self.view.showError(msg, fix)
-
-        for key in keys:
-            self.configuration.removeValue(CONFIG_SETUP_GROUP, key)
             
     def _loadCameraAndMicroscope(self) -> bool:
         """Load the camera and/or the microscope from the settings.
 
-        This checks if the microscope and/or the camera have to be loaded. If 
-        only one is not set, it will load only this one.
+        This checks if the microscope and/or the camera have to be loaded or if
+        they have been set from outside already. If only one is not set, only 
+        the not defined one will be loaded
         
-        For loading it uses the 'microscope-module', 'microscope-class', 
-        'camera-module' and 'camera-class' settings in the `CONFIG_SETUP_GROUP`
-        configuration group. Those define the file and the class name. And 
-        those classes will be loaded and initialized.
+        For loading it uses the 'microscope' and 'camera' settings in the 
+        `CONFIG_SETUP_GROUP` configuration group. Those define the device name
+        which can be found via the `loader` object in the `__init__.py`. The 
+        loading of the class, if needed, will completely be handled by this 
+        object.
 
         If one or more of the keys are not given in the configuration, this 
-        will ask for the values. If the camera and the microscope are not set
-        and both are missing keys in the configuration, only one dialog will be
-        shown. That is the reason for loading both with one method.
+        function will ask for the values. If the camera and the microscope are 
+        not set and both are missing keys in the configuration, only one dialog 
+        will be shown.
 
-        If there is an error when loading a class, the error will be displayed
-        to the user and the loading will start over again (reloading only the 
-        part that did not work). 
-
-        If the user keeps setting wrong values (or there is an internal error)
-        there is a security counter. After `MAX_LOOP_COUNT` runs the function
-        will stop and return False. It will return True if the load was 
-        successfully.
+        If a class could not be initialized, all settings will tried to be 
+        reset to the state before the creation of the class. Then the user will
+        be asked for changing the unloadable device. If the device keeps not
+        being loadable or an error causes the initialization to start over, the
+        execution will stop after `MAX_LOOP_COUNT` runs and raise a 
+        `TooManyRepetitionsError`.
 
         If the class(es) have been loaded successfully (so if this method 
         returned true), the `Controller.camera` and the `Controller.microscope`
-        are valid objects. If not, the not loadable one will be set to None.
+        are valid objects. If not, the unloadable one will be set to None.
 
         The camera and the controllers configuration options will be asked for 
         if they are required and not set.
 
         Raises
         ------
+        TooManyRepetitionsError
+            When there are more than `MAX_LOOP_COUNT` runs required to create a
+            valid microscope and/or camera object
         StopProgram
-            When a `StopProgram` error is raised
+            When class is loaded from the file and the class raises a 
+            `StopProgram` exception anywhere
 
         Returns
         -------
@@ -408,13 +341,7 @@ class Controller:
         """
         # prevent infinite loop
         security_counter = 0
-        # python extensions to load, remove the extension and let the importer
-        # handle that
-        extensions = (".py", ".py3", ".pyd", ".pyc", ".pyo", ".pyw", ".pyx",
-                    ".pxd", ".pxi", ".pyi", ".pyz", ".pywz")
 
-        load_camera = False
-        load_microscope = False
         while ((not isinstance(self.microscope, MicroscopeInterface) or
                 not isinstance(self.camera, CameraInterface)) and
                 security_counter < MAX_LOOP_COUNT):
@@ -422,152 +349,65 @@ class Controller:
             security_counter += 1
 
             args = []
+            load_kinds = []
             if not isinstance(self.camera, CameraInterface):
-                args.append((CONFIG_SETUP_GROUP, "camera-module"))
-                args.append((CONFIG_SETUP_GROUP, "camera-class"))
-                load_camera = True
+                args.append((CONFIG_SETUP_GROUP, "camera"))
+                load_kinds.append("camera")
             
             if not isinstance(self.microscope, MicroscopeInterface):
-                args.append((CONFIG_SETUP_GROUP, "microscope-module"))
-                args.append((CONFIG_SETUP_GROUP, "microscope-class"))
-                load_microscope = True
+                args.append((CONFIG_SETUP_GROUP, "microscope"))
+                load_kinds.append("microscope")
 
             names = list(self.getConfigurationValuesOrAsk(*args))
             
-            # remove file extensions of module name
-            for ext in extensions:
-                for i in range(0, len(names), 2):
-                    if names[i].endswith(ext):
-                        names[i] = names[i][:-1*len(ext)]
+            from . import loader
 
-            load_dict = {}
-            if load_camera:
-                # set camera module and class name, make sure to use a list
-                load_dict["camera"] = [names[0], names[1]]
-            
-            if load_microscope and load_camera:
-                # set camera module and class name, make sure to use a list
-                load_dict["microscope"] = [names[2], names[3]]
-            elif load_microscope:
-                # set camera module and class name, make sure to use a list
-                load_dict["microscope"] = [names[0], names[1]]
-
-            loading_error = False
-            for kind, (module_name, class_name) in load_dict.items():
-                msg = ""
-                fix = ""
-                config_keys = tuple()
-                error = False
-
+            for name, kind in zip(names, load_kinds):
+                device = None
                 try:
-                    module = importlib.import_module(module_name, "pylo")
+                    device = loader.getDevice(name, self)
+                    if device is None:
+                        msg = ("The device '{}' neither is defined one of " +
+                               "the devices.ini nor is added in " + 
+                               "runtime.").format(name)
+                        fix = (("Check the devices.ini if one of them " + 
+                                "contains the '{}' definition. If so make " + 
+                                "sure that it is not disabled, that its " + 
+                                "kind is '{}' and that the 'file' and " + 
+                                "'class' are valid, exist and are readable. " +
+                                "If the '{}' is not found in one of the " + 
+                                "devices.ini files, add it to one of them. " + 
+                                "\n").format(name, kind, name) + 
+                            "The following devices.ini are loaded at the " + 
+                            "moment:\n".format() + 
+                            "\n".join(map(lambda x: "- '{}'".format(x), 
+                                            loader.device_ini_files)))
+                        self.view.showError(msg, fix)
                 except StopProgram as e:
                     raise e
+                except (DeviceImportError, DeviceClassNotDefined, 
+                        DeviceCreationError) as e:
+                    self.view.showError(e, self._getFixForError(e))
                 except Exception as e:
-                    msg = "The {kind} module could not be imported: {error}"
-                    fix = ("Change the '{kind}-module' in the '{config}' " + 
-                           "group in the configuration or type in a valid " + 
-                           "value. The value can either be a python file or " + 
-                           "a python module name. In case of a file, place " + 
-                           "that file in the current directory where this " + 
-                           "script is executed or in the '{kind}s' directory.")
-                    self._handleLoadCameraAndMicroscopeError(kind, e, msg, fix)
-                    error = True
-
-                if not error:
-                    try:
-                        class_ = getattr(module, class_name)
-                    except StopProgram as e:
-                        raise e
-                    except Exception as e:
-                        msg = ("The {kind} module does not define the given " + 
-                               "class {class_name}: {error}")
-                        fix = ("Change the {class_name}-class in the " + 
-                               "'{config}' group in the configuration or " + 
-                               "type in a valid value. The value has to be " + 
-                               "the name of the class that defines the " + 
-                               "{kind}. The {class_name} has to extend the " + 
-                               "{interface} class.")
-                        self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
-                                fix, class_name=class_name)
-                        error = True
-
-                if not error and not loading_error:
-                    # define the configuration options if there are some
-                    if (hasattr(class_, "defineConfigurationOptions") and 
-                        callable(class_.defineConfigurationOptions)):
-                        state_id = self.configuration.markState()
-
-                        class_.defineConfigurationOptions(self.configuration)
-
-                        config_keys = self.configuration.getAdditions(state_id, True)
-                        self.configuration.dropStateMark(state_id)
+                    fix = ("Fix the error was raised during creation of " + 
+                           "the '{}' object in the file '{}'. Fix the error " + 
+                           "there, then the loading should work.").format(
+                            name, loader.getDeviceClassFile(name))
+                    self.view.showError(e, fix)
                 
-                if error:
-                    # do not break here, check all modules and classes first if 
-                    # they are loadable, if not the user only has one dialog 
-                    # to type in everything again, not multiple dialogs for 
-                    # every missing value
-                    loading_error = True
-                elif not loading_error:
-                    # save the added keys to remove them on later errors if 
-                    # needed
-                    load_dict[kind].append(config_keys)
-                    load_dict[kind].append(class_)
+                if kind == "camera":
+                    if device is not None:
+                        self.camera = device
+                    else:
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                                                       "camera")
+                elif kind == "microscope":
+                    if device is not None:
+                        self.microscope = device
+                    else:
+                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                                                       "microscope")
 
-            if loading_error:
-                # there was at least one object that could not be loaded, 
-                # before creating the objects re-ask for this error object
-                continue
-
-            # ask all non-existing but required configuration options 
-            # before initializing the microscope and/or camera but ask for 
-            # both objects together to prevent annoying the user by too many 
-            # dialogs
-            self.askIfNotPresentConfigurationOptions()
-            
-            for kind, (module_name, class_name, config_keys, class_) in load_dict.items():
-                error = False
-                try:
-                    obj = class_(self)
-                except StopProgram as e:
-                    raise e
-                except Exception as e:
-                    msg = ("The {kind} module defines the {class_name} " + 
-                           "attribute but an object cannot be created from " + 
-                           "this attribute: {error}")
-                    fix = ("Change the '{class_name}' class in the " + 
-                           "'{module_name}' module. It needs to be a class " + 
-                           "extending the {interface} class.")
-                    self._handleLoadCameraAndMicroscopeError(kind, e, msg, 
-                            fix, class_name=class_name, module_name=module_name)
-                    
-                    error = True
-                
-                if not error:
-                    if ((kind == "camera" and not isinstance(obj, CameraInterface)) or
-                        (kind == "microscope" and not isinstance(obj, MicroscopeInterface))):
-                        msg = ("The {kind} object is not inheriting from " + 
-                               "the {interface} class which is required. " + 
-                               "Therefore the {class_name} class cannot be " + 
-                               "used as a {kind}.")
-                        fix = ("Change the '{class_name}' class in the " + 
-                               "'{module_name}' module to extend the " + 
-                               "{interface} class.")
-                        self._handleLoadCameraAndMicroscopeError(kind, None, msg, 
-                                fix, class_name=class_name, module_name=module_name)
-                        
-                        error = True
-                
-                if not error:
-                    if kind == "camera":
-                        self.camera = obj
-                    elif kind == "microscope":
-                        self.microscope = obj
-                else:
-                    for group, key in config_keys:
-                        self.configuration.removeElement(group, key)
-        
         # show an error that the max loop count is reached and stop the
         # execution
         if security_counter + 1 >= MAX_LOOP_COUNT:
@@ -730,13 +570,14 @@ class Controller:
                 
                 measurement_layout = self.view.showCreateMeasurement(self)
                 
-                if(not isinstance(measurement_layout, typing.Sequence) or 
-                len(measurement_layout) <= 1):
-                    self.view.showError("The view returned an invalid measurement.",
-                                        "Try to input your measurement again, if " + 
-                                        "it still doesn't work you have to debug " + 
-                                        "your view in 'pylo/{}'.".format(
-                                            inspect.getfile(self.view.__class__)))
+                if (not isinstance(measurement_layout, typing.Sequence) or 
+                    len(measurement_layout) <= 1):
+                    msg = ("The view returned an invalid measurement. Try " + 
+                           "to input your measurement again, if it still " + 
+                           "doesn't work you have to debug the '{}' view in " + 
+                           "{}.").format(self.view.__class__, 
+                                         inspect.getfile(self.view.__class__))
+                    self.view.showError(msg)
             
                 # fire user_ready event
                 user_ready()
@@ -752,24 +593,24 @@ class Controller:
 
                 try:
                     self.measurement = Measurement.fromSeries(self, 
-                                                              measurement_layout[0], 
-                                                              measurement_layout[1])
+                        measurement_layout[0], measurement_layout[1])
                 except (KeyError, ValueError) as e:
-                    self.view.showError("The measurement could not be initialized " + 
-                                        "because it is not formatted correctly: " + 
-                                        "{}".format(e),
-                                        "Try again and make sure you entered a " + 
-                                        "valid value for this.")
+                    msg = ("The measurement could not be initialized " + 
+                           "because it is not formatted correctly: {}".format(e))
+                    fix = ("Try again and make sure you entered a valid " + 
+                           "value for this. If this error keeps appearing " + 
+                           "even though all values are correct, there is " + 
+                           "an internal problem with the Measurement class.")
+                    self.view.showError(msg, fix)
 
             # show an error that the max loop count is reached and stop the
             # execution
             if security_counter + 1 >= MAX_LOOP_COUNT:
-                self.view.showError(("The program is probably trapped in an " + 
-                                    "infinite loop when trying to initialize the " + 
-                                    "measurement. The execution will be stopped now " + 
-                                    "after {} iterations.").format(security_counter),
-                                    "This is a bigger issue. Look in the code " + 
-                                    "and debug the 'pylo/controller.py' file.")
+                msg = ("The program is probably trapped in an infinite loop " +
+                       "when trying to initialize the measurement. The " + 
+                       "execution will be stopped now  after {} " + 
+                       "iterations.").format(security_counter)
+                self.view.showError(msg)
                 return
             
             # fire series_ready event
@@ -828,9 +669,12 @@ class Controller:
             running = False
 
         # wait until the measurement has started, this is only for fixing
-        # synchronizing problems because this funciton is started before the 
-        # measurement thread is fully started
-        if running:
+        # synchronizing problems because this function may be started before 
+        # the measurement thread is fully started, for very fast measurements 
+        # (mostly test measurements, there are no IO-operations), the 
+        # measurement may be finished before this function is called to wait 
+        # for the finish, therefore skip the waiting completely
+        if running and not self.measurement.finished:
             start_time = time.time()
 
             # wait until the measurement is running
@@ -838,9 +682,9 @@ class Controller:
                    time.time() < start_time + MEASUREMENT_START_TIMEOUT):
                 time.sleep(MEASUREMENT_START_TIMEOUT / 10)
             
-            if (not self.measurement.running and (
-                not isinstance(self._measurement_thread, ExceptionThread) or 
-                len(self._measurement_thread.exceptions) == 0)):
+            if (not self.measurement.running and not self.measurement.finished and
+                (not isinstance(self._measurement_thread, ExceptionThread) or 
+                 len(self._measurement_thread.exceptions) == 0)):
                 raise RuntimeError("The measurement was told to start by the " + 
                                 "controller but when the controller is " + 
                                 "waiting for the measurement to end, the " + 
@@ -899,7 +743,8 @@ class Controller:
         for thread in (self._measurement_thread, self._running_thread, *additional_threads):
             if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
                 for error in thread.exceptions:
-                    print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                    if not isinstance(error, StopProgram):
+                        print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
                     raise error
     
     def _getFixForError(self, error: Exception) -> typing.Union[None, str]:
@@ -920,10 +765,26 @@ class Controller:
         fix = None
         if isinstance(error, BlockedFunctionError):
             fix = ("A function was blocked due to security reasons, " + 
-                    "probably because an error occurred. You will continue " + 
-                    "getting this error until you restart the program " + 
-                    "completely.")
-        
+                   "probably because an error occurred. You will continue " + 
+                   "getting this error until you restart the program " + 
+                   "completely.")
+        elif isinstance(error, DeviceImportError):
+            fix = ("The file is not importable. Either the file does not " + 
+                   "exist or cannot be read because of missing reading " + 
+                   "permissions. Make sure that the file exists and that " + 
+                   "it can be opened by the python interpreter. " + 
+                   "\n" + 
+                   "To change the file visit the 'devices.ini' file where " + 
+                   "this device is defined in.")
+        elif isinstance(error, DeviceClassNotDefined):
+            fix = ("The file does not define the class name so add the " + 
+                   "class definition to the loaded file or change the class " + 
+                   "name to the name the file defines.")
+        elif isinstance(error, DeviceCreationError):
+            fix = ("The class object probably has some errors probably in " + 
+                   "its constructor or in a method or function called in " + 
+                   "the constructor. To fix simply fix those errors.")
+                   
         return fix
     
     def stopProgramLoop(self) -> None:
@@ -932,7 +793,8 @@ class Controller:
         This funciton will also wait for all threads to join.
         """
 
-        if isinstance(self.measurement, Measurement) and self.measurement.running:
+        if (isinstance(self.measurement, Measurement) and 
+            self.measurement.running):
             self.measurement.stop()
 
         if isinstance(self.view, AbstractView):
@@ -947,6 +809,9 @@ class Controller:
             
         if isinstance(self.measurement, Measurement):
             self.measurement.waitForAllImageSavings()
+        
+        self._measurement_thread = None
+        self._running_thread = None
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
@@ -963,75 +828,36 @@ class Controller:
             The configuration to define the required options in
         """
 
+        # import after program is running, loader may be added files before 
+        # starting the program
+        from . import loader
         # import as late as possible to allow changes by extensions        
         from .config import PROGRAM_NAME
+        from .config import DEFAULT_DEVICE_INI_PATHS
 
-        # ordering of dict.values() and dict.keys() changes between python
-        # versions, this makes sure the order is the same
-        import_dir_keys = []
-        import_dir_values = []
-        for k, v in import_dirs.items():
-            import_dir_keys.append(k)
-            import_dir_values.append(v)
-        
-        # create a human readable list separated by comma and the last one
-        # with an 'or', parameter is the list
-        humanlist = lambda x: ", ".join(x[:-1]) + " or " + x[-1]
-        # the path names where the Controller::_loadCameraAndMicroscope() 
-        # function looks in
-        path_names = humanlist(list(map(str, import_dir_keys)))
-        # the root path to make other paths relative to this
-        root = os.path.realpath(os.path.dirname(__file__))
-        # the paths the Controller::_loadCameraAndMicroscope() function looks in
-        paths = list(map(lambda p: str(os.path.realpath(p)).replace(root, ""), 
-                         import_dir_values))
-        # a callback to create the file paths that are looked in, parameter is 
-        # the file name
-        files = lambda x: humanlist(list(map(lambda p: os.path.join(p, x), paths)))
+        descr = ("The {kind} to use for the measurement. All microscopes " + 
+                 "and cameras defined in one or more `devices.ini` files. " + 
+                 "To add new microscopes or cameras they have to be " + 
+                 "registered in this file (or at runtime in the " + 
+                 "`pylo.loader`). The `devices.ini` files can be in one of " + 
+                 "the following directories: \n" +  
+                 "\n".join(map(lambda x: "- '{}'".format(x), 
+                               DEFAULT_DEVICE_INI_PATHS)) + 
+                 "\n")
         
         # add the option for the microscope module
         configuration.addConfigurationOption(
             CONFIG_SETUP_GROUP, 
-            "microscope-module", 
-            datatype=str, 
-            description=("The module name where the microscope to use is " + 
-            "defined. This must be a valid python module name. The file can " + 
-            "be placed in {paths} directory. For example the input " + 
-            "`my_custom_microscope` will check for the files " + 
-            "{files}.").format(name=PROGRAM_NAME, paths=path_names, 
-                               files=files("my_custom_microscope.py")),
-            restart_required=True
-        )
-        # the configuration option for the microscope class
-        configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, 
-            "microscope-class", 
-            datatype=str, 
-            description=("The class name of the microscope class that " + 
-            "communicates with the physical microscope. The class name must " + 
-            "be defined in the 'microscope-module' file."), 
+            "microscope", 
+            datatype=Datatype.options(loader.getInstalledDeviceNames("microscope")), 
+            description=descr.format(kind="microscope"),
             restart_required=True
         )
         # add the option for the camera module
         configuration.addConfigurationOption(
             CONFIG_SETUP_GROUP, 
-            "camera-module", 
-            datatype=str, 
-            description=("The module name where the camera to use is " + 
-            "defined. This must be a valid python module name. The file can " + 
-            "be placed in {paths} directory. For example the input " + 
-            "`my_custom_camera` will check for the files " + 
-            "{files}.").format(name=PROGRAM_NAME, paths=path_names, 
-                               files=files("my_custom_camera.py")),
-            restart_required=True
-        )
-        # the configuration option for the camera class
-        configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, 
-            "camera-class", 
-            datatype=str, 
-            description=("The class name of the camera class that " + 
-            "communicates with the physical camera. The class name must " + 
-            "be defined in the 'camera-module' file."), 
+            "camera", 
+            datatype=Datatype.options(loader.getInstalledDeviceNames("camera")),
+            description=descr.format(kind="camera"),
             restart_required=True
         )

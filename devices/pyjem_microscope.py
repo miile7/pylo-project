@@ -2,19 +2,14 @@ import math
 import time
 import typing
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from pylo import FallbackModuleNotFoundError
 
 # for development only
 try:
     import dev_constants
     load_from_dev = True
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     load_from_dev = False
 
 if load_from_dev:
@@ -23,7 +18,7 @@ if load_from_dev:
         if not dev_constants.pyjem_path in sys.path:
             sys.path.insert(0, dev_constants.pyjem_path)
 
-from ..config import OFFLINE_MODE
+from pylo.config import OFFLINE_MODE
 error = None
 if OFFLINE_MODE != True:
     try:
@@ -43,13 +38,9 @@ if OFFLINE_MODE == True or error is not None:
     from PyJEM.offline.TEM3.lens3 import Lens3
     from PyJEM.offline.TEM3.stage3 import Stage3
 
-from ..datatype import Datatype
-from .microscope_interface import MicroscopeInterface
-from ..measurement_variable import MeasurementVariable
-
-# the group name in the configuration for settings that are related to this
-# microscope
-CONFIG_PYJEM_MICROSCOPE_GROUP = "pyjem-microscope"
+from pylo import Datatype
+from pylo import MicroscopeInterface
+from pylo import MeasurementVariable
 
 # the function modes for TEM mode
 FUNCTION_MODE_TEM_MAG = 0
@@ -140,9 +131,9 @@ class PyJEMMicroscope(MicroscopeInterface):
       - FLC: Free lense control, can be on and off for individual leses
     """
     
-    def __init__(self, controller : "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Get the microscope instance"""
-        super().__init__(controller)
+        super().__init__(*args, **kwargs)
 
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
@@ -153,7 +144,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         try:
             focus_calibration_factor = (
                 self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    self.config_group_name, 
                     "focus-calibration"
                 )
             )
@@ -169,7 +160,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         try:
             self.objective_lense_coarse_fine_stepwidth = (
                 self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    self.config_group_name, 
                     "objective-lense-coarse-fine-stepwidth"
                 )
             )
@@ -185,7 +176,7 @@ class PyJEMMicroscope(MicroscopeInterface):
         try:
             magnetic_field_calibration_factor = (
                 self.controller.configuration.getValue(
-                    CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                    self.config_group_name, 
                     "objective-lense-magnetic-field-calibration"
                 )
             )
@@ -202,7 +193,7 @@ class PyJEMMicroscope(MicroscopeInterface):
             try:
                 magnetic_field_unit = (
                     self.controller.configuration.getValue(
-                        CONFIG_PYJEM_MICROSCOPE_GROUP, 
+                        self.config_group_name, 
                         "magnetic-field-unit"
                     )
                 )
@@ -697,19 +688,30 @@ class PyJEMMicroscope(MicroscopeInterface):
         self.setCurrentState(self._init_state)
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration"):
+    def defineConfigurationOptions(configuration: "AbstractConfiguration", 
+                                   config_group_name: typing.Optional[str]="pyjem-microscope",
+                                   config_defaults: typing.Optional[dict]={}) -> None:
         """Define which configuration options this class requires.
 
         Parameters
         ----------
         configuration : AbstractConfiguration
             The configuration to define the required options in
+        config_group_name : str, optional
+            The group name this device should use to save persistent values in
+            the configuration, this is given automatically when loading this
+            object as a device, default: "pyjem-microscope"
+        config_defaults : dict, optional
+            The default values to use, this is given automatically when loading
+            this object as a device, default: {}
         """
         
         # add the stepwidth of the objective coarse lense in objective fine 
         # lense units
+        if not "objective-lense-coarse-fine-stepwidth" in config_defaults:
+            config_defaults["objective-lense-coarse-fine-stepwidth"] = None
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "objective-lense-coarse-fine-stepwidth", 
             datatype=float, 
             description=("The factor to calculate between the fine and " + 
@@ -717,12 +719,14 @@ class PyJEMMicroscope(MicroscopeInterface):
             "value is equal to this value steps with the objective fine " + 
             "lense. So OL-fine * value = OL-coarse."), 
             restart_required=True,
-            default_value=32
+            default_value=config_defaults["objective-lense-coarse-fine-stepwidth"]
         )
         
         # add the option for the calibration factor for the focus
+        if not "focus-calibration" in config_defaults:
+            config_defaults["focus-calibration"] = 0
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "focus-calibration", 
             datatype=float, 
             description=("The calibration factor for the focus. The " + 
@@ -730,12 +734,14 @@ class PyJEMMicroscope(MicroscopeInterface):
             "it to the PyJEM functions. The focus received by the PyJEM " + 
             "functions will be multiplied with this factor and then shown."), 
             restart_required=True,
-            default_value=3
+            default_value=config_defaults["focus-calibration"]
         )
         
         # add the option for the calibration factor for the magnetic field
+        if not "objective-lense-magnetic-field-calibration" in config_defaults:
+            config_defaults["objective-lense-magnetic-field-calibration"] = 0
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "objective-lense-magnetic-field-calibration", 
             datatype=float, 
             description=("The calibration factor for the objective lense to " + 
@@ -743,16 +749,18 @@ class PyJEMMicroscope(MicroscopeInterface):
             "factor is defined as the magnetic field per current. The unit is " + 
             "then [magnetic field]/[current]."), 
             restart_required=True,
-            default_value=0
+            default_value=config_defaults["objective-lense-magnetic-field-calibration"]
         )
 
         # add the option for the magnetic field unit to display
+        if not "magnetic-field-unit" in config_defaults:
+            config_defaults["magnetic-field-unit"] = ""
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "magnetic-field-unit", 
             datatype=str, 
             description=("The unit the magnetic field is measured in if the " + 
                 "calibration factor is given."), 
             restart_required=True,
-            default_value=""
+            default_value=config_defaults["magnetic-field-unit"]
         )

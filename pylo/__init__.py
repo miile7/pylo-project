@@ -40,7 +40,15 @@ can add any kind of callable which will be executed when the event is fired.\n\n
 from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
+from .errors import DeviceImportError
+from .errors import DeviceCreationError
+from .errors import BlockedFunctionError
+from .errors import DeviceClassNotDefined
+from .errors import FallbackModuleNotFoundError
+from .errors import ExecutionOutsideEnvironmentError
+
 from .image import Image
+from .device import Device
 from .cli_view import CLIView
 from .datatype import Datatype
 from .datatype import OptionDatatype
@@ -49,15 +57,16 @@ from .controller import Controller
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
-from .exception_thread import ExceptionThread
+from .device_loader import DeviceLoader
 from .blocked_function import BlockedFunction
+from .camera_interface import CameraInterface
+from .exception_thread import ExceptionThread
 from .ini_configuration import IniConfiguration
 from .measurement_steps import MeasurementSteps
 from .vulnerable_machine import VulnerableMachine
 from .measurement_variable import MeasurementVariable
-from .blocked_function_error import BlockedFunctionError
+from .microscope_interface import MicroscopeInterface
 from .abstract_configuration import AbstractConfiguration
-from .execution_outside_environment_error import ExecutionOutsideEnvironmentError
 
 try:
     from .dm_view import DMView
@@ -68,10 +77,35 @@ except ExecutionOutsideEnvironmentError:
     DMImage = None
     DMConfiguration = None
 
-# controller = None
-
+import os
 import typing
 
+loader = None
+def get_loader(*args, **kwargs) -> DeviceLoader:
+    """Get the current device loader instance.
+
+    Any arguments will directly be passed to the `DeviceLoader` constructor if
+    the loader does not exist yet.
+
+    Returns
+    -------
+    DeviceLoader
+        The current loader or a new one if there is no loader yet
+    """
+    global loader
+    if not isinstance(loader, DeviceLoader):
+        loader = DeviceLoader(*args, **kwargs)
+    
+    return loader
+
+loader = get_loader()
+from .config import DEFAULT_DEVICE_INI_PATHS
+for p in DEFAULT_DEVICE_INI_PATHS:
+    if (os.path.exists(p) and os.path.isfile(p) and 
+        not p in loader.device_ini_files):
+        loader.device_ini_files.append(p)
+
+# controller = None
 def get_controller(view: typing.Optional[AbstractView]=None,
                    configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
     """Get the current instance of the controller.

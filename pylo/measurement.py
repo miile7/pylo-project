@@ -16,6 +16,8 @@ from .events import before_record
 from .events import after_record
 from .events import measurement_ready
 
+from .errors import BlockedFunctionError
+
 from .image import Image
 from .datatype import Datatype
 from .log_thread import LogThread
@@ -23,7 +25,6 @@ from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
 from .measurement_steps import MeasurementSteps
 from .measurement_variable import MeasurementVariable
-from .blocked_function_error import BlockedFunctionError
 
 # from .config import DEFAULT_SAVE_DIRECTORY
 # from .config import DEFAULT_SAVE_FILE_NAME
@@ -63,6 +64,8 @@ class Measurement:
     running : bool
         Whether the measurement is running or not, to stop the measurement 
         immediately set this to False
+    finished : bool
+        Whether the measurement was completely run and finished successfully
         
     Listened Events
     ---------------
@@ -144,7 +147,9 @@ class Measurement:
 
         self.current_image = None
         self.running = False
+        self.finished = False
         self.logging = True
+        self._image_save_threads = []
 
         # stop the measurement when the emergency event is fired
         emergency.append(self.stop)
@@ -276,10 +281,16 @@ class Measurement:
         measurement_ready
             Fired when the measurement has fully finished
         """
+        self.finished = False
         self.running = True
         
         # self.controller.view.progres_max = len(self.steps)
         self.controller.view.print("Starting measurement...")
+        self.controller.view.print("Used devices:")
+        self.controller.view.print("  Camera: {}".format(
+            self.controller.camera.name))
+        self.controller.view.print("  Microscope: {}".format(
+            self.controller.microscope.name))
         self.controller.view.print(
             "Saving all images to {}.".format(self.save_dir), inset="  "
         )
@@ -480,6 +491,7 @@ class Measurement:
             # reset everything to the state before measuring
             self.running = False
             self._step_index = -1
+            self.finished = True
             measurement_ready()
         except StopProgram:
             self.stop()

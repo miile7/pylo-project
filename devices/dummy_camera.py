@@ -3,8 +3,8 @@ import typing
 import random
 import numpy as np
 
-from .camera_interface import CameraInterface
-from ..image import Image
+from pylo import Image
+from pylo import CameraInterface
 
 class DummyCamera(CameraInterface):
     """This class represents a dummy camera that records images with random 
@@ -20,17 +20,11 @@ class DummyCamera(CameraInterface):
         The image size
     """
 
-    def __init__(self, controller: "Controller") -> None:
-        """Create a new camera interface object.
-        
-        Parameters
-        ----------
-        controller : Controller
-            The controller
-        """
+    def __init__(self, *args, **kwargs) -> None:
+        """Create a new camera interface object."""
+        super(DummyCamera, self).__init__(*args, **kwargs)
         self.imagesize = (32, 32)
         self.tags = {"Camera": "Dummy Camera"}
-        self.controller = controller
     
     def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
         """Get the image of the current camera.

@@ -22,7 +22,6 @@ path_like.append(str)
 path_like.append(pathlib.PurePath)
 
 if hasattr(os, "PathLike"):
-
     # keep support for python 3.5.6, os.PathLike is invented in python 3.6
     path_like.append(os.PathLike)
 

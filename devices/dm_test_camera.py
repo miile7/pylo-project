@@ -2,20 +2,17 @@ import time
 
 import numpy as np
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# for python <3.6
+from pylo import FallbackModuleNotFoundError
 
 try:
     import DigitalMicrograph as DM
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
-from .dm_camera import DMCamera
+# from .dm_camera import DMCamera
+from pylo import loader
+DMCamera = loader.getDeviceClass("Digital Micrograph Camera")
 
 class _DMDummyCamera:
     def PrepareForAcquire(self):
@@ -34,7 +31,7 @@ class _DMDummyCamera:
         return img
 
 class DMTestCamera(DMCamera):
-    def __init__(self, controller: "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Create a new dm camera object.
         
         Parameters
@@ -43,9 +40,9 @@ class DMTestCamera(DMCamera):
             The controller
         """
 
-        super(DMTestCamera, self).__init__(controller)
+        super(DMTestCamera, self).__init__(*args, **kwargs)
         self.camera = _DMDummyCamera()
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
-        DMCamera.defineConfigurationOptions(configuration)
+    def defineConfigurationOptions(*args, **kwargs) -> None:
+        DMCamera.defineConfigurationOptions(*args, **kwargs)

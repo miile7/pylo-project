@@ -16,13 +16,8 @@ import numpy as np
 import pylo
 import pylo.config
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from pylo import FallbackModuleNotFoundError
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -52,6 +47,7 @@ controller_tmp_path = os.path.join(test_root, "tmp-test-controller-{}".format(ra
 
 os.makedirs(controller_tmp_path, exist_ok=True)
 
+pylo.config.DEFAULT_SAVE_FILE_NAME = "{counter}-test-measurement.tif"
 pylo.config.DEFAULT_LOG_PATH = os.path.join(controller_tmp_path, "measurement.log")
 pylo.config.DEFAULT_INI_PATH = os.path.join(controller_tmp_path, "configuration.ini")
 
@@ -173,9 +169,9 @@ class DummyImage(pylo.Image):
         pass
 
 use_dummy_images = False
-class DummyCamera(pylo.cameras.CameraInterface):
-    def __init__(self, controller):
-        super().__init__(controller)
+class DummyCamera(pylo.CameraInterface):
+    def __init__(self, controller, *args, **kwargs):
+        super().__init__(controller, *args, **kwargs)
         self.reset()
     
     def reset(self):
@@ -194,10 +190,11 @@ class DummyCamera(pylo.cameras.CameraInterface):
     def resetToSafeState(self):
         pass
 
-measurement_duration_time = -1
-class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
-    def __init__(self, controller):
-        super().__init__(controller)
+pylo.loader.addDeviceFromFile("camera", "DummyCamera", __file__, "DummyCamera")
+
+class DummyMicroscope(pylo.MicroscopeInterface):
+    def __init__(self, controller, *args, **kwargs):
+        super().__init__(controller, *args, **kwargs)
         self.reset()
 
     def reset(self):
@@ -216,8 +213,9 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def setMeasurementVariableValue(self, id_, value):
         self.performed_steps.append((id_, value, time.time()))
 
-        if measurement_duration_time > 0:
-            time.sleep(measurement_duration_time)
+        if (hasattr(self.controller, "measurement_duration_time") and 
+            self.controller.measurement_duration_time >= 0):
+            time.sleep(self.controller.measurement_duration_time)
     
     def getMeasurementVariableValue(self, id_):
         for k, v, t in reversed(self.performed_steps):
@@ -229,6 +227,18 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
     def resetToSafeState(self):
         pass
 
+pylo.loader.addDeviceFromFile("microscope", "DummyMicroscope", __file__, 
+                              "DummyMicroscope")
+
+# add some invalid devices
+pylo.loader.addDeviceFromFile("microscope", "NoFileDummyMicroscope", 
+                              "filedoesnotexist.py", "DummyMicroscope")
+pylo.loader.addDeviceFromFile("microscope", "NoClassDummyMicroscope", __file__, 
+                              "ClassDoesNotExist")
+pylo.loader.addDeviceFromFile("camera", "NoFileDummyCamera", 
+                              "filedoesnotexist.py", "DummyCamera")
+pylo.loader.addDeviceFromFile("camera", "NoClassDummyCamera", __file__, 
+                              "ClassDoesNotExist")
 configuration_test_setup = [
     ({"group": "test-group", "key": "test-key", "value": "test"}, ),
     ({"group": "test-group2", "key": "test-key", "value": False}, ),
@@ -255,9 +265,6 @@ configuration_test_setup = [
 
 @pytest.fixture()
 def controller():
-    global measurement_duration_time
-
-    measurement_duration_time = -1
     pylo.config.CONFIGURATION = DummyConfiguration()
     pylo.config.CONFIGURATION.reset()
     pylo.config.VIEW = DummyView()
@@ -402,370 +409,7 @@ class TestController:
                                                                     l["key"])
             # check if the returned value is correct
             assert values[i] == l["value"]
-        
-    def create_dummy_class_file(self, directory):
-        """Creates a python file that defines two classes and saves it to the 
-        given directory.
-
-        Raises
-        ------
-        OSError
-            When the file cannot be created
-
-        Parameters
-        ----------
-        directory : str
-            The directory to save the file to
-        
-        Returns
-        -------
-        str
-            The file name
-        str
-            The full file path (including the file name)
-        str
-            The module name
-        str
-            The class name (the second class has the same name with a "2"
-            appended)
-        """
-
-        class_name = "ControllerTestDummyClass{}C".format(random.randint(0, 99999999))
-        module = class_name.lower()
-        filename = module + ".py"
-
-        directory = str(directory)
-
-        os.makedirs(directory, exist_ok=True)
-        path = os.path.join(directory, filename)
-
-        f = open(path, "w+")
-        f.write(("class {cn}:\n" + 
-                    "\tdef __init__(self, *args):\n" + 
-                        "\t\tself.dummy_value = \"dummy value\"\n" + 
-                        "\t\tself.constructor_args = args\n"
-                "\n" + 
-                    "\tdef dummy_func(self):\n" + 
-                        "\t\treturn True\n"
-                "\n" + 
-                "\n" + 
-                "class {cn}2:\n" + 
-                    "\tdef __init__(self, *args):\n" + 
-                        "\t\tself.constructor_args = args\n" + 
-                "\n" + 
-                "\n" + 
-                "thisisnotaclass = True").format(cn=class_name))
-        f.close()
-
-        return filename, path, module, class_name
-    
-    def clear_dummy_class_files(self, path):
-        """Remove the given file."""
-        if os.path.exists(path):
-            if (os.path.isfile(path) and 
-                os.path.basename(path).startswith("controllertestdummyclass")):
-                os.remove(path)
-            else:
-                raise OSError("Not removing '{}' because it probably is not " + 
-                              "a controller dummy test class.")
-    
-    def check_dynamic_created_object(self, obj, class_name, constructor_args=None):
-        """Check if the `obj` is created correctly."""
-
-        assert isinstance(obj, object)
-        assert hasattr(obj, "__class__")
-        assert hasattr(obj.__class__, "__name__")
-        assert obj.__class__.__name__ == class_name
-
-        if constructor_args is not None:
-            assert obj.constructor_args == constructor_args
-    
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_root(self, controller):
-        """Test whether the _dynamicGetClasses() function works for a file
-        in the pylo root directory."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-
-        obj = controller._dynamicCreateClass(obj)
-        self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(path)
-    
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_root_with_extension(self, controller):
-        """Test whether the _dynamicGetClasses() function works for a file
-        in the pylo root directory."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module + ".py")
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-        
-        obj = controller._dynamicCreateClass(obj)
-        self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(path)
-    
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_root_with_args(self, controller):
-        """Test whether the _dynamicGetClasses() function works with 
-        constructor arguments."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-        args = ("A", "B", "C")
-
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-        obj = controller._dynamicCreateClass(obj, constructor_args=args)
-        
-        self.check_dynamic_created_object(obj, class_name, args)
-        self.clear_dummy_class_files(path)
-    
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_root_with_args_and_class_2(self, controller):
-        """Test whether the _dynamicGetClasses() function works with two 
-        classes loaded form the same source."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-        class_name2 = class_name + "2"
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name2", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name2", class_name2)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-
-        args1 = ("A", "B", "C")
-        args2 = ("D", "E", "F")
-        obj = controller._dynamicGetClasses(
-            ("dummy-test-module-name", "dummy-test-class-name"),
-            ("dummy-test-module-name2", "dummy-test-class-name2")
-        )
-
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 2
-
-        obj1, obj2 = obj
-        assert isinstance(obj1, type)
-        assert isinstance(obj2, type)
-
-        obj1 = controller._dynamicCreateClass(obj1, constructor_args=args1)
-        obj2 = controller._dynamicCreateClass(obj2, constructor_args=args2)
-        
-        self.check_dynamic_created_object(obj1, class_name, args1)
-        self.check_dynamic_created_object(obj2, class_name2, args2)
-        self.clear_dummy_class_files(path)
-
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_submodule(self, controller):
-        """Test whether the _dynamicGetClasses() function works for a file
-        in the micrsocopes subdirectory."""
-
-        path = os.path.join(pylo_root, "microscopes")
-        filename, path, module, class_name = self.create_dummy_class_file(path)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-        
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-        obj = controller._dynamicCreateClass(obj)
-        
-        self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(path)
-
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_cwd(self, controller):
-        """Test whether the _dynamicGetClasses() function works for a file
-        in the current working directory."""
-
-        # this should be the current working directory
-        path = os.getcwd()
-        try:
-            filename, path, module, class_name = self.create_dummy_class_file(path)
-        except OSError:
-            pytest.skip("The test file {} could not be created. Cannot test " + 
-                        "importing if the file does not exist.")
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-        
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-        obj = controller._dynamicCreateClass(obj)
-        
-        self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(path)
-
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_in_test(self, controller):
-        """Test whether the _dynamicGetClasses() function works for a file
-        in the current working directory."""
-
-        # this should be the current working directory
-        path = os.path.dirname(__file__)
-        try:
-            filename, path, module, class_name = self.create_dummy_class_file(path)
-        except OSError:
-            pytest.skip("The test file {} could not be created. Cannot test " + 
-                        "importing if the file does not exist.")
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        obj = controller._dynamicGetClasses(("dummy-test-module-name", 
-                                             "dummy-test-class-name"))
-        
-        assert isinstance(obj, (list, tuple))
-        assert len(obj) == 1
-
-        obj = obj[0]
-        assert isinstance(obj, type)
-        obj = controller._dynamicCreateClass(obj)
-        
-        self.check_dynamic_created_object(obj, class_name)
-        self.clear_dummy_class_files(path)
-
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_module_does_not_exist(self, controller):
-        """Test whether the _dynamicGetClasses() function raises an exception
-        when the module does not exist."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", "thisdoesnotexist")
-        controller.configuration.setValue("setup", "dummy-test-class-name", class_name)
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        with pytest.raises((ModuleNotFoundError, ImportError)):
-            # python <3.6 raises an ImportError
-            controller._dynamicGetClasses(("dummy-test-module-name", 
-                                           "dummy-test-class-name"))
-        self.clear_dummy_class_files(path)
-        
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_class_does_not_exist(self, controller):
-        """Test whether the _dynamicGetClasses() function raises an exception
-        when the class does not exist."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", "thisdoesnotexist")
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        with pytest.raises((AttributeError, ImportError)):
-            # python <3.6 raises an import error
-            controller._dynamicGetClasses(("dummy-test-module-name", 
-                                           "dummy-test-class-name"))
-        self.clear_dummy_class_files(path)
-        
-    @pytest.mark.skip(reason=("Controller._dynamicGetClasses() is now included " + 
-                         "in Controller._loadCameraAndMicroscope(), this " + 
-                         "test should be rewritten."))
-    @pytest.mark.usefixtures("controller")
-    def test_dynamic_create_class_class_is_not_a_class(self, controller):
-        """Test whether the _dynamicGetClasses() function raises an exception
-        when the class is not a class."""
-
-        filename, path, module, class_name = self.create_dummy_class_file(pylo_root)
-
-        controller.configuration.setValue("setup", "dummy-test-module-name", module)
-        controller.configuration.setValue("setup", "dummy-test-class-name", "thisisnotaclass")
-
-        # wait a short time, otherwise the module is sometimes not found
-        time.sleep(0.1)
-        with pytest.raises((NameError, TypeError, ImportError)):
-            # python <3.6 raises an import error
-            controller._dynamicGetClasses(("dummy-test-module-name", 
-                                           "dummy-test-class-name"))
-        self.clear_dummy_class_files(path)
-    
+            
     def before_init_handler(self):
         """The event handler for the before_init event."""
         self.before_init_times.append(time.time())
@@ -834,13 +478,11 @@ class TestController:
 
         if change_microscope:
             # define the microscope to use
-            controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
-            controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+            controller.configuration.setValue("setup", "microscope", "DummyMicroscope")
 
         if change_camera:
             # define the camera to use
-            controller.configuration.setValue("setup", "camera-module", "test_controller.py")
-            controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+            controller.configuration.setValue("setup", "camera", "DummyCamera")
 
         if change_save_path:
             controller.configuration.setValue("measurement", "save-directory", save_path)
@@ -928,8 +570,7 @@ class TestController:
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if mircoscope is asked from the configuration
-        assert ("setup", "microscope-module") in requests
-        assert ("setup", "microscope-class") in requests
+        assert ("setup", "microscope") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_camera_from_configuration(self, tmp_path, controller):
@@ -940,8 +581,7 @@ class TestController:
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if camera is asked from the configuration
-        assert ("setup", "camera-module") in requests
-        assert ("setup", "camera-class") in requests
+        assert ("setup", "camera") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_microscope_and_camera_are_valid(self, tmp_path, controller):
@@ -949,8 +589,16 @@ class TestController:
         self.init_start_program_test(controller, tmp_path)
 
         # check mircoscope and camera are valid
-        assert isinstance(controller.microscope, DummyMicroscope)
-        assert isinstance(controller.camera, DummyCamera)
+        # this test does not work, objects have different classes because they
+        # are loaded differently, does not matter in the "real" application
+        # assert isinstance(controller.microscope, DummyMicroscope)
+        # assert isinstance(controller.camera, DummyCamera)
+
+        assert controller.microscope.__class__.__module__ == os.path.basename(__file__)
+        assert controller.microscope.__class__.__name__ == "DummyMicroscope"
+
+        assert controller.camera.__class__.__module__ == os.path.basename(__file__)
+        assert controller.camera.__class__.__name__ == "DummyCamera"
     
     @pytest.mark.usefixtures("controller")
     def test_show_create_measurement_is_executed(self, tmp_path, controller):
@@ -1078,8 +726,7 @@ class TestController:
     def test_error_shown_microscope_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope-module", "nontexistingmodule")
-        controller.configuration.setValue("setup", "microscope-class", "DummyMicroscope")
+        controller.configuration.setValue("setup", "microscope", "NoFileDummyMicroscope")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -1087,7 +734,7 @@ class TestController:
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module could not be imported" in str(e[0]):
+            if "Could not import the device 'NoFileDummyMicroscope'" in str(e[0]):
                 found = True
                 break
         
@@ -1097,15 +744,15 @@ class TestController:
     def test_error_shown_microscope_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope-module", "test_controller.py")
-        controller.configuration.setValue("setup", "microscope-class", "NonExistingClass")
+        controller.configuration.setValue("setup", "microscope", "NoClassDummyMicroscope")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_microscope=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The microscope module does not define the given class" in str(e[0]):
+            if "Could not create the device 'NoClassDummyMicroscope'" in str(e[0]):
                 found = True
                 break
         
@@ -1115,15 +762,15 @@ class TestController:
     def test_error_shown_camera_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera-module", "nontexistingmodule")
-        controller.configuration.setValue("setup", "camera-class", "DummyCamera")
+        controller.configuration.setValue("setup", "camera", "NoFileDummyCamera")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module could not be imported" in str(e[0]):
+            if "Could not import the device 'NoFileDummyCamera'" in str(e[0]):
                 found = True
                 break
         
@@ -1133,15 +780,15 @@ class TestController:
     def test_error_shown_camera_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the camera could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera-module", "test_controller.py")
-        controller.configuration.setValue("setup", "camera-class", "NonExistingClass")
+        controller.configuration.setValue("setup", "camera", "NoClassDummyCamera")
+
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
             self.init_start_program_test(controller, tmp_path, change_camera=False)
 
         found = False
         for e in controller.view.error_log:
-            if "The camera module does not define the given class" in str(e[0]):
+            if "Could not create the device 'NoClassDummyCamera'" in str(e[0]):
                 found = True
                 break
         
@@ -1279,10 +926,8 @@ class TestController:
     
     @pytest.mark.usefixtures("controller")
     @pytest.mark.parametrize("group,key,for_camera", [
-        ("setup", "microscope-module", False),
-        ("setup", "microscope-class", False),
-        ("setup", "camera-module", True),
-        ("setup", "camera-class", True),
+        ("setup", "microscope", False),
+        ("setup", "camera", True),
     ])
     def test_stop_program_exception_stops_in_ask_for_microscope_or_camera(self, tmp_path, controller, group, key, for_camera):
         """Test if the program is stopped if the view raises the StopProgram
@@ -1307,9 +952,9 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        # assert (isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface) == 
+        # assert (isinstance(controller.microscope, pylo.MicroscopeInterface) == 
         #         for_camera)
-        assert not isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert not isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1327,8 +972,8 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert isinstance(controller.microscope, pylo.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.usefixtures("controller")
@@ -1346,8 +991,8 @@ class TestController:
         assert len(self.user_ready_times) == 0
         assert len(self.series_ready_times) == 0
 
-        assert isinstance(controller.microscope, pylo.microscopes.MicroscopeInterface)
-        assert isinstance(controller.camera, pylo.cameras.CameraInterface)
+        assert isinstance(controller.microscope, pylo.MicroscopeInterface)
+        assert isinstance(controller.camera, pylo.CameraInterface)
         assert not isinstance(controller.measurement, pylo.Measurement)
     
     @pytest.mark.slow()
@@ -1355,8 +1000,6 @@ class TestController:
     def test_stop_program_loop_stops_program_while_working(self, tmp_path, controller):
         """Test if the program loop is stoppend when calling 
         Controller::stopProgramLoop() in another thread."""
-
-        global measurement_duration_time
 
         # add a listener to the microscope_ready event
         pylo.microscope_ready.clear()
@@ -1371,12 +1014,13 @@ class TestController:
         # let the microscope take one second to arrange the measuremnet 
         # variable
         measurement_duration_time = 1
+        controller.measurement_duration_time = measurement_duration_time
         
         # program is running
         self.init_start_program_test(controller, tmp_path, wait_for_finish=False)
         
         # wait some time until the measurement should be started
-        time.sleep(measurement_duration_time * 2 / 3)
+        time.sleep(measurement_duration_time * 1 / 2)
 
         # stop the program
         controller.stopProgramLoop()
@@ -1402,8 +1046,6 @@ class TestController:
         """Test if the program loop is stoppend when calling 
         Controller::restartProgramLoop() in another thread."""
 
-        global measurement_duration_time
-
         # add a listener to the microscope_ready event
         pylo.microscope_ready.clear()
         pylo.measurement_ready.clear()
@@ -1417,6 +1059,7 @@ class TestController:
         # let the microscope take one second to arrange the measuremnet 
         # variable
         measurement_duration_time = 1
+        controller.measurement_duration_time = measurement_duration_time
         
         # program is running
         self.init_start_program_test(controller, tmp_path, wait_for_finish=False)
@@ -1461,10 +1104,8 @@ class TestController:
 
         # check if mircoscope and camera are created at least two times, there
         # can be more requests when restarting, ect.
-        assert requests.count(("setup", "microscope-module")) >= 2
-        assert requests.count(("setup", "microscope-class")) >= 2
-        assert requests.count(("setup", "camera-module")) >= 2
-        assert requests.count(("setup", "camera-class")) >= 2
+        assert requests.count(("setup", "microscope")) >= 2
+        assert requests.count(("setup", "camera")) >= 2
 
         # all first events are triggered before the restart
         assert self.before_init_times[0] <= restart_time
@@ -1473,10 +1114,8 @@ class TestController:
         assert self.microscope_ready_times[0] <= restart_time
 
         # all first requests are made before the restart
-        assert min(request_times_dict["setup-microscope-module"]) <= restart_time
-        assert min(request_times_dict["setup-microscope-class"]) <= restart_time
-        assert min(request_times_dict["setup-camera-module"]) <= restart_time
-        assert min(request_times_dict["setup-camera-class"]) <= restart_time
+        assert min(request_times_dict["setup-microscope"]) <= restart_time
+        assert min(request_times_dict["setup-camera"]) <= restart_time
 
         # all second events are triggered after the restart
         assert restart_time <= self.before_init_times[1]

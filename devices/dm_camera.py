@@ -5,21 +5,16 @@ import typing
 
 import numpy as np
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+# python <3.6 does not define a ModuleNotFoundError, use this fallback
+from pylo import FallbackModuleNotFoundError
 
-from .camera_interface import CameraInterface
-from ..dm_image import DMImage
-from ..execution_outside_environment_error import ExecutionOutsideEnvironmentError
+from pylo import DMImage
+from pylo import CameraInterface
+from pylo import ExecutionOutsideEnvironmentError
 
 try:
     import DigitalMicrograph as DM
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
 if DM is not None:
@@ -28,7 +23,7 @@ if DM is not None:
     try:
         import dev_constants
         load_from_dev = True
-    except (ModuleNotFoundError, ImportError) as e:
+    except (FallbackModuleNotFoundError, ImportError) as e:
         load_from_dev = False
 
     if load_from_dev:
@@ -39,8 +34,6 @@ if DM is not None:
     import execdmscript
 else:
     raise ExecutionOutsideEnvironmentError("Could not load module execdmscript.")
-
-CONFIG_DM_CAMERA_GROUP = "dm-camera"
 
 class DMCamera(CameraInterface):
     """This class represents a camera that can only be used in Gatan 
@@ -64,16 +57,10 @@ class DMCamera(CameraInterface):
         default: False
     """
 
-    def __init__(self, controller: "Controller") -> None:
-        """Create a new dm camera object.
-        
-        Parameters
-        ----------
-        controller : Controller
-            The controller
-        """
+    def __init__(self, *args, **kwargs) -> None:
+        """Create a new dm camera object."""
 
-        super(DMCamera, self).__init__(controller)
+        super(DMCamera, self).__init__(*args, **kwargs)
 
         self.show_images = None
         self.exposure_time = None
@@ -83,7 +70,7 @@ class DMCamera(CameraInterface):
         self.ccd_area = None
         self.tags = {}
 
-        from ..config import OFFLINE_MODE
+        from pylo.config import OFFLINE_MODE
 
         if DM is not None and not OFFLINE_MODE:
             self.camera = DM.GetActiveCamera()
@@ -99,15 +86,15 @@ class DMCamera(CameraInterface):
         
         (self.show_images, self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, *self.ccd_area) = self.controller.getConfigurationValuesOrAsk(
-            (CONFIG_DM_CAMERA_GROUP, "show-images"),
-            (CONFIG_DM_CAMERA_GROUP, "exposure-time"),
-            (CONFIG_DM_CAMERA_GROUP, "binning-x"),
-            (CONFIG_DM_CAMERA_GROUP, "binning-y"),
-            (CONFIG_DM_CAMERA_GROUP, "process-level"),
-            (CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-top"),
-            (CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-right"),
-            (CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-bottom"),
-            (CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-left"),
+            (self.config_group_name, "show-images"),
+            (self.config_group_name, "exposure-time"),
+            (self.config_group_name, "binning-x"),
+            (self.config_group_name, "binning-y"),
+            (self.config_group_name, "process-level"),
+            (self.config_group_name, "ccd-readout-area-top"),
+            (self.config_group_name, "ccd-readout-area-right"),
+            (self.config_group_name, "ccd-readout-area-bottom"),
+            (self.config_group_name, "ccd-readout-area-left"),
             fallback_default=True, save_if_not_exists=True
         )
 
@@ -208,7 +195,7 @@ class DMCamera(CameraInterface):
             Whether to set the new workspace as the active one, default: True
         """
 
-        from ..config import PROGRAM_NAME
+        from pylo.config import PROGRAM_NAME
 
         # try to find the workspace with the program name, if there is none 
         # create a new one
@@ -242,89 +229,105 @@ class DMCamera(CameraInterface):
             self._workspace_id = script["wsid"]
 
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration") -> None:
+    def defineConfigurationOptions(configuration: "AbstractConfiguration", 
+                                   config_group_name: typing.Optional[str]="dm-camera",
+                                   config_defaults: typing.Optional[dict]={}) -> None:
         """Define which configuration options this class requires.
 
         Parameters
         ----------
         configuration : AbstractConfiguration
             The configuration to define the required options in
+        config_group_name : str, optional
+            The group name this device should use to save persistent values in
+            the configuration, this is given automatically when loading this
+            object as a device, default: "dm-camera"
+        config_defaults : dict, optional
+            The default values to use, this is given automatically when loading
+            this object as a device, default: {}
         """
 
-        # import as late as possible to allow changes by extensions
-        from ..config import DEFAULT_DM_SHOW_IMAGES
-        from ..config import DEFAULT_DM_CAMERA_EXPOSURE_TIME
-        from ..config import DEFAULT_DM_CAMERA_BINNING_X
-        from ..config import DEFAULT_DM_CAMERA_BINNING_Y
-        from ..config import DEFAULT_DM_PROCESS_LEVEL
-        from ..config import DEFAULT_DM_CCD_READOUT_AREA_TOP
-        from ..config import DEFAULT_DM_CCD_READOUT_AREA_RIGHT
-        from ..config import DEFAULT_DM_CCD_READOUT_AREA_BOTTOM
-        from ..config import DEFAULT_DM_CCD_READOUT_AREA_LEFT
-
+        if "show-images" not in config_defaults:
+            config_defaults["show-images"] = False
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "show-images", 
+            config_group_name, "show-images", 
             datatype=bool, 
-            default_value=DEFAULT_DM_SHOW_IMAGES, 
+            default_value=config_defaults["show-images"], 
             description="Whether to show all acquired images (in a new " + 
             "workspace) or not, they will be saved to a file in both cases."
         )
         
         # the exposure time
+        if "exposure-time" not in config_defaults:
+            config_defaults["exposure-time"] = 0.5
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "exposure-time", 
+            config_group_name, "exposure-time", 
             datatype=float, 
-            default_value=DEFAULT_DM_CAMERA_EXPOSURE_TIME, 
+            default_value=config_defaults["exposure-time"], 
             description="The exposure time in seconds."
         )
         
         # the binning
+        if "binning-x" not in config_defaults:
+            config_defaults["binning-x"] = 1
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "binning-x", 
+            config_group_name, "binning-x", 
             datatype=int, 
-            default_value=DEFAULT_DM_CAMERA_BINNING_X, 
+            default_value=config_defaults["binning-x"], 
             description="The hardware binning of pixels in x direction."
         )
         
         # the binning
+        if "binning-y" not in config_defaults:
+            config_defaults["binning-y"] = 1
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "binning-y", 
+            config_group_name, "binning-y", 
             datatype=int, 
-            default_value=DEFAULT_DM_CAMERA_BINNING_Y, 
+            default_value=config_defaults["binning-y"], 
             description="The hardware binning of pixels in y direction."
         )
         
         # the process level
+        if "process-level" not in config_defaults:
+            config_defaults["process-level"] = 3
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "process-level", 
+            config_group_name, "process-level", 
             datatype=int, 
-            default_value=DEFAULT_DM_PROCESS_LEVEL, 
+            default_value=config_defaults["process-level"], 
             description=("The process level, use 1 for 'unprocessed', 2 for " + 
             "'dark subtracted' and 3 for 'gain normalized'.")
         )
         
         # the ccd readout area
+        if "ccd-readout-area-top" not in config_defaults:
+            config_defaults["ccd-readout-area-top"] = 0
+        if "ccd-readout-area-right" not in config_defaults:
+            config_defaults["ccd-readout-area-right"] = 4096
+        if "ccd-readout-area-left" not in config_defaults:
+            config_defaults["ccd-readout-area-left"] = 0
+        if "ccd-readout-area-bottom" not in config_defaults:
+            config_defaults["ccd-readout-area-bottom"] = 4096
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-top", 
+            config_group_name, "ccd-readout-area-top", 
             datatype=int, 
-            default_value=DEFAULT_DM_CCD_READOUT_AREA_TOP, 
+            default_value=config_defaults["ccd-readout-area-top"], 
             description="The top coordinate of the CCD readout area"
         )
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-right", 
+            config_group_name, "ccd-readout-area-right", 
             datatype=int, 
-            default_value=DEFAULT_DM_CCD_READOUT_AREA_RIGHT, 
+            default_value=config_defaults["ccd-readout-area-right"], 
             description="The right coordinate of the CCD readout area"
         )
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-bottom", 
+            config_group_name, "ccd-readout-area-bottom", 
             datatype=int, 
-            default_value=DEFAULT_DM_CCD_READOUT_AREA_BOTTOM, 
+            default_value=config_defaults["ccd-readout-area-bottom"], 
             description="The bottom coordinate of the CCD readout area"
         )
         configuration.addConfigurationOption(
-            CONFIG_DM_CAMERA_GROUP, "ccd-readout-area-left", 
+            config_group_name, "ccd-readout-area-left", 
             datatype=int, 
-            default_value=DEFAULT_DM_CCD_READOUT_AREA_LEFT, 
+            default_value=config_defaults["ccd-readout-area-left"], 
             description="The left coordinate of the CCD readout area"
         )

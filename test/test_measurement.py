@@ -18,8 +18,6 @@ import csv
 import re
 
 import pylo
-import pylo.cameras
-import pylo.microscopes
 
 sleep_time = "random"
 def setSleepTime(time="random"):
@@ -77,7 +75,7 @@ def convertImageSaveToMeasurementVariable(var, value, steps=255):
     """
     return value / steps * (var.max_value - var.min_value) + var.min_value
 
-class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope(pylo.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
 
@@ -169,7 +167,7 @@ class DummyMicroscope(pylo.microscopes.MicroscopeInterface):
         self.is_in_safe_state = True
 
 dummy_camera_name = "DummyCamera for testing"
-class DummyCamera(pylo.cameras.CameraInterface):
+class DummyCamera(pylo.CameraInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.microscope = controller.microscope
@@ -993,6 +991,8 @@ class TestMeasurement:
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
 
+        # wait for all file handles to close
+        performed_measurement.measurement.waitForAllImageSavings()
         # reset the sleep time to be random again
         setSleepTime("random")
 
@@ -1032,6 +1032,8 @@ class TestMeasurement:
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
 
+        # wait for all file handles to close
+        performed_measurement.measurement.waitForAllImageSavings()
         # reset the sleep time to be random again
         setSleepTime("random")
     
@@ -1062,6 +1064,8 @@ class TestMeasurement:
         assert (performed_measurement.controller.camera.is_in_safe_state == 
                 camera_to_safe)
 
+        # wait for all file handles to close
+        performed_measurement.measurement.waitForAllImageSavings()
         setSleepTime("random")
     
     @pytest.mark.slow()
@@ -1088,6 +1092,8 @@ class TestMeasurement:
         assert (end_time - start_time > relaxation_time or
                 math.isclose(end_time - start_time, relaxation_time, abs_tol=0.1))
 
+        # wait for all file handles to close
+        performed_measurement.measurement.waitForAllImageSavings()
         setSleepTime("random")
     
     def check_events(self, stop_callable):
@@ -1124,6 +1130,8 @@ class TestMeasurement:
         # check if the measurement is acutally stopped
         self.check_measurement_is_stopped(performed_measurement)
 
+        # wait for all file handles to close
+        performed_measurement.measurement.waitForAllImageSavings()
         # reset the sleep time to be random again
         setSleepTime("random")
         pylo.after_stop.clear()

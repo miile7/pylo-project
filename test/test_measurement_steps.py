@@ -13,7 +13,7 @@ import pytest
 
 import pylo
 
-class DummyMicroscope1(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope1(pylo.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.clear()
@@ -58,7 +58,7 @@ class DummyMicroscope1(pylo.microscopes.MicroscopeInterface):
     def resetToSafeState(self):
         pass
 
-class DummyMicroscope2(pylo.microscopes.MicroscopeInterface):
+class DummyMicroscope2(pylo.MicroscopeInterface):
     def __init__(self, controller):
         super().__init__(controller)
         self.clear()

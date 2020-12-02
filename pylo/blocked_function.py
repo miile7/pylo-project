@@ -1,4 +1,4 @@
-from .blocked_function_error import BlockedFunctionError
+from .errors import BlockedFunctionError
 
 class BlockedFunction:
     """This class represents a object method which is currently not executable.

@@ -1299,7 +1299,7 @@ class DMViewDialog : UIFrame{
             input.DLGAnchor("East");
 
             TagGroup inner_line_wrapper = DLGCreateGroup();
-            // inner_line_wrapper.DLGWidth(cw1 + cw2);
+            // inner_line_wrapper.DLGWidth(350);
             inner_line_wrapper.DLGAddElement(input);
             inner_line_wrapper.DLGAnchor("East");
             inner_line_wrapper.DLGSide("Right");
@@ -1363,6 +1363,7 @@ class DMViewDialog : UIFrame{
                 }
             }
 
+            input.DLGWidth(225);
             input.DLGValue(value_index);
         }
         else{
@@ -1431,7 +1432,7 @@ class DMViewDialog : UIFrame{
 
         // the number of variables to show in one row
         number max_cols = 1;
-        number max_rows = 7;
+        number max_rows = 4;
 
         TagGroup tabs = DLGCreateTabList();
         tabs.DLGExpand("X");
