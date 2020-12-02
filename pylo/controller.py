@@ -389,13 +389,11 @@ class Controller:
                         DeviceCreationError) as e:
                     self.view.showError(e, self._getFixForError(e))
                 except Exception as e:
-                    msg = ("Creating the '{}' object caused a '{}' Error " + 
-                           "with the message '{}'.").format(name, 
-                                                            e.__class__.__name__,
-                                                            str(e))
-                    fix = ("Fix the error in the '{}' class in the definition " + 
-                           "file '{}'.").format(name, loader.getDeviceClassFile(name))
-                    self.view.showError(msg, fix)
+                    fix = ("Fix the error was raised during creation of " + 
+                           "the '{}' object in the file '{}'. Fix the error " + 
+                           "there, then the loading should work.").format(
+                            name, loader.getDeviceClassFile(name))
+                    self.view.showError(e, fix)
                 
                 if kind == "camera":
                     if device is not None:
@@ -745,7 +743,8 @@ class Controller:
         for thread in (self._measurement_thread, self._running_thread, *additional_threads):
             if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
                 for error in thread.exceptions:
-                    print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                    if not isinstance(error, StopProgram):
+                        print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
                     raise error
     
     def _getFixForError(self, error: Exception) -> typing.Union[None, str]:
