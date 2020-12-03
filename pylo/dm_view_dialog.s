@@ -1583,7 +1583,6 @@ class DMViewDialog : UIFrame{
         number cols = 2;
         number rows = 12;
 
-        custom_tag_inputs = NewTagList();
         TagGroup tags_outer_wrapper = DLGCreateGroup();
         tags_outer_wrapper.DLGTableLayout(cols, 1, 1);
 
@@ -1715,6 +1714,9 @@ class DMViewDialog : UIFrame{
 
         // input boxes for the configuration panel
         config_inputs = NewTagList();
+
+        // input boxes for custom tags panel
+        custom_tag_inputs = NewTagList();
 
         // input boxes for the series panel
         series_selectboxes = NewTagList();
