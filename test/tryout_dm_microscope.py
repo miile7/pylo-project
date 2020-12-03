@@ -63,40 +63,16 @@ import traceback
 
 try:
     import pylo
-    import pylo.microscopes
-    import pylo.cameras
 
     print("Preparing...");
 
-    pylo = importlib.reload(pylo)
-    pylo.microscopes = importlib.reload(pylo.microscopes)
-    pylo.cameras = importlib.reload(pylo.cameras)
-
-    view = pylo.AbstractView()
+    view = pylo.DMView()
     configuration = pylo.AbstractConfiguration()
-
-    # set configuration
-    from pylo.microscopes.dm_microscope import CONFIG_PYJEM_MICROSCOPE_GROUP
-
-    configuration.setValue("setup", "microscope-module", "dm_microscope.py")
-    configuration.setValue("setup", "microscope-class", "DMMicroscope")
-    configuration.setValue("setup", "camera-module", "dm_camera.py")
-    configuration.setValue("setup", "camera-class", "DMCamera")
-
-    configuration.setValue(CONFIG_PYJEM_MICROSCOPE_GROUP, "focus-calibration", 3)
-    configuration.setValue(CONFIG_PYJEM_MICROSCOPE_GROUP, "objective-lense-coarse-fine-stepwidth", 32)
-    # configuration.setValue(CONFIG_PYJEM_MICROSCOPE_GROUP, "objective-lense-magnetic-field-calibration", None)
-    # configuration.setValue(CONFIG_PYJEM_MICROSCOPE_GROUP, "magnetic-field-unit", None)
-    configuration.removeElement(CONFIG_PYJEM_MICROSCOPE_GROUP, "objective-lense-magnetic-field-calibration")
-    configuration.removeElement(CONFIG_PYJEM_MICROSCOPE_GROUP, "magnetic-field-unit")
     
     controller = pylo.Controller(view, configuration)
 
-    pylo.microscopes.DMMicroscope.defineConfigurationOptions(controller.configuration)
-    pylo.cameras.DMCamera.defineConfigurationOptions(controller.configuration)
-
-    controller.microscope = pylo.microscopes.DMMicroscope(controller)
-    controller.camera = pylo.cameras.DMCamera(controller)
+    controller.microscope = pylo.loader.getDevice("Digital Micrograph Microscope", controller)
+    controller.camera = pylo.loader.getDevice("Dummy Camera", controller)
 
     tests = [
         "set-lorentz-mode",
@@ -104,11 +80,12 @@ try:
     ]
 
     setgettests = {
-        "focus": random.randint(2, 10),
+        "om-current": random.randint(2, 10),
         "x-tilt": random.randint(2, 10),
         # "y-tilt": 5,
         # "ol-current": 0x20,
     }
+    hex_display = ("ol-current", "om-current")
 
     if "set-lorentz-mode" in tests:
         print("")
@@ -129,7 +106,7 @@ try:
         print("= " * 40)
         print("")
         
-        if var_id == "ol-current":
+        if var_id in hex_display:
             info = " (0x{:x})".format(value)
         else:
             info = ""
@@ -141,7 +118,7 @@ try:
         val = controller.microscope.getMeasurementVariableValue(var_id)
         print(val, end="")
 
-        if var_id == "ol-current":
+        if var_id in hex_display:
             print(" (0x{:x})".format(val), end="")
         
         print("")
