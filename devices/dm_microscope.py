@@ -573,7 +573,6 @@ class DMMicroscope(MicroscopeInterface):
             restart_required=True,
             default_value=config_defaults["objective-lense-coarse-fine-stepwidth"]
         )
-        print("DMMicroscope.defineConfigurationOptions()", type(config_defaults["objective-lense-coarse-fine-stepwidth"]), config_group_name)
         
         # add the option for the calibration factor for the magnetic field
         if not "objective-lense-magnetic-field-calibration" in config_defaults:
