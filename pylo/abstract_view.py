@@ -295,7 +295,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def askFor(self, *inputs: AskInput) -> tuple:
+    def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
         """Ask for the specific input when the program needs to know something 
         from the user. 
         
@@ -314,6 +314,12 @@ class AbstractView:
         inputs : dict
             A dict with the 'name' key that defines the name to show. Optional
             additional keys are 'datatype', and 'description'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, note that not all 
+            views support this
         
         Returns
         -------

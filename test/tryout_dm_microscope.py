@@ -83,7 +83,7 @@ try:
         "om-current": random.randint(2, 10),
         "x-tilt": random.randint(2, 10),
         # "y-tilt": 5,
-        # "ol-current": 0x20,
+        "ol-current": 0x30,
     }
     hex_display = ("ol-current", "om-current")
 
@@ -107,7 +107,7 @@ try:
         print("")
         
         if var_id in hex_display:
-            info = " (0x{:x})".format(value)
+            info = " (0x{:x})".format(int(value))
         else:
             info = ""
         
@@ -119,7 +119,7 @@ try:
         print(val, end="")
 
         if var_id in hex_display:
-            print(" (0x{:x})".format(val), end="")
+            print(" (0x{:x})".format(int(val)), end="")
         
         print("")
 
