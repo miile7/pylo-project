@@ -2,17 +2,11 @@ import math
 import time
 import typing
 
-try:
-    test_error = ModuleNotFoundError()
-except NameError:
-    # for python <3.6, ModuleNotFound error does not exist
-    # https://docs.python.org/3/library/exceptions.html#ModuleNotFoundError
-    class ModuleNotFoundError(ImportError):
-        pass
+from pylo import FallbackModuleNotFoundError
 
 try:
     import DigitalMicrograph as DM
-except (ModuleNotFoundError, ImportError) as e:
+except (FallbackModuleNotFoundError, ImportError) as e:
     DM = None
 
 # for development only
@@ -30,15 +24,12 @@ if load_from_dev:
 
 import execdmscript
 
-from ..events import microscope_ready
-from ..datatype import Datatype
-from ..stop_program import StopProgram
-from .microscope_interface import MicroscopeInterface
-from ..measurement_variable import MeasurementVariable
+from pylo import microscope_ready
 
-# the group name in the configuration for settings that are related to this
-# microscope
-CONFIG_PYJEM_MICROSCOPE_GROUP = "dm-microscope"
+from pylo import Datatype
+from pylo import StopProgram
+from pylo import MicroscopeInterface
+from pylo import MeasurementVariable
 
 # illumination modes = PyJEM Probe Mmodes
 ILLUMINATION_MODE_TEM = "TEM"
@@ -80,9 +71,9 @@ class DMMicroscope(MicroscopeInterface):
     integrated in Gatan Microscope Suite (GMS/Digital Micrograph/DM).
     """
     
-    def __init__(self, controller : "Controller") -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Get the microscope instance"""
-        super().__init__(controller)
+        super().__init__(*args, **kwargs)
 
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
@@ -92,7 +83,7 @@ class DMMicroscope(MicroscopeInterface):
         # passed to the PyJEM functions
         try:
             focus_calibration_factor = self.controller.configuration.getValue(
-                CONFIG_PYJEM_MICROSCOPE_GROUP, "focus-calibration")
+                self.config_group_name, "focus-calibration")
         except KeyError:
             focus_calibration_factor = None
 
@@ -132,7 +123,7 @@ class DMMicroscope(MicroscopeInterface):
         # try:
         #     self.objective_lense_coarse_fine_stepwidth = (
         #         self.controller.configuration.getValue(
-        #             CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #             self.config_group_name, 
         #             "objective-lense-coarse-fine-stepwidth"
         #         )
         #     )
@@ -148,7 +139,7 @@ class DMMicroscope(MicroscopeInterface):
         # try:
         #     magnetic_field_calibration_factor = (
         #         self.controller.configuration.getValue(
-        #             CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #             self.config_group_name, 
         #             "objective-lense-magnetic-field-calibration"
         #         )
         #     )
@@ -165,7 +156,7 @@ class DMMicroscope(MicroscopeInterface):
         #     try:
         #         magnetic_field_unit = (
         #             self.controller.configuration.getValue(
-        #                 CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #                 self.config_group_name, 
         #                 "magnetic-field-unit"
         #             )
         #         )
@@ -232,7 +223,7 @@ class DMMicroscope(MicroscopeInterface):
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
 
-        from ..config import OFFLINE_MODE
+        from pylo.config import OFFLINE_MODE
 
         if DM is not None and not OFFLINE_MODE:
             self.dm_microscope = DM.Py_Microscope()
@@ -277,10 +268,10 @@ class DMMicroscope(MicroscopeInterface):
             Whether the microscope should be in lorentz mode or not
         """
 
-        # from .config import DEFAULT_DM_SET_OPTICS_MODE
-        DEFAULT_DM_SET_OPTICS_MODE = True
 
-        if DEFAULT_DM_SET_OPTICS_MODE:
+        use_set_function = True
+        
+        if use_set_function:
             script = "EMSetImagingOpticsMode(\"{}\");".format(
                 IMAGING_OPTICS_MODE_LowMAG)
             with execdmscript.exec_dmscript(script):
@@ -490,19 +481,30 @@ class DMMicroscope(MicroscopeInterface):
         self.action_lock.release()
     
     @staticmethod
-    def defineConfigurationOptions(configuration: "AbstractConfiguration"):
+    def defineConfigurationOptions(configuration: "AbstractConfiguration", 
+                                   config_group_name: typing.Optional[str]="pyjem-microscope",
+                                   config_defaults: typing.Optional[dict]={}) -> None:
         """Define which configuration options this class requires.
 
         Parameters
         ----------
         configuration : AbstractConfiguration
             The configuration to define the required options in
+        config_group_name : str, optional
+            The group name this device should use to save persistent values in
+            the configuration, this is given automatically when loading this
+            object as a device, default: "pyjem-microscope"
+        config_defaults : dict, optional
+            The default values to use, this is given automatically when loading
+            this object as a device, default: {}
         """
         
         # add the stepwidth of the objective coarse lense in objective fine 
         # lense units
+        # if not "objective-lense-coarse-fine-stepwidth" in config_defaults:
+        #     config_defaults["objective-lense-coarse-fine-stepwidth"] = None
         # configuration.addConfigurationOption(
-        #     CONFIG_PYJEM_MICROSCOPE_GROUP, 
+        #     self.config_group_name, 
         #     "objective-lense-coarse-fine-stepwidth", 
         #     datatype=float, 
         #     description=("The factor to calculate between the fine and " + 
@@ -510,12 +512,14 @@ class DMMicroscope(MicroscopeInterface):
         #     "value is equal to this value steps with the objective fine " + 
         #     "lense. So OL-fine * value = OL-coarse."), 
         #     restart_required=True,
-        #     default_value=32
+        #     default_value=config_defaults["objective-lense-coarse-fine-stepwidth"]
         # )
         
         # add the option for the calibration factor for the focus
+        if not "focus-calibration" in config_defaults:
+            config_defaults["focus-calibration"] = 0
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "focus-calibration", 
             datatype=float, 
             description=("The calibration factor for the focus. The " + 
@@ -523,27 +527,33 @@ class DMMicroscope(MicroscopeInterface):
             "it to the PyJEM functions. The focus received by the PyJEM " + 
             "functions will be multiplied with this factor and then shown."), 
             restart_required=True,
-            default_value=3
+            default_value=config_defaults["focus-calibration"]
         )
         
         # add the option for the calibration factor for the magnetic field
+        if not "objective-lense-magnetic-field-calibration" in config_defaults:
+            config_defaults["objective-lense-magnetic-field-calibration"] = 0
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "objective-lense-magnetic-field-calibration", 
             datatype=float, 
             description=("The calibration factor for the objective lense to " + 
             "set the magnetic field at the probe position. The calibration " + 
             "factor is defined as the magnetic field per current. The unit is " + 
             "then [magnetic field]/[current]."), 
-            restart_required=True
+            restart_required=True,
+            default_value=config_defaults["objective-lense-magnetic-field-calibration"]
         )
 
         # add the option for the magnetic field unit to display
+        if not "magnetic-field-unit" in config_defaults:
+            config_defaults["magnetic-field-unit"] = ""
         configuration.addConfigurationOption(
-            CONFIG_PYJEM_MICROSCOPE_GROUP, 
+            config_group_name, 
             "magnetic-field-unit", 
             datatype=str, 
             description=("The unit the magnetic field is measured in if the " + 
                 "calibration factor is given."), 
-            restart_required=True
+            restart_required=True,
+            default_value=config_defaults["magnetic-field-unit"]
         )
