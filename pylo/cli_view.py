@@ -6,6 +6,7 @@ import typing
 import textwrap
 import linecache
 
+from .pylolib import parse_value
 from .pylolib import format_value
 from .pylolib import get_datatype_human_text
 from .pylolib import human_concat_list
@@ -876,13 +877,13 @@ class CLIView(AbstractView):
             if new_key is not None:
                 tags[new_key] = {"value": "", "save": False}
             
-            return self._showCustomTagsLoop(tags)
+            return self._showCustomTags(tags)
         elif cmd == True:
             return tags
         elif cmd == False:
             raise StopProgram
         else:
-            return self._showCustomTagsLoop(tags)
+            return self._showCustomTags(tags)
 
     def _printSelect(self, *args: typing.Union[str, dict], 
                      additional_commands: typing.Optional[typing.List[typing.Dict[str, typing.Any]]]=None) -> typing.Tuple[dict, typing.Union[bool, None], typing.Union[str, None]]:
@@ -1339,41 +1340,8 @@ class CLIView(AbstractView):
             raise ValueError(("The value is required. You have to fill in " + 
                               "something valid."))
         elif val is not None:
-            if input_definition["datatype"] == bool:
-                if isinstance(val, bool):
-                    return val
-                elif (isinstance(val, str) and 
-                      val.lower() in ("yes", "y", "true", "t", "on")):
-                    val = True
-                elif (isinstance(val, str) and 
-                      val.lower() in ("no", "n", "false", "f", "off")):
-                    val = False
-                else:
-                    raise ValueError(("Please use 'yes', 'y', 'true', 't' " + 
-                                      "or 'on' to indicate a true boolean, " + 
-                                      "use 'no', 'n', 'false', 'f' or 'off' " + 
-                                      "to represent a false (case insensitive)"))
-            elif isinstance(input_definition["datatype"], OptionDatatype):
-                try:
-                    val = input_definition["datatype"](val)
-                except KeyError:
-                    raise ValueError(("The value '{}' is not an option of " + 
-                                      "the list, please enter {}").format(
-                                          val,
-                                          human_concat_list(input_definition["datatype"].options)
-                                      ))
-            elif callable(input_definition["datatype"]):
-                try:
-                    val = input_definition["datatype"](val)
-                except ValueError:
-                    raise ValueError(("The value '{}' could not be " + 
-                                      "converted to a '{}'. Please type in " + 
-                                      "a correct value.").format(
-                                        val, 
-                                        get_datatype_human_text(
-                                            input_definition["datatype"]
-                                        )
-                                    ))
+            val = parse_value(input_definition["datatype"], val, 
+                              suppress_errors=False)
 
             if "min_value" in input_definition:
                 try:

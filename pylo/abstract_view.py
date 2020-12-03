@@ -1,5 +1,6 @@
 import typing
 
+from .pylolib import parse_value
 from .pylolib import human_concat_list
 from .datatype import Datatype
 
@@ -416,9 +417,8 @@ class AbstractView:
                 else:
                     start = {}
             
-            if (v.unique_id in start and parse and v.format != None and 
-                isinstance(v.format, (type, Datatype))):
-                start[v.unique_id] = v.format(start[v.unique_id])
+            if v.unique_id in start and parse:
+                start[v.unique_id] = parse_value(v.format, start[v.unique_id])
 
             if (not v.unique_id in start or 
                 not isinstance(start[v.unique_id], (int, float))):
@@ -545,9 +545,8 @@ class AbstractView:
         }
 
         for k, d in keys.items():
-            if (k in series and parse and var.format != None and 
-                isinstance(var.format, (type, Datatype))):
-                series[k] = var.format(series[k])
+            if k in series and parse:
+                series[k] = parse_value(var.format, series[k])
             
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:

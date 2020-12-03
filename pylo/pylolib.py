@@ -9,6 +9,7 @@ path_like : tuple
 """
 
 import os
+import math
 import typing
 import pathlib
 
@@ -27,13 +28,15 @@ if hasattr(os, "PathLike"):
 
 path_like = tuple(path_like)
 
-def format_value(datatype: typing.Union[type, Datatype, list, tuple], value: typing.Any) -> str:
+def format_value(datatype: typing.Union[type, Datatype], value: typing.Any) -> str:
     """Get the `value` correctly formatted as a string.
 
     Parameters
     ----------
-    datatype : type, Datatype, list or tuple
-        The datatype or a list of allowed values
+    datatype : type, Datatype
+        The datatype
+    value : any
+        The value to format
     
     Returns
     -------
@@ -45,6 +48,96 @@ def format_value(datatype: typing.Union[type, Datatype, list, tuple], value: typ
         return datatype.format(value)
     else:
         return "{}".format(value)
+
+def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
+                suppress_errors: typing.Optional[bool]=True) -> typing.Any:
+    """Parse the given `value` for the given `datatype`.
+
+    Raises
+    ------
+    ValueError
+        When the `value` is not parsable and `surpress_errors` is False
+    TypeError
+        When the `datatype` neither is a datatype nor a type and 
+        `surpress_errors` is False
+
+    Parameters
+    ----------
+    datatype : type, Datatype or None
+        The datatype, if None is given the `value` is not converted
+    value : any
+        The value to parse
+    suppress_errors : bool, optional
+        If True no errors will be shown, if the value is not parsable a default
+        value will be returned, default: True
+    
+    Returns
+    -------
+    any
+        The `value` as the type of `datatype`
+    """
+        
+    if datatype == bool:
+        if isinstance(value, str):
+            value = value.lower()
+        
+        true_vals = ["yes", "y", "true", "t", "on"]
+        false_vals = ["no", "n", "false", "f", "off"]
+        
+        if value in true_vals:
+            value = True
+        elif value in false_vals:
+            value = False
+        else:
+            try:
+                value = float(value)
+
+                # prevent issues with float rounding
+                if math.isclose(value, 1):
+                    value = True
+                else:
+                    value = False
+            except ValueError as e:
+                if not suppress_errors:
+                    raise ValueError(("Please use {} to indicate a true " + 
+                                    "boolean, use {} to represent false " + 
+                                    "(case insensitive)").format(
+                                        human_concat_list(true_vals + [1]),
+                                        human_concat_list(false_vals + [0]),
+                                    )) from e
+    
+    if isinstance(datatype, (type, Datatype)):
+        try:
+            value = datatype(value)
+        except Exception as e:
+            if not suppress_errors:
+                if isinstance(datatype, OptionDatatype):
+                    raise ValueError(("The value '{}' is not an option of " + 
+                                      "the list, please enter {}").format(
+                                          value,
+                                          human_concat_list(datatype.options)))
+                else:
+                    raise ValueError(("The value '{}' could not be " + 
+                                      "converted to a '{}'. Please type in " + 
+                                      "a correct value.").format(
+                                        value, 
+                                        get_datatype_human_text(datatype)))
+            
+            if (isinstance(datatype, Datatype) and 
+                datatype.default_parse is not None):
+                value =  datatype.default_parse
+            elif datatype in (int, float):
+                value =  0
+            elif datatype == str:
+                value =  ""
+            else:
+                value = value
+    elif not suppress_errors:
+        raise TypeError(("Cannot convert the value '{}' because the datatype " + 
+                         "is not a datatype definition but a {}").format(value,
+                            type(datatype)))
+                
+    return value
 
 def get_datatype_name(datatype: typing.Union[type, Datatype, list, tuple]) -> str:
     """Get the datatype name to identify the datatype

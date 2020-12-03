@@ -22,6 +22,7 @@ from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
+from .pylolib import parse_value
 from .pylolib import get_datatype_name
 
 if DM is not None:
@@ -766,12 +767,7 @@ class DMView(AbstractView):
                     else:
                         var_type_name = get_datatype_name(var_type)
 
-                    if isinstance(var_type, Datatype):
-                        try:
-                            val = var_type.format(val)
-                        except Exception:
-                            if var_type.default_parse is not None:
-                                val = var_type.default_parse
+                    val = parse_value(var_type, val)
                     
                     try:
                         default_value = configuration.getDefault(group, key)
