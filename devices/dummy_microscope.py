@@ -19,6 +19,7 @@ class DummyMicroscope(MicroscopeInterface):
         super().__init__(*args, **kwargs)
         self.record_time = None
         self._values = {}
+        self.lorentz_mode = False
 
         self.supports_parallel_measurement_variable_setting = False
 
@@ -54,6 +55,12 @@ class DummyMicroscope(MicroscopeInterface):
             return self._values[id_]
         else:
             return 0
+    
+    def setInLorentzMode(self, lorentz_mode):
+        self.lorentz_mode = lorentz_mode
+    
+    def getInLorentzMode(self, lorentz_mode):
+        return self.lorentz_mode
     
     def resetToSafeState(self) -> None:
         pass
