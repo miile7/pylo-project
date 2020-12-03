@@ -69,6 +69,11 @@ class DMView(AbstractView):
         # the maximum numbers of characters in one line
         self.line_length = 100
 
+        # whether to execute the all dm-scripts with debug=True or not, this is
+        # a shorthand for debugging and prevents reloading the view (and 
+        # therefore restarting the program) for debugging every time
+        self._exec_debug = False
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 
@@ -82,7 +87,9 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with execdmscript.exec_dmscript("showAlert(msg, 2);", setvars={"msg": hint}):
+        with execdmscript.exec_dmscript("showAlert(msg, 2);", 
+                                        setvars={"msg": hint}, 
+                                        debug=self._exec_debug):
             pass
 
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
@@ -125,7 +132,9 @@ class DMView(AbstractView):
         if isinstance(how_to_fix, str) and how_to_fix != "":
             msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
 
-        with execdmscript.exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
+        with execdmscript.exec_dmscript("showAlert(msg, 0);", 
+                                        setvars={"msg": msg}, 
+                                        debug=self._exec_debug):
             pass
 
     def askForDecision(self, text: str, options: typing.Optional[typing.Sequence[str]]=("Ok", "Cancel")) -> int:
@@ -171,7 +180,9 @@ class DMView(AbstractView):
                 "button1": options[1]
             }
         
-            with execdmscript.exec_dmscript(dmscript, setvars=setvars, readvars=readvars) as script:
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
+                                            readvars=readvars, 
+                                            debug=self._exec_debug) as script:
                 index = script["index"]
 
                 # for dm-script the buttons are the "confirm" and the "cancel"
@@ -239,7 +250,8 @@ class DMView(AbstractView):
             ])
 
             DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
-            with execdmscript.exec_dmscript(dmscript, setvars=setvars):
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
+                                            debug=self._exec_debug):
                 # wait for dm-script to show the dialog, the user takes longer
                 # to react anyway
                 time.sleep(0.5)
@@ -363,7 +375,7 @@ class DMView(AbstractView):
             "kill_dialog.display(\"Kill task\");",
         ))
 
-        with execdmscript.exec_dmscript(dmscript, debug=False):
+        with execdmscript.exec_dmscript(dmscript, debug=self._exec_debug):
             pass
 
     def _createRunningDialog(self) -> None:
@@ -394,7 +406,9 @@ class DMView(AbstractView):
         #     time.sleep(0.1)
         # with execdmscript.exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
         #     pass
-        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False):
+        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, 
+                                        setvars=sv, readvars=rv, 
+                                        debug=self._exec_debug):
             pass
     
     def _observeProgressDialogSuccessThread(self) -> None:
@@ -839,7 +853,9 @@ class DMView(AbstractView):
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
         # and sets the start and series variables
-        with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, setvars=variables) as script:
+        with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, 
+                                        setvars=variables, 
+                                        debug=self._exec_debug) as script:
             try:
                 success = bool(script["success"])
             except KeyError:
