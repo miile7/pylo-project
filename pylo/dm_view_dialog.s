@@ -98,11 +98,6 @@ class DMViewDialog : UIFrame{
     TagGroup panel_list;
 
     /**
-     * Whether the user is allowed to switch between the series and the settings panel.
-     */
-    number allow_panel_change;
-
-    /**
      * The mode, this can be "configuration", "series" or "ask_for"
      */
     string display_mode;
@@ -1742,17 +1737,23 @@ class DMViewDialog : UIFrame{
         else{
             panel_list = DLGCreateTabList(0);
 
-            TagGroup series_panel = DLGCreateTab("Create series");
-            series_panel.DLGAddElement(self._createSeriesSetupContent());
-            panel_list.DLGAddTab(series_panel);
+            if(display_mode == "series" || display_mode == ""){
+                TagGroup series_panel = DLGCreateTab("Create series");
+                series_panel.DLGAddElement(self._createSeriesSetupContent());
+                panel_list.DLGAddTab(series_panel);
+            }
 
-            TagGroup configuration_panel = DLGCreateTab("Settings");
-            configuration_panel.DLGAddElement(self._createConfigurationContent());
-            panel_list.DLGAddTab(configuration_panel);
+            if(display_mode == "configuration" || display_mode == ""){
+                TagGroup configuration_panel = DLGCreateTab("Settings");
+                configuration_panel.DLGAddElement(self._createConfigurationContent());
+                panel_list.DLGAddTab(configuration_panel);
+            }
 
-            TagGroup custom_tags_panel = DLGCreateTab("Custom tags");
-            custom_tags_panel.DLGAddElement(self._createCustomTagsContent());
-            panel_list.DLGAddTab(custom_tags_panel);
+            if(display_mode == "custom_tags" || display_mode == ""){
+                TagGroup custom_tags_panel = DLGCreateTab("Custom tags");
+                custom_tags_panel.DLGAddElement(self._createCustomTagsContent());
+                panel_list.DLGAddTab(custom_tags_panel);
+            }
         }
         
         // Tabs do not work as a direct child of the dialog items, so probably panels don't too, 
@@ -1801,48 +1802,12 @@ class DMViewDialog : UIFrame{
         configuration = configuration_vars;
         ask_for_values = ask_vals;
         display_mode = startup;
-        ask_vals_message = msg
-        allow_panel_change = 1;
+        ask_vals_message = msg;
         custom_tag_values = custom_tag_vals;
 		self.super.init(self._createContent(title));
         
 		return self;
 	}
-
-    /**
-     * Set whether the tab panel can be changed or not
-     */
-    void updateAllowPanelChange(object self, number allow_change){
-        allow_panel_change = allow_change;
-        panel_list.DLGEnabled(allow_panel_change);
-    }
-
-    /**
-     * Show the series dialog.
-     */
-    number poseSeries(object self){
-        self.switchToSeriesPanel();
-        self.updateAllowPanelChange(0);
-        return self.pose();
-    }
-
-    /**
-     * Show the configuration dialog.
-     */
-    number poseConfiguration(object self){
-        self.switchToConfigurationPanel();
-        self.updateAllowPanelChange(0);
-        return self.pose();
-    }
-
-    /**
-     * Show the custom tags dialog.
-     */
-    number poseCustomTags(object self){
-        self.switchToCustomTagsPanel();
-        self.updateAllowPanelChange(0);
-        return self.pose();
-    }
 
     /**
      * Overwriting pose function, before clicking 'OK' the inputs are validated. If there are errors
@@ -1963,7 +1928,7 @@ class DMViewDialog : UIFrame{
      * @param input
      *      The input field as a `TagGroup`
      * @param settings
-     *      The settings for the input
+     *      The settings for the input or NULL to use the default settings (load string value)
      * @param index
      *      The index in the `target` `TagGroup` to set the value to
      * @param target
@@ -1971,7 +1936,12 @@ class DMViewDialog : UIFrame{
      */
     void addValueFromInputToTagGroup(object self, TagGroup input, TagGroup settings, number index, TagGroup &target){
         string type;
-        settings.TagGroupGetTagAsString("datatype", type);
+        if(settings.TagGroupIsValid()){
+            // dm-script does not support lazy evaluation so this have to be two ifs
+            if(settings.TagGroupDoesTagExist("datatype")){
+                settings.TagGroupGetTagAsString("datatype", type);
+            }
+        }
 
         if(type == "int"){
             number value = input.DLGGetValue();
@@ -2137,20 +2107,21 @@ class DMViewDialog : UIFrame{
 
                 if(tag_name != ""){
                     TagGroup tag = NewTagGroup();
-                    // prepare the tags and get the indices
-                    number value_index = tag.TagGroupCreateNewLabeledTag("value");
-                    number save_index = tag.TagGroupCreateNewLabeledTag("save");
 
-                    // get the input boxes
+                    // load the value, get input
                     TagGroup tag_value_input;
                     input_group.TagGroupGetTagAsTagGroup("value_input", tag_value_input);
+                    // prepare index and set the value
+                    number value_index = tag.TagGroupCreateNewLabeledTag("value");
+                    self.addValueFromInputToTagGroup(tag_value_input, str_settings, value_index, tag);
+
+                    // load the value, get input
                     TagGroup save_tag_input;
                     input_group.TagGroupGetTagAsTagGroup("save_input", save_tag_input);
-                    
-                    // save the value correctly formatted to the tag
-                    self.addValueFromInputToTagGroup(tag_value_input, str_settings, value_index, tag);
+                    // prepare index and set value
+                    number save_index = tag.TagGroupCreateNewLabeledTag("save");
                     self.addValueFromInputToTagGroup(save_tag_input, bool_settings, save_index, tag);
-
+                    
                     // save the tag to the tags
                     tags.TagGroupCreateNewLabeledTag(tag_name);
                     tags.TagGroupSetTagAsTagGroup(tag_name, tag);
@@ -2404,20 +2375,7 @@ TagGroup series;
 TagGroup configuration;
 TagGroup ask_for;
 TagGroup custom_tags;
-number success;
-
-if(dialog_startup == "series"){
-    success = dialog.poseSeries();
-}
-else if(dialog_startup == "configuration"){
-    success = dialog.poseConfiguration();
-}
-else if(dialog_startup == "custom_tags"){
-    success = dialog.poseCustomTags();
-}
-else{
-    success = dialog.pose();
-}
+number success = dialog.pose();
 
 if(success){
     start = dialog.getStart();
