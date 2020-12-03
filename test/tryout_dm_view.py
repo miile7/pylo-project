@@ -77,12 +77,14 @@ try:
 		# "error",
 		# "hint",
 		# "create-measurement",
-		# "show-settings",
 		# "ask-for-decision",
+		# "show-settings",
 		"show-custom-tags",
 		# "ask-for",
 		# "show-running",
 	]
+	
+	# view._exec_debug = True
 
 	if "error" in tests:
 		print("")
@@ -121,11 +123,18 @@ try:
 		pprint.pprint(view.showSettings(configuration))
 
 	if "show-custom-tags" in tests:
+		from pylo.config import CUSTOM_TAGS_GROUP_NAME
+		configuration.setValue(CUSTOM_TAGS_GROUP_NAME, "saved-key", "Saved value");
 		print("")
 		print("= " * 40)
 		print("")
 		print("Showing Custom Tags")
 		pprint.pprint(view.showCustomTags(configuration))
+		print("Configuration:")
+		config_tags = {}
+		for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
+		    config_tags[key] = configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key)
+		pprint.pprint(config_tags)
 
 	if "ask-for" in tests:
 		print("")
