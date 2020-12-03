@@ -565,21 +565,24 @@ class Controller:
             # prevent infinite loop
             security_counter = 0
             # build the view
-            measurement_layout = None
+            interactions = None
             while (not isinstance(self.measurement, Measurement) and 
                 security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
                 
-                measurement_layout = self.view.showCreateMeasurement(self)
+                # index 0: measurement start parameters
+                # index 1: measurement series paramters
+                # index 2: configuration as a dict
+                # index 3: custom tags as a dict
+                interactions = self.view.showProgramDialogs(self)
                 
-                if (not isinstance(measurement_layout, typing.Sequence) or 
-                    len(measurement_layout) <= 1):
-                    msg = ("The view returned an invalid measurement. Try " + 
-                           "to input your measurement again, if it still " + 
-                           "doesn't work you have to debug the '{}' view in " + 
-                           "{}.").format(self.view.__class__, 
-                                         inspect.getfile(self.view.__class__))
-                    self.view.showError(msg)
+                if (not isinstance(interactions, typing.Sequence) or 
+                    len(interactions) < 4):
+                    raise RuntimeError("The view does not return all required " + 
+                                       "user values.")
+
+                # update configuration
+                self.configuration.loadFromMapping(interactions[2])
             
                 # fire user_ready event
                 user_ready()
@@ -604,7 +607,7 @@ class Controller:
 
                 try:
                     self.measurement = Measurement.fromSeries(self, 
-                        measurement_layout[0], measurement_layout[1])
+                        interactions[0], interactions[1])
                 except (KeyError, ValueError) as e:
                     msg = ("The measurement could not be initialized " + 
                            "because it is not formatted correctly: {}".format(e))
@@ -613,6 +616,9 @@ class Controller:
                            "even though all values are correct, there is " + 
                            "an internal problem with the Measurement class.")
                     self.view.showError(msg, fix)
+
+                # set the custom tags to the measurement
+                self.measurement.tags = interactions[3]
 
             # show an error that the max loop count is reached and stop the
             # execution
@@ -644,11 +650,7 @@ class Controller:
             self.stopProgramLoop()
             return
         except Exception as e:
-            try:
-                self.view.showError(e, self._getFixForError(e))
-                self.view.show_running = False
-            except StopProgram:
-                self.stopProgramLoop()
+            self._handleErrorWhileProgramIsRunning(e)
     
     def waitForProgram(self, raise_error_when_not_started: typing.Optional[bool]=False) -> None:
         """Wait until the program has finished.
@@ -721,20 +723,37 @@ class Controller:
         except StopProgram:
             pass
         except Exception as e:
-            try:
-                # stop before the error, mostly the view raises the python 
-                # error too so the program would not end then
-                print("Controller.waitForProgram(): Error detected:", e.__class__.__name__, e)
-                self.stopProgramLoop()
-                self.view.showError(e, self._getFixForError(e))
-            except StopProgram:
-                pass
+            self._handleErrorWhileProgramIsRunning(e)
         
         self.stopProgramLoop()
 
         if not running and raise_error_when_not_started:
             raise RuntimeError("Cannot wait for the program if the program " + 
                                "has not started or has already finished.")
+    
+    def _handleErrorWhileProgramIsRunning(self, error: Exception) -> None:
+        """Stop the program, set the microscope and camera to emergency and 
+        display the error with possible fixes.
+
+        Parameters
+        ----------
+        error : Exception
+            The error
+        """
+
+        if isinstance(error, StopProgram):
+            self.stopProgramLoop()
+        else:
+            try:
+                # stop before the error, mostly the view raises the python 
+                # error too so the program would not end then
+                print("Controller._handleErrorWhileProgramIsRunning(): Error " + 
+                      "detected:", error.__class__.__name__, error)
+                self.stopProgramLoop()
+                self._setEmergency()
+                self.view.showError(error, self._getFixForError(error))
+            except StopProgram:
+                self.stopProgramLoop()
     
     def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
         """Check all thread collections of this class plus the 
@@ -757,6 +776,23 @@ class Controller:
                     if not isinstance(error, StopProgram):
                         print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
                     raise error
+    
+    def _setEmergency(self) -> None:
+        """Set the microscope and the camera to be in emergency state."""
+
+        try:
+            self.microscope.resetToEmergencyState()
+        except BlockedFunctionError:
+            # emergency event is called, microscope goes in emergency state by 
+            # itself
+            pass
+
+        try:
+            self.camera.resetToEmergencyState()
+        except BlockedFunctionError:
+            # emergency event is called, camera goes in emergency state by 
+            # itself
+            pass
     
     def _getFixForError(self, error: Exception) -> typing.Union[None, str]:
         """Get a possible fix for the given error.

@@ -38,7 +38,7 @@ class Measurement:
     ----------
     tags : dict
         Any information that should be stored about this measurement
-    steps : iterable of dicts
+    steps : MeasurementSteps or sequence of dicts
         A list of dicts where each dict contains **all** `MeasurementVariable`
         ids as the keys and the corresponding value in the
         `MeasurementVariable` specific unit
@@ -73,7 +73,8 @@ class Measurement:
         Stop the measurement if the event is fired
     """
 
-    def __init__(self, controller: "Controller", steps: typing.List[dict]) -> None:
+    def __init__(self, controller: "Controller", 
+                 steps: typing.Union[MeasurementSteps, typing.Sequence[dict]]) -> None:
         self.controller = controller
         self.tags = {}
         self.steps = steps
@@ -242,23 +243,6 @@ class Measurement:
 
         try:
             self.controller.camera.resetToSafeState()
-        except BlockedFunctionError:
-            # emergency event is called, camera goes in emergency state by 
-            # itself
-            pass
-    
-    def _setEmergency(self) -> None:
-        """Set the microscope and the camera to be in emergency state."""
-
-        try:
-            self.controller.microscope.resetToEmergencyState()
-        except BlockedFunctionError:
-            # emergency event is called, microscope goes in emergency state by 
-            # itself
-            pass
-
-        try:
-            self.controller.camera.resetToEmergencyState()
         except BlockedFunctionError:
             # emergency event is called, camera goes in emergency state by 
             # itself
@@ -499,7 +483,6 @@ class Measurement:
         except Exception as e:
             # stop if any error occurres, just to be sure
             self.stop()
-            self._setEmergency()
             raise e
     
     def waitForAllImageSavings(self) -> None:
@@ -604,6 +587,8 @@ class Measurement:
             "Acquire time": datetime.datetime.now().isoformat(),
             "{} configuration".format(PROGRAM_NAME): self.controller.configuration.asDict()
         }
+        if isinstance(self.tags, dict):
+            tags.update(self.tags)
 
         return tags
     
