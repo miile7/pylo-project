@@ -26,6 +26,7 @@ import execdmscript
 
 from pylo import microscope_ready
 
+from pylo import pylolib
 from pylo import Datatype
 from pylo import StopProgram
 from pylo import MicroscopeInterface
@@ -268,17 +269,22 @@ class DMMicroscope(MicroscopeInterface):
             Whether the microscope should be in lorentz mode or not
         """
 
-
-        use_set_function = True
-        
+        if "use-em-optics-mode-set-function" in self.config_defaults:
+            use_set_function = pylolib.parse_value(bool,
+                self.config_defaults["use-em-optics-mode-set-function"])
+        else:
+            use_set_function = False
+    
         if use_set_function:
             script = "EMSetImagingOpticsMode(\"{}\");".format(
                 IMAGING_OPTICS_MODE_LowMAG)
             with execdmscript.exec_dmscript(script):
                 pass
         else:
-            raise NotImplementedError("Manual setting of the lorentz mode " + 
-                                      "is not yet implemented.")
+            self.controller.view.askForDecision("Please set the microscope " + 
+                                                "into the lorentz mode.", 
+                                                options=("In lorentz mode now", 
+                                                         "Cancel"))
     
     def getInLorentzMode(self) -> bool:
         """Get whether the microscope is in the lorentz mode.
@@ -452,7 +458,7 @@ class DMMicroscope(MicroscopeInterface):
                                "microscope is in the LowMAG mode. But the " + 
                                "microscope is not in the LowMag mode.")
         
-        return self.dm_microscope.GetFocus()
+        return int(self.dm_microscope.GetFocus())
         # return self.dm_microscope.GetCalibratedFocus()
 
     def resetToSafeState(self) -> None:
