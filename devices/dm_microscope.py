@@ -83,8 +83,9 @@ class DMMicroscope(MicroscopeInterface):
         # the user entered values will be divided by this factor and then 
         # passed to the PyJEM functions
         try:
-            focus_calibration_factor = self.controller.configuration.getValue(
-                self.config_group_name, "focus-calibration")
+            focus_calibration_factor = pylolib.parse_value(float, 
+                self.controller.configuration.getValue(
+                    self.config_group_name, "focus-calibration"))
         except KeyError:
             focus_calibration_factor = None
 
@@ -119,75 +120,68 @@ class DMMicroscope(MicroscopeInterface):
         if button == 1:
             raise StopProgram()
         
-        # # the factor to get from the objective fine lense value to the 
-        # # objective coarse lense value
-        # try:
-        #     self.objective_lense_coarse_fine_stepwidth = (
-        #         self.controller.configuration.getValue(
-        #             self.config_group_name, 
-        #             "objective-lense-coarse-fine-stepwidth"
-        #         )
-        #     )
-        # except KeyError:
-        #     self.objective_lense_coarse_fine_stepwidth = None
+        # the factor to get from the objective fine lense value to the 
+        # objective coarse lense value
+        try:
+            self.objective_lense_coarse_fine_stepwidth = pylolib.parse_value(
+                Datatype.int, self.controller.configuration.getValue(
+                    self.config_group_name, 
+                    "objective-lense-coarse-fine-stepwidth"))
+        except KeyError:
+            self.objective_lense_coarse_fine_stepwidth = None
         
-        # if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
-        #     math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
-        #     self.objective_lense_coarse_fine_stepwidth = None
+        if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
+            math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
+            self.objective_lense_coarse_fine_stepwidth = None
 
-        # # the factor to multiply the lense current with to get the magnetic
-        # # field
-        # try:
-        #     magnetic_field_calibration_factor = (
-        #         self.controller.configuration.getValue(
-        #             self.config_group_name, 
-        #             "objective-lense-magnetic-field-calibration"
-        #         )
-        #     )
-        # except KeyError:
-        #     magnetic_field_calibration_factor = None
+        # the factor to multiply the lense current with to get the magnetic
+        # field
+        try:
+            magnetic_field_calibration_factor = pylolib.parse_value(float, 
+                self.controller.configuration.getValue(
+                    self.config_group_name, 
+                    "objective-lense-magnetic-field-calibration"))
+        except KeyError:
+            magnetic_field_calibration_factor = None
         
-        # if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
-        #     math.isclose(magnetic_field_calibration_factor, 0)):
-        #     magnetic_field_calibration_factor = None
+        if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
+            math.isclose(magnetic_field_calibration_factor, 0)):
+            magnetic_field_calibration_factor = None
         
-        # if magnetic_field_calibration_factor is not None:
-        #     # the units of the magnetic field that results when multiplying with 
-        #     # the magnetic_field_calibration_factor
-        #     try:
-        #         magnetic_field_unit = (
-        #             self.controller.configuration.getValue(
-        #                 self.config_group_name, 
-        #                 "magnetic-field-unit"
-        #             )
-        #         )
-        #     except KeyError:
-        #         magnetic_field_unit = None
-        # else:
-        #     magnetic_field_unit = None
+        if magnetic_field_calibration_factor is not None:
+            # the units of the magnetic field that results when multiplying with 
+            # the magnetic_field_calibration_factor
+            try:
+                magnetic_field_unit = (self.controller.configuration.getValue(
+                        self.config_group_name, "magnetic-field-unit"))
+            except KeyError:
+                magnetic_field_unit = None
+        else:
+            magnetic_field_unit = None
 
-        # if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
-        #     max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
-        #                       0xFFFF)
-        # else:
-        #     max_ol_current = 0xFFFF
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
+                              0xFFFF)
+        else:
+            max_ol_current = 0xFFFF
         
-        # self.registerMeasurementVariable(
-        #     MeasurementVariable(
-        #         "ol-current", 
-        #         "Objective Lense Current", 
-        #         unit="hex",
-        #         format=Datatype.hex_int,
-        #         min_value=0x0,
-        #         max_value=max_ol_current,
-        #         calibrated_unit=magnetic_field_unit,
-        #         calibrated_name="Magnetic Field",
-        #         calibration=magnetic_field_calibration_factor,
-        #         calibrated_format=float
-        #     ),
-        #     self._getObjectiveLensCurrent,
-        #     self._setObjectiveLensCurrent
-        # )
+        self.registerMeasurementVariable(
+            MeasurementVariable(
+                "ol-current", 
+                "Objective Lense Current", 
+                unit="hex",
+                format=Datatype.hex_int,
+                min_value=0x0,
+                max_value=max_ol_current,
+                calibrated_unit=magnetic_field_unit,
+                calibrated_name="Magnetic Field",
+                calibration=magnetic_field_calibration_factor,
+                calibrated_format=float
+            ),
+            self._getObjectiveLensCurrent,
+            self._setObjectiveLensCurrent
+        )
+        self._ol_currents = {}
         
         # tilt limits depend on holder
         self.registerMeasurementVariable(
@@ -292,6 +286,13 @@ class DMMicroscope(MicroscopeInterface):
         This will return true if the objective fine and coarse lenses are 
         switched to free lense control and their current is 0.
         """
+
+        msg = ("DMMicroscope.getInLorentzMode(): DEBUG: ALWAYS RETURNING " + 
+               "TRUE IN LORENTZ MODE")
+        print("+-{}-+".format("-" * len(msg)))
+        print("| {} |".format(msg))
+        print("+-{}-+".format("-" * len(msg)))
+        return True
         
         if self.dm_microscope.CanGetImagingOpticsMode():
             return (self.dm_microscope.GetImagingOpticsMode() == 
@@ -310,7 +311,57 @@ class DMMicroscope(MicroscopeInterface):
             The value to set the objective lense current to in objective fine
             lense steps
         """
-        raise NotImplementedError("The objective lens current is not yet implemented!")
+        if not self.isValidMeasurementVariableValue("ol-current", value):
+            raise ValueError(("The value {} is not allowed for the " + 
+                              "objective lense current.").format(value))
+
+        # calculate the values if the coarse lens and the fine lens can be 
+        # converted into eachother
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            self._ol_currents["coarse"] = value // self.objective_lense_coarse_fine_stepwidth
+            self._ol_currents["fine"] = value % self.objective_lense_coarse_fine_stepwidth
+        else:
+            self._ol_currents["fine"] = value
+        
+        # tell the operator to set the values manually
+        template = "{lens} value to '0x{value:x}' (decimal: '{value}')"
+        text = "Please change the objectiv lens current manually. Set the "
+        bullet_points = []
+        if "coarse" in self._ol_currents:
+            text += template.format(lens="coarse lens (OLc)",
+                                    value=int(self._ol_currents["coarse"]))
+            bullet_points.append(
+                ("Coarse (OLc)", 
+                 "0x{:x} (hex)".format(int(self._ol_currents["coarse"])), 
+                 "{} (dec)".format(self._ol_currents["coarse"])))
+            
+            text += " and the "
+            msg = "Currents are set"
+        else:
+            msg = "Current is set"
+                                    
+        text += template.format(lens="fine lens (OLf)",
+                                value=int(self._ol_currents["fine"]))
+        bullet_points.append(
+            ("Fine (OLc)", 
+             "0x{:x} (hex)".format(int(self._ol_currents["fine"])), 
+             "{} (dec)".format(self._ol_currents["fine"])))
+        
+        text += ".\n\n"
+        ll = 0 # the character length of the label column
+        hl = 0 # the character length of the hex value column
+        dl = 0 # the character length of the decimal value column
+        for label, hexval, decval in bullet_points:
+            ll = max(ll, len(label))
+            hl = max(hl, len(hexval))
+            dl = max(dl, len(decval))
+        for label, hexval, decval in bullet_points:
+            text += ("- {{:{}}}\t{{:>{}}}\t{{:>{}}}".format(ll, hl, dl)).format(
+                label, hexval, decval) + "\n"
+        
+        text += "\nAfter confirming the measurement will be continued."
+        
+        self.controller.view.askForDecision(text, options=(msg, "Cancel"))
     
     def _getObjectiveLensCurrent(self) -> float:
         """Get the objective lense current in the current units.
@@ -321,7 +372,27 @@ class DMMicroscope(MicroscopeInterface):
             The actual current of the objective lense at the microscope,
             measured in objective fine lense steps
         """
-        raise NotImplementedError("The objective lens current is not yet implemented!")
+        
+        if "fine" in self._ol_currents:
+            fine_value = self._ol_currents["fine"]
+        else:
+            raise IOError("The microscope cannot get the objective lens " + 
+                          "current by the API and the current has not yet " + 
+                          "been saved.")
+
+        coarse_value = None
+        if "coarse" in self._ol_currents:
+            coarse_value = self._ol_currents["coarse"]
+
+        if (isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) and
+            isinstance(coarse_value, (int, float)) and 
+            self.objective_lense_coarse_fine_stepwidth > 0):
+            value = (coarse_value * self.objective_lense_coarse_fine_stepwidth + 
+                     fine_value)
+        else:
+            value = fine_value
+
+        return value
     
     def _getObjectiveLenseCurrent(self) -> float:
         """Get the objective lense current in the current units.
@@ -505,22 +576,6 @@ class DMMicroscope(MicroscopeInterface):
             this object as a device, default: {}
         """
         
-        # add the stepwidth of the objective coarse lense in objective fine 
-        # lense units
-        # if not "objective-lense-coarse-fine-stepwidth" in config_defaults:
-        #     config_defaults["objective-lense-coarse-fine-stepwidth"] = None
-        # configuration.addConfigurationOption(
-        #     self.config_group_name, 
-        #     "objective-lense-coarse-fine-stepwidth", 
-        #     datatype=float, 
-        #     description=("The factor to calculate between the fine and " + 
-        #     "coarse objective lense. One step with the objective coarse " + 
-        #     "value is equal to this value steps with the objective fine " + 
-        #     "lense. So OL-fine * value = OL-coarse."), 
-        #     restart_required=True,
-        #     default_value=config_defaults["objective-lense-coarse-fine-stepwidth"]
-        # )
-        
         # add the option for the calibration factor for the focus
         if not "focus-calibration" in config_defaults:
             config_defaults["focus-calibration"] = 0
@@ -535,6 +590,23 @@ class DMMicroscope(MicroscopeInterface):
             restart_required=True,
             default_value=config_defaults["focus-calibration"]
         )
+        
+        # add the stepwidth of the objective coarse lense in objective fine 
+        # lense units
+        if not "objective-lense-coarse-fine-stepwidth" in config_defaults:
+            config_defaults["objective-lense-coarse-fine-stepwidth"] = None
+        configuration.addConfigurationOption(
+            config_group_name, 
+            "objective-lense-coarse-fine-stepwidth", 
+            datatype=float, 
+            description=("The factor to calculate between the fine and " + 
+            "coarse objective lense. One step with the objective coarse " + 
+            "value is equal to this value steps with the objective fine " + 
+            "lense. So OL-fine * value = OL-coarse."), 
+            restart_required=True,
+            default_value=config_defaults["objective-lense-coarse-fine-stepwidth"]
+        )
+        print("DMMicroscope.defineConfigurationOptions()", type(config_defaults["objective-lense-coarse-fine-stepwidth"]), config_group_name)
         
         # add the option for the calibration factor for the magnetic field
         if not "objective-lense-magnetic-field-calibration" in config_defaults:
