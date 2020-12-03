@@ -110,6 +110,89 @@ class AbstractView:
         """
         raise NotImplementedError()
 
+    def showCustomTags(self, configuration: "AbstractConfiguration") -> typing.Dict[str, str]:
+        """Show a view to let the user add custom tags to each image.
+        
+        Show all tags from the `custom-tags` group in the `configuration` and 
+        let the user add more tags. Each tag has a key and a value and can be 
+        saved persistently or not.
+
+        When confirmed, the tags the user decided are saved and the function 
+        returns all tags as a dict with the key as a string and the value as a
+        string.
+
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        
+        Returns
+        -------
+        dict
+            The custom tags as key-value pairs
+        """
+        
+        from .config import CUSTOM_TAGS_GROUP_NAME
+        tags = {}
+        try:
+            for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
+                try:
+                    value = configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key)
+                except KeyError:
+                    value = ""
+                tags[key] = {"value": value, "save": True}
+
+                # reset complete group
+                configuration.removeElement(CUSTOM_TAGS_GROUP_NAME, key)
+        except KeyError:
+            pass
+        
+        tags = self._showCustomTags(tags)
+
+        keys = list(tags.keys())
+        for key in keys:
+            if not "value" in tags[key] or tags[key]["value"] is None:
+                del tags[key]
+            elif not isinstance(tags[key]["value"], str):
+                tags[key]["value"] = str(tags[key]["value"])
+            
+        for key, tag in tags.items():
+            if "save" in tag and tag["save"]:
+                configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
+        
+        return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
+    
+    def _showCustomTags(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
+        """Show the custom tags.
+
+        The `tags` is a dict of dicts. Each key is the name of a tag to add.
+        The value is a dict with the following indices:
+        - "value": any, the value of the key to write in each image
+        - "save": bool, whether to save the key into the configuration or not
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        
+        Returns
+        -------
+        dict
+            The `tags` parameter dict modified by the user
+        """
+        raise NotImplementedError()
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 

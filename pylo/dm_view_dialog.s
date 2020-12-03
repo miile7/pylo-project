@@ -80,14 +80,22 @@ class DMViewDialog : UIFrame{
     string ask_vals_message;
 
     /**
+     * The custom tags to set, this is a `TagGroup` where each key is the tag name, the value is
+     * another `TagGroup` with the "value" index containing the value as a string and the "save"
+     * telling whether to save this value to the configuration or not as a boolean
+     */
+    TagGroup custom_tag_values;
+
+    /**
+     * A `TagList` containing ´TagGroup`s with the "name_input", the "value_input" and the 
+     * "save_input" index containing the corresponding inputs.
+     */
+    TagGroup custom_tag_inputs;
+
+    /**
      * The panels for the series settings and the configuration settings.
      */
     TagGroup panel_list;
-
-    /**
-     * Whether the user is allowed to switch between the series and the settings panel.
-     */
-    number allow_panel_change;
 
     /**
      * The mode, this can be "configuration", "series" or "ask_for"
@@ -1011,6 +1019,13 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+     * Switch the panels to show the custom tags panel.
+     */
+    void switchToCustomTagsPanel(object self){
+        panel_list.DLGValue(2);
+    }
+
+    /**
      * Create one row for the lower wrapper.
      *
      * @param columns
@@ -1541,6 +1556,105 @@ class DMViewDialog : UIFrame{
         return wrapper;
     }
 
+    /**
+     * Create the content for the configuration panel.
+     *
+     * @return
+     *      The configuration content as a dialog group
+     */
+    TagGroup _createCustomTagsContent(object self){
+        TagGroup wrapper = DLGCreateGroup();
+
+        TagGroup description_line = DLGCreateGroup();
+        // description_line.DLGTableLayout(2, 1, 0);
+        description_line.DLGExpand("X");
+        description_line.DLGFill("X");
+
+        // description text
+        string description = "Each tag with its value is added to every image. If save is checked, ";
+        description += "the tag will be saved and automatically also set on the next measurement."
+        TagGroup description_label = DLGCreateLabel(description, 110);
+        description_label.DLGHeight(1);
+        description_label.DLGAnchor("West");
+        description_line.DLGAddElement(description_label);
+
+        wrapper.DLGAddElement(description_line);
+
+        number cols = 2;
+        number rows = 12;
+
+        TagGroup tags_outer_wrapper = DLGCreateGroup();
+        tags_outer_wrapper.DLGTableLayout(cols, 1, 1);
+
+        TagGroup tags_inner_wrapper;
+
+        number cw1 = 25;
+        number cw2 = cw1;
+        number cw3 = 8;
+
+        for(number i = 0; i < cols * rows; i++){
+            if(i % rows == 0){
+                // add new column
+                tags_inner_wrapper = DLGCreateBox();
+                tags_inner_wrapper.DLGTableLayout(3, rows + 1, 0);
+                tags_outer_wrapper.DLGAddElement(tags_inner_wrapper);
+
+                tags_inner_wrapper.DLGAddElement(DLGCreateLabel("Tag name", cw1))
+                tags_inner_wrapper.DLGAddElement(DLGCreateLabel("Tag value", cw2))
+                tags_inner_wrapper.DLGAddElement(DLGCreateLabel("Save for future", cw3))
+            }
+
+            string tag_name = "";
+            number save_tag = 0;
+            string tag_value = "";
+
+            // load the existing values
+            if(custom_tag_vals.TagGroupCountTags() > i){
+                tag_name = custom_tag_values.TagGroupGetTagLabel(i);
+
+                TagGroup value_group;
+                custom_tag_values.TagGroupGetTagAsTagGroup(tag_name, value_group);
+                if(value_group.TagGroupIsValid()){
+                    if(value_group.TagGroupDoesTagExist("value")){
+                        value_group.TagGroupGetTagAsString("value", tag_value);
+                    }
+                    if(value_group.TagGroupDoesTagExist("save")){
+                        value_group.TagGroupGetTagAsBoolean("save", save_tag);
+                    }
+                }
+            }
+
+            TagGroup inputs_group = NewTagGroup();
+
+            // name input
+            TagGroup tag_name_input = DLGCreateStringField(tag_name, cw1);
+            tag_name_input.DLGIdentifier("custom_tags_name_input_" + i);
+            inputs_group.TagGroupCreateNewLabeledTag("name_input");
+            inputs_group.TagGroupSetTagAsTagGroup("name_input", tag_name_input);
+            tags_inner_wrapper.DLGAddElement(tag_name_input);
+
+            // value input
+            TagGroup tag_value_input = DLGCreateStringField(tag_value, cw2);
+            tag_value_input.DLGIdentifier("custom_tags_value_input_" + i);
+            inputs_group.TagGroupCreateNewLabeledTag("value_input");
+            inputs_group.TagGroupSetTagAsTagGroup("value_input", tag_value_input);
+            tags_inner_wrapper.DLGAddElement(tag_value_input);
+
+            // save input
+            TagGroup save_tag_input = DLGCreateCheckBox("Save", save_tag);
+            save_tag_input.DLGIdentifier("custom_tags_save_input_" + i);
+            inputs_group.TagGroupCreateNewLabeledTag("save_input");
+            inputs_group.TagGroupSetTagAsTagGroup("save_input", save_tag_input);
+            tags_inner_wrapper.DLGAddElement(save_tag_input);
+
+            custom_tag_inputs.TagGroupInsertTagAsTagGroup(infinity(), inputs_group);
+        }
+
+        wrapper.DLGAddElement(tags_outer_wrapper);
+
+        return wrapper;
+    }
+
 	/**
 	 * Create the contents for the ask-for dialog. 
      *
@@ -1601,6 +1715,9 @@ class DMViewDialog : UIFrame{
         // input boxes for the configuration panel
         config_inputs = NewTagList();
 
+        // input boxes for custom tags panel
+        custom_tag_inputs = NewTagList();
+
         // input boxes for the series panel
         series_selectboxes = NewTagList();
         limit_displays = NewTagList();
@@ -1622,13 +1739,23 @@ class DMViewDialog : UIFrame{
         else{
             panel_list = DLGCreateTabList(0);
 
-            TagGroup series_panel = DLGCreateTab("Create series");
-            series_panel.DLGAddElement(self._createSeriesSetupContent());
-            panel_list.DLGAddTab(series_panel);
+            if(display_mode == "series" || display_mode == ""){
+                TagGroup series_panel = DLGCreateTab("Create series");
+                series_panel.DLGAddElement(self._createSeriesSetupContent());
+                panel_list.DLGAddTab(series_panel);
+            }
 
-            TagGroup configuration_panel = DLGCreateTab("Settings");
-            configuration_panel.DLGAddElement(self._createConfigurationContent());
-            panel_list.DLGAddTab(configuration_panel);
+            if(display_mode == "configuration" || display_mode == ""){
+                TagGroup configuration_panel = DLGCreateTab("Settings");
+                configuration_panel.DLGAddElement(self._createConfigurationContent());
+                panel_list.DLGAddTab(configuration_panel);
+            }
+
+            if(display_mode == "custom_tags" || display_mode == ""){
+                TagGroup custom_tags_panel = DLGCreateTab("Custom tags");
+                custom_tags_panel.DLGAddElement(self._createCustomTagsContent());
+                panel_list.DLGAddTab(custom_tags_panel);
+            }
         }
         
         // Tabs do not work as a direct child of the dialog items, so probably panels don't too, 
@@ -1642,52 +1769,47 @@ class DMViewDialog : UIFrame{
 
 		return dialog_tags;
     }
-	
+    
     /**
      * Create a new dialog.
      *
+     * @param startup
+     *      Which panel to show, currently supported are "series", "configuration", "ask_for" and 
+     *      "custom_tags"
      * @param title
-     *      The title of the dialog
-     * @param message
-     *      The message, use "" for not showing a message.
+     *      The title to display
+     * @param measurement_vars
+     *      A `TagList` of `TagGroup`s with the "name", "unique_id", "unit", "min_value", 
+     *      "max_value", "start", "step" and "end" indices and the optional "format", 
+     *      "formatted_min_value", "formatted_max_value", "formatted_start", "formatted_step" and 
+     *      "formatted_end"
+     * @param configuration_vars
+     *      A `TagGroup` where the key is the group name and the value is another `TagGroup` with
+     *      the "value", "datatype", "description" and "restart_required" indices
+     * @param ask_vals
+     *      A `TagList` of ask value definitions where each definition is a `TagGroup` with the 
+     *      "name", the "datatype" and the "description" indices
+     * @param msg
+     *      A message to show when the ask for values are shown (only shown if startup = "ask_for")
+     * @param custom_tag_vals
+     *      The custom tags to show with their values as a `TagGroup` where the key is the tag name
+     *      and the value is a `TagGroup` with the "value" index containing the value as a string
+     *      and the "save" index continaing whether to save the value to the configuration or not
      *
      * @return
      *      The dialog
      */
-	object init(object self, string startup, string title, TagGroup measurement_vars, TagGroup configuration_vars, TagGroup ask_vals, String msg){
+	object init(object self, string startup, string title, TagGroup measurement_vars, TagGroup configuration_vars, TagGroup ask_vals, String msg, TagGroup custom_tag_vals){
         measurement_variables = measurement_vars;
         configuration = configuration_vars;
         ask_for_values = ask_vals;
         display_mode = startup;
-        ask_vals_message = msg
-        allow_panel_change = 1;
+        ask_vals_message = msg;
+        custom_tag_values = custom_tag_vals;
 		self.super.init(self._createContent(title));
         
 		return self;
 	}
-
-    void updateAllowPanelChange(object self, number allow_change){
-        allow_panel_change = allow_change;
-        panel_list.DLGEnabled(allow_panel_change);
-    }
-
-    /**
-     * Show the series dialog.
-     */
-    number poseSeries(object self){
-        self.switchToSeriesPanel();
-        self.updateAllowPanelChange(0);
-        return self.pose();
-    }
-
-    /**
-     * Show the configuration dialog.
-     */
-    number poseConfiguration(object self){
-        self.switchToConfigurationPanel();
-        self.updateAllowPanelChange(0);
-        return self.pose();
-    }
 
     /**
      * Overwriting pose function, before clicking 'OK' the inputs are validated. If there are errors
@@ -1808,7 +1930,7 @@ class DMViewDialog : UIFrame{
      * @param input
      *      The input field as a `TagGroup`
      * @param settings
-     *      The settings for the input
+     *      The settings for the input or NULL to use the default settings (load string value)
      * @param index
      *      The index in the `target` `TagGroup` to set the value to
      * @param target
@@ -1816,7 +1938,12 @@ class DMViewDialog : UIFrame{
      */
     void addValueFromInputToTagGroup(object self, TagGroup input, TagGroup settings, number index, TagGroup &target){
         string type;
-        settings.TagGroupGetTagAsString("datatype", type);
+        if(settings.TagGroupIsValid()){
+            // dm-script does not support lazy evaluation so this have to be two ifs
+            if(settings.TagGroupDoesTagExist("datatype")){
+                settings.TagGroupGetTagAsString("datatype", type);
+            }
+        }
 
         if(type == "int"){
             number value = input.DLGGetValue();
@@ -1948,245 +2075,314 @@ class DMViewDialog : UIFrame{
 
         return vals;
     }
+
+    /**
+     * Get the custom tag values as a `TagGroup`.
+     *
+     * @return
+     *      The custom tags as a `TagGroup` where the key is the tag name and the value is a 
+     *      `TagGroup` with the "value" index containing the value as a string and the "save" 
+     *      index continaing whether to save the value to the configuration or not
+     */
+    TagGroup getCustomTags(object self){
+        TagGroup tags = NewTagGroup();
+
+        // use DMViewDialog::addValueFromInputToTagGroup() function for possible other formats later
+        TagGroup str_settings = NewTagGroup();
+        str_settings.TagGroupCreateNewLabeledTag("datatype");
+        str_settings.TagGroupSetTagAsString("datatype", "string");
+
+        TagGroup bool_settings = NewTagGroup();
+        bool_settings.TagGroupCreateNewLabeledTag("datatype");
+        bool_settings.TagGroupSetTagAsString("datatype", "boolean");
+
+        for(number i = 0; i < custom_tag_inputs.TagGroupCountTags(); i++){
+            TagGroup input_group;
+            custom_tag_inputs.TagGroupGetIndexedTagAsTagGroup(i, input_group);
+
+            if(input_group.TagGroupIsValid()){
+                TagGroup tag_name_input;
+                input_group.TagGroupGetTagAsTagGroup("name_input", tag_name_input);
+
+                // get the name
+                string tag_name = tag_name_input.DLGGetStringValue();
+
+                if(tag_name != ""){
+                    TagGroup tag = NewTagGroup();
+
+                    // load the value, get input
+                    TagGroup tag_value_input;
+                    input_group.TagGroupGetTagAsTagGroup("value_input", tag_value_input);
+                    // prepare index and set the value
+                    number value_index = tag.TagGroupCreateNewLabeledTag("value");
+                    self.addValueFromInputToTagGroup(tag_value_input, str_settings, value_index, tag);
+
+                    // load the value, get input
+                    TagGroup save_tag_input;
+                    input_group.TagGroupGetTagAsTagGroup("save_input", save_tag_input);
+                    // prepare index and set value
+                    number save_index = tag.TagGroupCreateNewLabeledTag("save");
+                    self.addValueFromInputToTagGroup(save_tag_input, bool_settings, save_index, tag);
+                    
+                    // save the tag to the tags
+                    tags.TagGroupCreateNewLabeledTag(tag_name);
+                    tags.TagGroupSetTagAsTagGroup(tag_name, tag);
+                }
+            }
+        }
+
+        return tags;
+    }
 }
 
-// TagGroup m_vars = NewTagList();
+// @execdmscript.ignore.start
+// the following content is ignored in the python execution
+TagGroup m_vars = NewTagList();
+
+number index;
+TagGroup tg;
+
+// Focus Measurement variable
+tg = NewTagGroup();
+index = tg.TagGroupCreateNewLabeledTag("name");
+tg.TagGroupSetIndexedTagAsString(index, "Focus");
+index = tg.TagGroupCreateNewLabeledTag("unique_id");
+tg.TagGroupSetIndexedTagAsString(index, "focus");
+index = tg.TagGroupCreateNewLabeledTag("unit");
+tg.TagGroupSetIndexedTagAsString(index, "nm");
+index = tg.TagGroupCreateNewLabeledTag("min_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("max_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 100);
+index = tg.TagGroupCreateNewLabeledTag("start");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("step");
+tg.TagGroupSetIndexedTagAsNumber(index, 10);
+index = tg.TagGroupCreateNewLabeledTag("end");
+tg.TagGroupSetIndexedTagAsNumber(index, 100);
+m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+
+// Tilt Measurement variable
+tg = NewTagGroup();
+index = tg.TagGroupCreateNewLabeledTag("name");
+tg.TagGroupSetIndexedTagAsString(index, "X-Tilt");
+index = tg.TagGroupCreateNewLabeledTag("unique_id");
+tg.TagGroupSetIndexedTagAsString(index, "x-tilt");
+index = tg.TagGroupCreateNewLabeledTag("unit");
+tg.TagGroupSetIndexedTagAsString(index, "deg");
+index = tg.TagGroupCreateNewLabeledTag("min_value");
+tg.TagGroupSetIndexedTagAsNumber(index, -15);
+index = tg.TagGroupCreateNewLabeledTag("max_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 15);
+index = tg.TagGroupCreateNewLabeledTag("start");
+tg.TagGroupSetIndexedTagAsNumber(index, -10);
+index = tg.TagGroupCreateNewLabeledTag("step");
+tg.TagGroupSetIndexedTagAsNumber(index, 1);
+index = tg.TagGroupCreateNewLabeledTag("end");
+tg.TagGroupSetIndexedTagAsNumber(index, 10);
+m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+
+// Magnetic Field Measurement variable
+tg = NewTagGroup();
+index = tg.TagGroupCreateNewLabeledTag("name");
+tg.TagGroupSetIndexedTagAsString(index, "Magnetic Field");
+index = tg.TagGroupCreateNewLabeledTag("unique_id");
+tg.TagGroupSetIndexedTagAsString(index, "ol-current");
+index = tg.TagGroupCreateNewLabeledTag("unit");
+tg.TagGroupSetIndexedTagAsString(index, "T");
+index = tg.TagGroupCreateNewLabeledTag("min_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("max_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 3);
+index = tg.TagGroupCreateNewLabeledTag("start");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("step");
+tg.TagGroupSetIndexedTagAsNumber(index, 0.3);
+index = tg.TagGroupCreateNewLabeledTag("end");
+tg.TagGroupSetIndexedTagAsNumber(index, 3);
+m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+
+// Condenser lense (testing only)
+tg = NewTagGroup();
+index = tg.TagGroupCreateNewLabeledTag("name");
+tg.TagGroupSetIndexedTagAsString(index, "Condenser lense");
+index = tg.TagGroupCreateNewLabeledTag("unique_id");
+tg.TagGroupSetIndexedTagAsString(index, "cl-current");
+index = tg.TagGroupCreateNewLabeledTag("unit");
+tg.TagGroupSetIndexedTagAsString(index, "hex");
+index = tg.TagGroupCreateNewLabeledTag("min_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x0);
+index = tg.TagGroupCreateNewLabeledTag("formatted_min_value");
+tg.TagGroupSetIndexedTagAsString(index, "0x0");
+index = tg.TagGroupCreateNewLabeledTag("max_value");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
+index = tg.TagGroupCreateNewLabeledTag("formatted_max_value");
+tg.TagGroupSetIndexedTagAsString(index, "0x8000");
+index = tg.TagGroupCreateNewLabeledTag("start");
+tg.TagGroupSetIndexedTagAsNumber(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("formatted_start");
+tg.TagGroupSetIndexedTagAsString(index, "0x0");
+index = tg.TagGroupCreateNewLabeledTag("step");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x100);
+index = tg.TagGroupCreateNewLabeledTag("formatted_step");
+tg.TagGroupSetIndexedTagAsString(index, "0x100");
+index = tg.TagGroupCreateNewLabeledTag("end");
+tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
+index = tg.TagGroupCreateNewLabeledTag("formatted_end");
+tg.TagGroupSetIndexedTagAsString(index, "0x8000");
+index = tg.TagGroupCreateNewLabeledTag("format");
+tg.TagGroupSetIndexedTagAsString(index, "hex");
+m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+TagGroup config_vars = NewTagGroup();
 
 // number index;
-// TagGroup tg;
+// TagGroup tg, tg2;
+TagGroup tg2;
 
-// // Focus Measurement variable
-// tg = NewTagGroup();
-// index = tg.TagGroupCreateNewLabeledTag("name");
-// tg.TagGroupSetIndexedTagAsString(index, "Focus");
-// index = tg.TagGroupCreateNewLabeledTag("unique_id");
-// tg.TagGroupSetIndexedTagAsString(index, "focus");
-// index = tg.TagGroupCreateNewLabeledTag("unit");
-// tg.TagGroupSetIndexedTagAsString(index, "nm");
-// index = tg.TagGroupCreateNewLabeledTag("min_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("max_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 100);
-// index = tg.TagGroupCreateNewLabeledTag("start");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("step");
-// tg.TagGroupSetIndexedTagAsNumber(index, 10);
-// index = tg.TagGroupCreateNewLabeledTag("end");
-// tg.TagGroupSetIndexedTagAsNumber(index, 100);
-// m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+tg = NewTagGroup();
 
-// // Tilt Measurement variable
-// tg = NewTagGroup();
-// index = tg.TagGroupCreateNewLabeledTag("name");
-// tg.TagGroupSetIndexedTagAsString(index, "X-Tilt");
-// index = tg.TagGroupCreateNewLabeledTag("unique_id");
-// tg.TagGroupSetIndexedTagAsString(index, "x-tilt");
-// index = tg.TagGroupCreateNewLabeledTag("unit");
-// tg.TagGroupSetIndexedTagAsString(index, "deg");
-// index = tg.TagGroupCreateNewLabeledTag("min_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, -15);
-// index = tg.TagGroupCreateNewLabeledTag("max_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 15);
-// index = tg.TagGroupCreateNewLabeledTag("start");
-// tg.TagGroupSetIndexedTagAsNumber(index, -10);
-// index = tg.TagGroupCreateNewLabeledTag("step");
-// tg.TagGroupSetIndexedTagAsNumber(index, 1);
-// index = tg.TagGroupCreateNewLabeledTag("end");
-// tg.TagGroupSetIndexedTagAsNumber(index, 10);
-// m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsString(index, "camera");
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "string");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "the detector to use to acquire the image");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("detector-name");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// // Magnetic Field Measurement variable
-// tg = NewTagGroup();
-// index = tg.TagGroupCreateNewLabeledTag("name");
-// tg.TagGroupSetIndexedTagAsString(index, "Magnetic Field");
-// index = tg.TagGroupCreateNewLabeledTag("unique_id");
-// tg.TagGroupSetIndexedTagAsString(index, "ol-current");
-// index = tg.TagGroupCreateNewLabeledTag("unit");
-// tg.TagGroupSetIndexedTagAsString(index, "T");
-// index = tg.TagGroupCreateNewLabeledTag("min_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("max_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 3);
-// index = tg.TagGroupCreateNewLabeledTag("start");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("step");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0.3);
-// index = tg.TagGroupCreateNewLabeledTag("end");
-// tg.TagGroupSetIndexedTagAsNumber(index, 3);
-// m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsNumber(index, 1024);
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "int");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "the size (width has to be equal to height) of the image the detector makes in px");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("image-size");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// // Condenser lense (testing only)
-// tg = NewTagGroup();
-// index = tg.TagGroupCreateNewLabeledTag("name");
-// tg.TagGroupSetIndexedTagAsString(index, "Condenser lense");
-// index = tg.TagGroupCreateNewLabeledTag("unique_id");
-// tg.TagGroupSetIndexedTagAsString(index, "cl-current");
-// index = tg.TagGroupCreateNewLabeledTag("unit");
-// tg.TagGroupSetIndexedTagAsString(index, "hex");
-// index = tg.TagGroupCreateNewLabeledTag("min_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0x0);
-// index = tg.TagGroupCreateNewLabeledTag("formatted_min_value");
-// tg.TagGroupSetIndexedTagAsString(index, "0x0");
-// index = tg.TagGroupCreateNewLabeledTag("max_value");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
-// index = tg.TagGroupCreateNewLabeledTag("formatted_max_value");
-// tg.TagGroupSetIndexedTagAsString(index, "0x8000");
-// index = tg.TagGroupCreateNewLabeledTag("start");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("formatted_start");
-// tg.TagGroupSetIndexedTagAsString(index, "0x0");
-// index = tg.TagGroupCreateNewLabeledTag("step");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0x100);
-// index = tg.TagGroupCreateNewLabeledTag("formatted_step");
-// tg.TagGroupSetIndexedTagAsString(index, "0x100");
-// index = tg.TagGroupCreateNewLabeledTag("end");
-// tg.TagGroupSetIndexedTagAsNumber(index, 0x8000);
-// index = tg.TagGroupCreateNewLabeledTag("formatted_end");
-// tg.TagGroupSetIndexedTagAsString(index, "0x8000");
-// index = tg.TagGroupCreateNewLabeledTag("format");
-// tg.TagGroupSetIndexedTagAsString(index, "hex");
-// m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
-// TagGroup config_vars = NewTagGroup();
+index = config_vars.TagGroupCreateNewLabeledTag("pyjem-camera");
+config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
 
-// // number index;
-// // TagGroup tg, tg2;
-// TagGroup tg2;
+tg = NewTagGroup();
 
-// tg = NewTagGroup();
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 1);
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "boolean");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "Whether to set the microscope in the safe sate after the measurement is finished");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("microscope-to-safe-state-after-measurement");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsString(index, "camera");
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "string");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "the detector to use to acquire the image");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("detector-name");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsFloat(index, 3.5);
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "float");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "The relaxation time in seconds to wait after the microscope is switched to lorentz mode. Use 0 or negative values to ignore");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("relaxation-time-lorentz-mode");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsNumber(index, 1024);
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "int");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "the size (width has to be equal to height) of the image the detector makes in px");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("image-size");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+string path = GetApplicationDirectory("auto_save", 1)
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsString(index, path + "\\1990-01-01\\");
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "string");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "The directory where to save the camera images to that are recorded while measuring");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("save-directory");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// index = config_vars.TagGroupCreateNewLabeledTag("pyjem-camera");
-// config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
+tg2 = NewTagGroup();
+index = tg2.TagGroupCreateNewLabeledTag("value");
+tg2.TagGroupSetIndexedTagAsString(index, "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4");
+index = tg2.TagGroupCreateNewLabeledTag("default_value");
+tg2.TagGroupSetIndexedTagAsString(index, "");
+index = tg2.TagGroupCreateNewLabeledTag("datatype");
+tg2.TagGroupSetIndexedTagAsString(index, "string");
+index = tg2.TagGroupCreateNewLabeledTag("description");
+tg2.TagGroupSetIndexedTagAsString(index, "The name format to use to save the recorded images. Some placeholders can be used. Use {counter} to get the current measurement number, use {tags[your_value]} to get use the `your_value` of the measurement tags. Use {variables[your_variable]} to get the value of the measurement variable `your_variable`. To use the `your_img_value` of the image tags, use {imgtags[your_value]}. For times set the format according to the python `strftime()` format, started with a colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and hour minute and second. Make sure to inculde the file extension but use supported extensions only.");
+index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg2.TagGroupCreateNewLabeledTag("restart_required");
+tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
+index = tg.TagGroupCreateNewLabeledTag("save-file-format");
+tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
 
-// tg = NewTagGroup();
+index = config_vars.TagGroupCreateNewLabeledTag("measurement");
+config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
 
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 1);
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "boolean");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "Whether to set the microscope in the safe sate after the measurement is finished");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("microscope-to-safe-state-after-measurement");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+string msg = "";
+ask_vals = NewTagList();
 
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsFloat(index, 3.5);
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "float");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "The relaxation time in seconds to wait after the microscope is switched to lorentz mode. Use 0 or negative values to ignore");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("relaxation-time-lorentz-mode");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+custom_tag_vals = NewTagGroup();
+tg = NewTagGroup();
+tg.TagGroupSetTagAsString("value", "289K");
+tg.TagGroupSetTagAsBoolean("save", 1);
+custom_tag_vals.TagGroupSetTagAsTagGroup("Temerature", tg);
+tg = NewTagGroup();
+tg.TagGroupSetTagAsString("value", "You");
+tg.TagGroupSetTagAsBoolean("save", 1);
+custom_tag_vals.TagGroupSetTagAsTagGroup("Operator", tg);
+tg = NewTagGroup();
+tg.TagGroupSetTagAsString("value", "NbF3-0021");
+tg.TagGroupSetTagAsBoolean("save", 0);
+custom_tag_vals.TagGroupSetTagAsTagGroup("Probe", tg);
 
-// string path = GetApplicationDirectory("auto_save", 1)
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsString(index, path + "\\1990-01-01\\");
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "string");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "The directory where to save the camera images to that are recorded while measuring");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("save-directory");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+string dialog_startup = "custom_tags"; 
+string __file__ = getApplicationDirectory(0, 1);
 
-// tg2 = NewTagGroup();
-// index = tg2.TagGroupCreateNewLabeledTag("value");
-// tg2.TagGroupSetIndexedTagAsString(index, "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4");
-// index = tg2.TagGroupCreateNewLabeledTag("default_value");
-// tg2.TagGroupSetIndexedTagAsString(index, "");
-// index = tg2.TagGroupCreateNewLabeledTag("datatype");
-// tg2.TagGroupSetIndexedTagAsString(index, "string");
-// index = tg2.TagGroupCreateNewLabeledTag("description");
-// tg2.TagGroupSetIndexedTagAsString(index, "The name format to use to save the recorded images. Some placeholders can be used. Use {counter} to get the current measurement number, use {tags[your_value]} to get use the `your_value` of the measurement tags. Use {variables[your_variable]} to get the value of the measurement variable `your_variable`. To use the `your_img_value` of the image tags, use {imgtags[your_value]}. For times set the format according to the python `strftime()` format, started with a colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and hour minute and second. Make sure to inculde the file extension but use supported extensions only.");
-// index = tg2.TagGroupCreateNewLabeledTag("ask_if_not_present");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg2.TagGroupCreateNewLabeledTag("restart_required");
-// tg2.TagGroupSetIndexedTagAsBoolean(index, 0);
-// index = tg.TagGroupCreateNewLabeledTag("save-file-format");
-// tg.TagGroupSetIndexedTagAsTagGroup(index, tg2);
+// @execdmscript.ignore.end
 
-// index = config_vars.TagGroupCreateNewLabeledTag("measurement");
-// config_vars.TagGroupSetIndexedTagAsTagGroup(index, tg);
-
-// dialog_startup, m_vars and config_vars are defined in the python file executing this file
-// TagGroup m_vars = NewTagList();
-// TagGroup config_vars = NewTagList();
-// string dialog_startup = "series"; 
-// string __file__ = getApplicationDirectory(0, 1);
 string title = "PyLo";
 
-object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, config_vars, ask_vals, message);
+object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, config_vars, ask_vals, message, custom_tag_vals);
 
 TagGroup start;
 TagGroup series;
 TagGroup configuration;
 TagGroup ask_for;
-number success;
-
-if(dialog_startup == "series"){
-    success = dialog.poseSeries();
-}
-else if(dialog_startup == "configuration"){
-    success = dialog.poseConfiguration();
-}
-else{
-    success = dialog.pose();
-}
+TagGroup custom_tags;
+number success = dialog.pose();
 
 if(success){
     start = dialog.getStart();
     series = dialog.getSeries();
     configuration = dialog.getConfiguration();
     ask_for = dialog.getAskForValues();
+    custom_tags = dialog.getCustomTags();
 }

@@ -69,6 +69,11 @@ class DMView(AbstractView):
         # the maximum numbers of characters in one line
         self.line_length = 100
 
+        # whether to execute the all dm-scripts with debug=True or not, this is
+        # a shorthand for debugging and prevents reloading the view (and 
+        # therefore restarting the program) for debugging every time
+        self._exec_debug = False
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 
@@ -82,7 +87,9 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with execdmscript.exec_dmscript("showAlert(msg, 2);", setvars={"msg": hint}):
+        with execdmscript.exec_dmscript("showAlert(msg, 2);", 
+                                        setvars={"msg": hint}, 
+                                        debug=self._exec_debug):
             pass
 
     def showError(self, error : typing.Union[str, Exception], how_to_fix: typing.Optional[str]=None) -> None:
@@ -125,7 +132,9 @@ class DMView(AbstractView):
         if isinstance(how_to_fix, str) and how_to_fix != "":
             msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
 
-        with execdmscript.exec_dmscript("showAlert(msg, 0);", setvars={"msg": msg}):
+        with execdmscript.exec_dmscript("showAlert(msg, 0);", 
+                                        setvars={"msg": msg}, 
+                                        debug=self._exec_debug):
             pass
 
     def askForDecision(self, text: str, options: typing.Optional[typing.Sequence[str]]=("Ok", "Cancel")) -> int:
@@ -171,7 +180,9 @@ class DMView(AbstractView):
                 "button1": options[1]
             }
         
-            with execdmscript.exec_dmscript(dmscript, setvars=setvars, readvars=readvars) as script:
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
+                                            readvars=readvars, 
+                                            debug=self._exec_debug) as script:
                 index = script["index"]
 
                 # for dm-script the buttons are the "confirm" and the "cancel"
@@ -239,7 +250,8 @@ class DMView(AbstractView):
             ])
 
             DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
-            with execdmscript.exec_dmscript(dmscript, setvars=setvars):
+            with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
+                                            debug=self._exec_debug):
                 # wait for dm-script to show the dialog, the user takes longer
                 # to react anyway
                 time.sleep(0.5)
@@ -363,7 +375,7 @@ class DMView(AbstractView):
             "kill_dialog.display(\"Kill task\");",
         ))
 
-        with execdmscript.exec_dmscript(dmscript, debug=False):
+        with execdmscript.exec_dmscript(dmscript, debug=self._exec_debug):
             pass
 
     def _createRunningDialog(self) -> None:
@@ -394,7 +406,9 @@ class DMView(AbstractView):
         #     time.sleep(0.1)
         # with execdmscript.exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
         #     pass
-        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, setvars=sv, readvars=rv, debug=False):
+        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, 
+                                        setvars=sv, readvars=rv, 
+                                        debug=self._exec_debug):
             pass
     
     def _observeProgressDialogSuccessThread(self) -> None:
@@ -603,11 +617,44 @@ class DMView(AbstractView):
 
         return results[2]
     
+    def _showCustomTags(self, tags: typing.Dict[str, typing.Dict[str, typing.Any]]) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
+        """Show the custom tags.
+
+        The `tags` is a dict of dicts. Each key is the name of a tag to add.
+        The value is a dict with the following indices:
+        - "value": any, the value of the key to write in each image
+        - "save": bool, whether to save the key into the configuration or not
+        
+        Raises
+        ------
+        StopProgram
+            When the user clicks the cancel button.
+        
+        Parameters
+        ----------
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        
+        Returns
+        -------
+        dict
+            The `tags` parameter dict modified by the user
+        """
+        results = self._showDialog(custom_tags=tags, dialog_type=0b1000)
+
+        if len(results) <= 4 or results[4] is None:
+            raise RuntimeError("Could not create the tags from " + 
+                               "the dialogs values.")
+
+        return results[4]
+    
     def _showDialog(self, 
                     measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     ask_for_values: typing.Optional[typing.Sequence[AskInput]]=None,
                     ask_for_msg: typing.Optional[str]="",
+                    custom_tags: typing.Optional[dict]={},
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
 
@@ -617,18 +664,12 @@ class DMView(AbstractView):
             Define which dialog to show, use
             - `0b01` for showing the configuration dialog
             - `0b10` for showing the series dialog
-            - `0b01 | 0b10 = 0b11` for showing the series dialog but the user 
-              can switch to the configuration dialog and back
+            - `0b01 | 0b10 | 0b1000 = 0b1011` for showing the series dialog 
+              but the user can switch to the configuration dialog and the 
+              custom tags dialog and back
             - `0b100` for showing the ask for dialog
+            - `0b1000` for showing the custom tags dialog
         """
-
-        path = os.path.join(self._rel_path, "dm_view_dialog.s")
-        sync_vars = {"start": dict, 
-                     "series": dict, 
-                     "configuration": dict, 
-                     "ask_for": list,
-                     "success": bool}
-        libs = (os.path.join(self._rel_path, "pylolib.s"), )
 
         if (dialog_type & 0b01) > 0 and (dialog_type & 0b10) > 0:
             dialog_startup = ""
@@ -636,6 +677,8 @@ class DMView(AbstractView):
             dialog_startup = "configuration"
         elif (dialog_type & 0b100) > 0:
             dialog_startup = "ask_for"
+        elif (dialog_type & 0b1000) > 0:
+            dialog_startup = "custom_tags"
         else:
             dialog_startup = "series"
         
@@ -723,9 +766,12 @@ class DMView(AbstractView):
                     else:
                         var_type_name = get_datatype_name(var_type)
 
-                    if (var_type != str and hasattr(var_type, "format") and 
-                        callable(var_type.format)):
-                        val = var_type.format(val)
+                    if isinstance(var_type, Datatype):
+                        try:
+                            val = var_type.format(val)
+                        except Exception:
+                            if var_type.default_parse is not None:
+                                val = var_type.default_parse
                     
                     try:
                         default_value = configuration.getDefault(group, key)
@@ -785,17 +831,31 @@ class DMView(AbstractView):
             "config_vars": config_vars,
             "ask_vals": ask_vals,
             "message": ask_for_msg,
-            "dialog_startup": dialog_startup
+            "dialog_startup": dialog_startup,
+            "custom_tag_vals": custom_tags
         }
+
+        path = os.path.join(self._rel_path, "dm_view_dialog.s")
+        sync_vars = {"start": dict, 
+                     "series": dict, 
+                     "configuration": dict, 
+                     "ask_for": list,
+                     "custom_tags": dict,
+                     "success": bool}
+        libs = (os.path.join(self._rel_path, "pylolib.s"), )
+
         start = None
         series = None
         config = None
         ask_for_values = None
+        custom_tags = None
         success = None
 
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
         # and sets the start and series variables
-        with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, setvars=variables) as script:
+        with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, 
+                                        setvars=variables, 
+                                        debug=self._exec_debug) as script:
             try:
                 success = bool(script["success"])
             except KeyError:
@@ -834,10 +894,16 @@ class DMView(AbstractView):
                 ask_for_values = script["ask_for"]
             except KeyError:
                 ask_for_values = None
+            
+            try:
+                custom_tags = script["custom_tags"]
+            except KeyError:
+                custom_tags = None
         
         if success and ((start is not None and series is not None) or 
-           config is not None or ask_for_values is not None):
-            return start, series, config, ask_for_values
+           config is not None or ask_for_values is not None or 
+           custom_tags is not None):
+            return start, series, config, ask_for_values, custom_tags
         else:
             raise StopProgram
         

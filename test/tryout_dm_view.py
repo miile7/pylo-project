@@ -63,45 +63,28 @@ import traceback
 
 try:
 	import pylo
-	import pylo.microscopes
-	import pylo.cameras
 
 	print("Preparing...");
-
-	pylo.OFFLINE_MODE = True
-
-	pylo = importlib.reload(pylo)
-	pylo.microscopes = importlib.reload(pylo.microscopes)
-	pylo.cameras = importlib.reload(pylo.cameras)
-
 	view = pylo.DMView()
-	configuration = pylo.IniConfiguration()
-
-	# configuration.setValue("setup", "microscope-module", "pyjem_microscope.py")
-	# configuration.setValue("setup", "microscope-class", "PyJEMMicroscope")
-	# configuration.setValue("setup", "camera-module", "pyjem_camera.py")
-	# configuration.setValue("setup", "camera-class", "PyJEMCamera")
-
-	configuration.setValue("pyjem-camera", "detector-name", "camera")
-	configuration.setValue("pyjem-camera", "image-size", 1024)
+	configuration = pylo.AbstractConfiguration()
 
 	controller = pylo.Controller(view, configuration)
 
-	pylo.microscopes.PyJEMMicroscope.defineConfigurationOptions(controller.configuration)
-	pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
-
-	controller.microscope = pylo.microscopes.PyJEMMicroscope(controller)
-	controller.camera = pylo.cameras.PyJEMCamera(controller)
+	controller.microscope = pylo.loader.getDevice("Dummy Microscope", controller)
+	controller.camera = pylo.loader.getDevice("Dummy Camera", controller)
 
 	tests = [
 		# "error",
 		# "hint",
 		# "create-measurement",
+		# "ask-for-decision",
 		# "show-settings",
-		"ask-for-decision",
+		"show-custom-tags",
 		# "ask-for",
 		# "show-running",
 	]
+	
+	# view._exec_debug = True
 
 	if "error" in tests:
 		print("")
@@ -129,7 +112,8 @@ try:
 		print("= " * 40)
 		print("")
 		print("Ask for decision")
-		print(view.askForDecision("Please click on one of the buttons.", ("Button 1", "Button 2", "Button 3", "Button 4")))
+		print(view.askForDecision("Please click on one of the buttons.", 
+								  ("Button 1", "Button 2", "Button 3", "Button 4")))
 
 	if "show-settings" in tests:
 		print("")
@@ -137,6 +121,20 @@ try:
 		print("")
 		print("Showing Settings")
 		pprint.pprint(view.showSettings(configuration))
+
+	if "show-custom-tags" in tests:
+		from pylo.config import CUSTOM_TAGS_GROUP_NAME
+		configuration.setValue(CUSTOM_TAGS_GROUP_NAME, "saved-key", "Saved value");
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing Custom Tags")
+		pprint.pprint(view.showCustomTags(configuration))
+		print("Configuration:")
+		config_tags = {}
+		for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
+		    config_tags[key] = configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key)
+		pprint.pprint(config_tags)
 
 	if "ask-for" in tests:
 		print("")

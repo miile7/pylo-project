@@ -1254,3 +1254,132 @@ class TestCLIView:
             add_defaults
         )
         assert series == expected_series
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("tags,user_inputs,expected", [
+        # modify elements
+        ({"tag1": {"value": "Value 1", "save": True}, 
+          "tag2": {"value": 2, "save": False},
+          "tag3": {"value": False}}, 
+          ("0", # edit tag1
+           "Modified value", # change to value
+           "3", # change save value of tag2
+           "y",
+           "4", # edit tag3
+           "Modified value 2", # change to value
+           "c", # confirm
+          ), {"tag1": {"value": "Modified value", "save": True}, 
+              "tag2": {"value": "2", "save": True},
+              "tag3": {"value": "Modified value 2", "save": False}}),
+        # delete elements
+        ({"tag1": {"value": "Value 1", "save": False}, 
+          "tag2": {"value": 2, "save": False},
+          "tag3": {"value": False}}, 
+          ("0", # edit tag1
+           "!empty", # empty value
+           "2", # edit tag3
+           "!empty", # change to value
+           "c", # confirm
+          ), {"tag2": {"value": "2", "save": False}}),
+        # # add elements
+        ({"tag1": {"value": "Value 1", "save": False}}, 
+          ("a", # add element
+           "newtag2", # new tag name
+           "2", # select new tag
+           "new tag value 2", # change value
+           "a", # add another element
+           "newtag3", # new tag name
+           "4", # seledct newtag3
+           "new tag value 3", # change value
+           "5", # select save value of newtag3
+           "y", # set to true
+           "0", # modify tag1
+           "changed value", # change value of tag1
+           "1", # change save value of tag1
+           "y", # set to true
+           "c", # confirm
+          ), {"tag1": {"value": "changed value", "save": True},
+              "newtag2": {"value": "new tag value 2", "save": False},
+              "newtag3": {"value": "new tag value 3", "save": True}}),
+    ])
+    def test_show_custom_tags_loop(self, cliview, tags, user_inputs, expected):
+        """Test if asking for decision works."""
+        global writer
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview._showCustomTagsLoop(tags)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        # realprint(writer.io_log)
+
+        # check results
+        assert results == expected
+    
+    @pytest.mark.usefixtures("cliview")
+    @pytest.mark.parametrize("tags,user_inputs,expected_config,expected_return", [
+        # modify elements
+        ({"tag1": "Value 1", "tag2": "Value 2", "tag3": "Value 3", 
+          "tag4": "Value 4"}, 
+          ("0", # edit tag1
+           "Modified value", # change to value
+           "2", # edit tag2
+           "!empty", # remove tag 2
+           "3", # edit tag3 save value
+           "n", # set to false 
+           "5", # edit tag4 save value
+           "y", 
+           "c", # confirm
+          ), 
+          {"tag1": "Modified value", "tag4": "Value 4"},
+          {"tag1": "Modified value", "tag3": "Value 3", "tag4": "Value 4"}),
+    ])
+    def test_show_custom_tags(self, cliview, tags, user_inputs, expected_config, expected_return):
+        """Test if asking for decision works."""
+        global writer
+
+        configuration = pylo.AbstractConfiguration()
+        from pylo.config import CUSTOM_TAGS_GROUP_NAME
+
+        for key, value in tags.items():
+            configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, value)
+
+        self.response_counter = 0
+        self.out_buffers = []
+        self.response_answers = user_inputs
+
+        # doesn't work to keep it in the fixture, has to be explicit every 
+        # time :(
+        writer.cls()
+        sys.stdout = writer
+        sys.stdin = writer
+        
+        writer.input_response = self.response_callback
+        
+        results = cliview.showCustomTags(configuration)
+
+        sys.stdout = sys.__stdout__
+        sys.stdin = sys.__stdin__
+
+        realprint(writer.io_log)
+
+        tags_config = {}
+        for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
+            tags_config[key] = configuration.getValue(CUSTOM_TAGS_GROUP_NAME, key)
+
+        # check results
+        # assert len(results) == len(expected)
+        assert tags_config == expected_config
+        assert results == expected_return

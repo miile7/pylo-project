@@ -167,3 +167,9 @@ try:
 except NameError:
     # __file__ does not exist
     pass
+
+__config_docs__("CUSTOM_TAGS_GROUP_NAME",
+"""The group name to save the custom tags with in the configuration.
+Default: "custom-tags"
+""")
+CUSTOM_TAGS_GROUP_NAME = "custom-tags"
