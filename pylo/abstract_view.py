@@ -48,6 +48,29 @@ class AbstractView:
         if self.show_running:
             self._updateRunning()
 
+    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+        """Show the measurement creation, the configuration and the custom
+        tags.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
+        
+        Returns
+        -------
+        tuple of dicts, dict, dict
+            The start and the series at index 0, the configuration at index 1 
+            and the tags at index 2 in the way defined by the individual 
+            functions
+        """
+        start, series = self.showCreateMeasurement(controller)
+        configuration = self.showSettings(controller.configuration)
+        custom_tags = self.showCustomTags(controller)
+
+        return start, series, configuration, custom_tags
+
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 

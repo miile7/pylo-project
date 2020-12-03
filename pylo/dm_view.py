@@ -513,6 +513,51 @@ class DMView(AbstractView):
                     self._progress_dialog_text_tagname, self._out
                 )
     
+    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+        """Show the measurement creation, the configuration and the custom
+        tags.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
+        
+        Returns
+        -------
+        tuple of dicts, dict, dict
+            The start and the series at index 0, the configuration at index 1 
+            and the tags at index 2 in the way defined by the individual 
+            functions
+        """
+        results = self._showDialog(
+            measurement_variables=controller.microscope.supported_measurement_variables,
+            configuration=controller.configuration,
+            dialog_type=0b10 | 0b01 | 0b100
+        )
+
+        if len(results) > 0:
+            start = results[0]
+        else:
+            start = None
+        
+        if len(results) > 1:
+            series = results[1]
+        else:
+            series = None
+        
+        if len(results) > 2:
+            configuration = results[2]
+        else:
+            configuration = None
+        
+        if len(results) > 4:
+            custom_tags = results[4]
+        else:
+            custom_tags = None
+
+        return start, series, configuration, custom_tags
+    
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
@@ -542,7 +587,7 @@ class DMView(AbstractView):
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
-            dialog_type=0b10 | 0b01
+            dialog_type=0b10
         )
 
         if len(results) > 0:
