@@ -314,6 +314,13 @@ class DMMicroscope(MicroscopeInterface):
         if not self.isValidMeasurementVariableValue("ol-current", value):
             raise ValueError(("The value {} is not allowed for the " + 
                               "objective lense current.").format(value))
+        
+        if ("value" in self._ol_currents and 
+            math.isclose(self._ol_currents["value"], value)):
+            # value is still the same from the last time
+            return
+        else:
+            self._ol_currents["value"] = value
 
         # calculate the values if the coarse lens and the fine lens can be 
         # converted into eachother
@@ -361,7 +368,9 @@ class DMMicroscope(MicroscopeInterface):
         
         text += "\nAfter confirming the measurement will be continued."
         
-        self.controller.view.askForDecision(text, options=(msg, "Cancel"))
+        button = self.controller.view.askForDecision(text, options=(msg, "Cancel"))
+        if button == 1:
+            raise StopProgram
     
     def _getObjectiveLensCurrent(self) -> float:
         """Get the objective lense current in the current units.
