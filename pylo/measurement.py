@@ -477,9 +477,9 @@ class Measurement:
             self._step_index = -1
             self.finished = True
             measurement_ready()
-        except StopProgram:
+        except StopProgram as e:
             self.stop()
-            return
+            raise e
         except Exception as e:
             # stop if any error occurres, just to be sure
             self.stop()

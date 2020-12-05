@@ -774,7 +774,9 @@ class Controller:
             if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
                 for error in thread.exceptions:
                     if not isinstance(error, StopProgram):
-                        print("Controller.raiseThreadErrors(): Raising error from thread '{}'".format(thread.name))
+                        print("Raising error from thread '{}'.".format(thread.name))
+                    else:
+                        print("Thread '{}' stops program.".format(thread.name))
                     raise error
     
     def _setEmergency(self) -> None:
@@ -839,6 +841,8 @@ class Controller:
 
         This funciton will also wait for all threads to join.
         """
+
+        print("Stopping loop.")
 
         if (isinstance(self.measurement, Measurement) and 
             self.measurement.running):
