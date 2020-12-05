@@ -422,7 +422,7 @@ class Controller:
             return True
     
     def _configurationChangesNeedRestart(self, state_id: int, 
-                                         show_hint: typing.Optional[bool]=True) -> bool:
+                                         show_hint: typing.Optional[bool]=True) -> typing.List[typing.Tuple[str, str]]:
         """Check if there are configuration changes in between the state made
         at the marked state with the `state_id` that trigger a restart.
 
@@ -450,8 +450,10 @@ class Controller:
         
         Returns
         -------
-        bool
-            Whether the program should restart or not
+        list
+            The list of restart required elements that have changed or an empty
+            list if no elemnt has changed or the changed elements do not 
+            require a restart
         """
         try:
             config_changes = (self.configuration.getAdditions(state_id, True, True) | 
@@ -488,9 +490,9 @@ class Controller:
                                         restart_settings_text
                                     ))
             
-            return True
+            return restart_required
         else:
-            return False
+            return []
 
     def startProgramLoop(self) -> None:
         """Start the program loop.
@@ -587,7 +589,16 @@ class Controller:
 
                 # get the changes in the configuration, the view shows the 
                 # settings
-                if self._configurationChangesNeedRestart(state_id):
+                restart_required_changes = self._configurationChangesNeedRestart(state_id)
+                if len(restart_required_changes) > 0:
+                    # reset microscope and camera if they changed
+                    if ((CONFIG_SETUP_GROUP, "microscope") in 
+                        restart_required_changes):
+                        self.microscope = None
+                    if ((CONFIG_SETUP_GROUP, "camera") in 
+                        restart_required_changes):
+                        self.camera = None
+
                     self.restartProgramLoop()
                     return
 
