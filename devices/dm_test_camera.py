@@ -2,6 +2,14 @@ import time
 
 import numpy as np
 
+# for python <3.6
+from pylo import FallbackModuleNotFoundError
+
+try:
+    import DigitalMicrograph as DM
+except (FallbackModuleNotFoundError, ImportError) as e:
+    DM = None
+
 # from .dm_camera import DMCamera
 from pylo import loader
 DMCamera = loader.getDeviceClass("Digital Micrograph Camera")
