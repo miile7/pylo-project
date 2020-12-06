@@ -2,6 +2,7 @@ import math
 import copy
 import typing
 
+from .pylolib import parse_value
 from .datatype import Datatype
 
 Savable = typing.Union[str, int, float, bool, None]
@@ -311,7 +312,8 @@ class AbstractConfiguration:
                     self.configuration[group][key][k] = kwargs[k]
     
     def getValue(self, group: str, key: str, 
-                 fallback_default: typing.Optional[bool]=True) -> Savable:
+                 fallback_default: typing.Optional[bool]=True,
+                 datatype: typing.Optional[typing.Union[type, Datatype]]=None) -> Savable:
         """Get the value for the given group and key.
 
         Raises
@@ -329,16 +331,21 @@ class AbstractConfiguration:
         fallback_default : bool
             Whether to use the default value if there is a default value but 
             no value
+        datatype : type or Datatype, optional
+            A type to use to convert the value to, if not given the datatype
+            for this value will be used, if there is no datatype set, the value
+            will be returned in the type it is saved as
         
         Returns
         -------
         any
             The value
         """
-        return self._getValue(group, key, fallback_default)
+        return self._getValue(group, key, fallback_default, datatype)
     
     def _getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True,
+                 datatype: typing.Optional[typing.Union[type, Datatype]]=None,
                  configuration: typing.Optional[dict]=None) -> Savable:
         """Get the value for the given group and key for the given 
         `configuration`.
@@ -361,6 +368,10 @@ class AbstractConfiguration:
         configuration : dict
             The configuration dict, if not given the 
             `AbstractConfiguration.configuration` will be used
+        datatype : type or Datatype, optional
+            A type to use to convert the value to, if not given the datatype
+            for this value will be used, if there is no datatype set, the value
+            will be returned in the type it is saved as
         
         Returns
         -------
@@ -373,9 +384,11 @@ class AbstractConfiguration:
         if self._valueExists(group, key, configuration):
             return self._parseValue(group, key, 
                                     configuration[group][key]["value"][-1],
-                                    configuration)
+                                    datatype, configuration)
         elif fallback_default and self._defaultExists(group, key, configuration):
-            return configuration[group][key]["default_value"]
+            return self._parseValue(None, None, 
+                                    configuration[group][key]["default_value"],
+                                    datatype)
         else:
             raise KeyError(("The value for the key '{}' within the group " + 
                             "'{}' has not been found.").format(key, group))
@@ -417,19 +430,29 @@ class AbstractConfiguration:
         else:
             return configuration[group][key]["datatype"]
     
-    def _parseValue(self, group: str, key: str, value: Savable, 
+    def _parseValue(self, group: typing.Union[str, None], 
+                    key: typing.Union[str, None], value: Savable,
+                    datatype: typing.Optional[typing.Union[type, Datatype]]=None, 
                     configuration: typing.Optional[dict]=None) -> Savable:
         """Parse the value to the datatype defined by the group and key, if 
         there is no datatype the original value will be returned.
 
         Parameters
         ----------
-        group : str
-            The name of the group
-        key : str
-            The key name
+        group : str or None
+            The name of the group to get the datatype, if the `datatype` is 
+            given, this value is ignored, if this value is not given the 
+            datatype will not be taken from the `configuration`
+        key : str or None
+            The key name to get the datatype, if the `datatype` is given, this 
+            value is ignored, if this value is not given the datatype will not 
+            be taken from the `configuration`
         value : str, int, float, bool or None
             The value to parse
+        datatype : type or Datatype, optional
+            A type to use to convert the value to, if not given the datatype
+            for this value will be used, if there is no datatype set, the value
+            will be returned in the type it is saved as
         configuration : dict
             The configuration dict, if not given the 
             `AbstractConfiguration.configuration` will be used
@@ -441,45 +464,16 @@ class AbstractConfiguration:
             the group and key
         """
 
-        try:
-            datatype = self._getType(group, key, configuration)
-        except KeyError:
-            datatype = None
-        
-        if datatype == bool:
-            if isinstance(value, str):
-                value = value.lower()
-            
-            if value in ("yes", "y", "true", "t", "on"):
-                value = True
-            elif value in ("no", "n", "false", "f", "off"):
-                value = False
-            else:
+        if not isinstance(datatype, (type, Datatype)):
+            if group is not None and key is not None:
                 try:
-                    value = float(value)
-
-                    if math.isclose(value, 1):
-                        value = True
-                    else:
-                        value = False
-                except ValueError:
-                    pass
+                    datatype = self._getType(group, key, configuration)
+                except KeyError:
+                    datatype = None
+            else:
+                datatype = None
         
-        if callable(datatype):
-            try:
-                return datatype(value)
-            except Exception:
-                if (isinstance(datatype, Datatype) and 
-                    datatype.default_parse is not None):
-                    return datatype.default_parse
-                elif datatype in (int, float):
-                    return 0
-                elif datatype == str:
-                    return ""
-                else:
-                    return value
-        else:
-            return value
+        return parse_value(datatype, value)
     
     def _getIndexValue(self, group: str, key: str, index: str) -> typing.Any:
         """Get the value at the index.
@@ -849,14 +843,14 @@ class AbstractConfiguration:
             for key in set(self.marked_states[state_id][group].keys()) & set(self.getKeys(group)):
                 if (self.valueExists(group, key) and 
                     self._valueExists(group, key, self.marked_states[state_id])):
-                    old_val =  self._getValue(group, key, False, self.marked_states[state_id])
+                    old_val =  self._getValue(group, key, False, None, self.marked_states[state_id])
                     new_val = self.getValue(group, key, fallback_default=False)
 
                     if (old_val != new_val and 
                         (not compare_as_str or str(old_val) != str(new_val))):
                         # both values exist but they are different (if the current
                         # value does not exist, it is deleted)
-                        # changes[(group, key)] = self._getValue(group, key, False, self.marked_states[state_id])
+                        # changes[(group, key)] = self._getValue(group, key, False, None, self.marked_states[state_id])
                         changes.add((group, key))
         
         # return set(changes.keys())
@@ -1007,7 +1001,7 @@ class AbstractConfiguration:
                             # (eventually) returned so the value did not really
                             # change
                             old_val = self.getDefault(group, key)
-                            new_val = self._getValue(group, key, True)
+                            new_val = self.getValue(group, key, True)
 
                             if (old_val == new_val or 
                                 (compare_as_str and str(old_val) == str(new_val))):

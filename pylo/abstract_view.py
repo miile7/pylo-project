@@ -1,5 +1,6 @@
 import typing
 
+from .pylolib import parse_value
 from .pylolib import human_concat_list
 from .datatype import Datatype
 
@@ -46,6 +47,29 @@ class AbstractView:
         
         if self.show_running:
             self._updateRunning()
+
+    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+        """Show the measurement creation, the configuration and the custom
+        tags.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
+        
+        Returns
+        -------
+        tuple of dicts, dict, dict
+            The start and the series at index 0, the configuration at index 1 
+            and the tags at index 2 in the way defined by the individual 
+            functions
+        """
+        start, series = self.showCreateMeasurement(controller)
+        configuration = self.showSettings(controller.configuration)
+        custom_tags = self.showCustomTags(controller)
+
+        return start, series, configuration, custom_tags
 
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -137,8 +161,44 @@ class AbstractView:
             The custom tags as key-value pairs
         """
         
+        tags = self._getCustomTagsFromConfiguration(configuration)
+        tags = self._showCustomTags(tags)
+        return self._convertCustomTagsToDict(configuration, tags, 
+                                             save_to_config=True)
+
+    def _getCustomTagsFromConfiguration(self, configuration: "AbstractConfiguration",
+                                        additional_tags: typing.Optional[typing.Dict[str, typing.Any]]={}):
+        """Get the custom tags from the configuration.
+
+        If more tags should be added, the `additional_tags` can be set to a 
+        dict containing the key-value pairs for the tags.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        tags : mapping
+            The custom tags as key-value pairs
+        
+        Returns
+        -------
+        dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        """
         from .config import CUSTOM_TAGS_GROUP_NAME
+        
         tags = {}
+
+        try:
+            additional_tags = dict(additional_tags)
+        except TypeError:
+            additional_tags = None
+        
+        if isinstance(additional_tags, dict):
+            for key, value in additional_tags.items():
+                additional_tags[key] = {"value": value, "save": False}
+        
         try:
             for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
                 try:
@@ -152,7 +212,33 @@ class AbstractView:
         except KeyError:
             pass
         
-        tags = self._showCustomTags(tags)
+        return tags
+    
+    def _convertCustomTagsToDict(self, configuration: "AbstractConfiguration", 
+                                 tags: typing.Dict[str, typing.Dict[str, typing.Any]],
+                                 save_to_config: typing.Optional[bool]=True) -> typing.Dict[str, str]:
+        """Converts the `tags` to a dict.
+
+        The `tags` is a dict where the tags key is the dict key and the value
+        is a dict with the "value" and the "save" keys.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        save_to_config : bool, optional
+            Whether to save the tags with a True "save" index to the 
+            configuration, default: True
+        
+        Returns
+        -------
+        dict
+            The custom tags as key-value pairs
+        """
+        from .config import CUSTOM_TAGS_GROUP_NAME
 
         keys = list(tags.keys())
         for key in keys:
@@ -160,10 +246,12 @@ class AbstractView:
                 del tags[key]
             elif not isinstance(tags[key]["value"], str):
                 tags[key]["value"] = str(tags[key]["value"])
-            
-        for key, tag in tags.items():
-            if "save" in tag and tag["save"]:
-                configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
+        
+        if save_to_config:
+            for key, tag in tags.items():
+                if "save" in tag and tag["save"]:
+                    configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, 
+                                           tag["value"])
         
         return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
     
@@ -294,7 +382,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def askFor(self, *inputs: AskInput) -> tuple:
+    def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
         """Ask for the specific input when the program needs to know something 
         from the user. 
         
@@ -313,6 +401,12 @@ class AbstractView:
         inputs : dict
             A dict with the 'name' key that defines the name to show. Optional
             additional keys are 'datatype', and 'description'
+        
+        Keyword Args
+        ------------
+        text : str
+            The text to show when the input lines pop up, note that not all 
+            views support this
         
         Returns
         -------
@@ -416,9 +510,8 @@ class AbstractView:
                 else:
                     start = {}
             
-            if (v.unique_id in start and parse and v.format != None and 
-                isinstance(v.format, (type, Datatype))):
-                start[v.unique_id] = v.format(start[v.unique_id])
+            if v.unique_id in start and parse:
+                start[v.unique_id] = parse_value(v.format, start[v.unique_id])
 
             if (not v.unique_id in start or 
                 not isinstance(start[v.unique_id], (int, float))):
@@ -545,9 +638,8 @@ class AbstractView:
         }
 
         for k, d in keys.items():
-            if (k in series and parse and var.format != None and 
-                isinstance(var.format, (type, Datatype))):
-                series[k] = var.format(series[k])
+            if k in series and parse:
+                series[k] = parse_value(var.format, series[k])
             
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:

@@ -22,6 +22,7 @@ from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
+from .pylolib import parse_value
 from .pylolib import get_datatype_name
 
 if DM is not None:
@@ -512,6 +513,54 @@ class DMView(AbstractView):
                     self._progress_dialog_text_tagname, self._out
                 )
     
+    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+        """Show the measurement creation, the configuration and the custom
+        tags.
+        
+        Parameters:
+        -----------
+        controller : Controller
+            The current controller for the microsocpe and the allowed 
+            measurement variables
+        
+        Returns
+        -------
+        tuple of dicts, dict, dict
+            The start and the series at index 0, the configuration at index 1 
+            and the tags at index 2 in the way defined by the individual 
+            functions
+        """
+        results = self._showDialog(
+            measurement_variables=controller.microscope.supported_measurement_variables,
+            configuration=controller.configuration,
+            custom_tags=self._getCustomTagsFromConfiguration(controller.configuration),
+            dialog_type=0b10 | 0b01 | 0b100
+        )
+
+        if len(results) > 0:
+            start = results[0]
+        else:
+            start = None
+        
+        if len(results) > 1:
+            series = results[1]
+        else:
+            series = None
+        
+        if len(results) > 2:
+            configuration = results[2]
+        else:
+            configuration = None
+        
+        if len(results) > 4:
+            custom_tags = self._convertCustomTagsToDict(controller.configuration, 
+                                                        results[4], 
+                                                        save_to_config=True)
+        else:
+            custom_tags = None
+
+        return start, series, configuration, custom_tags
+    
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
@@ -541,7 +590,7 @@ class DMView(AbstractView):
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
-            dialog_type=0b10 | 0b01
+            dialog_type=0b10
         )
 
         if len(results) > 0:
@@ -766,12 +815,7 @@ class DMView(AbstractView):
                     else:
                         var_type_name = get_datatype_name(var_type)
 
-                    if isinstance(var_type, Datatype):
-                        try:
-                            val = var_type.format(val)
-                        except Exception:
-                            if var_type.default_parse is not None:
-                                val = var_type.default_parse
+                    val = parse_value(var_type, val)
                     
                     try:
                         default_value = configuration.getDefault(group, key)
