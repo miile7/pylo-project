@@ -69,6 +69,8 @@ class DMView(AbstractView):
         self._out = ""
         # the maximum numbers of characters in one line
         self.line_length = 100
+        # all tagnames that have been set by this object at any time
+        self._created_tagnames = set()
 
         # whether to execute the all dm-scripts with debug=True or not, this is
         # a shorthand for debugging and prevents reloading the view (and 
@@ -202,6 +204,7 @@ class DMView(AbstractView):
                 "persistent_tag_name": id_,
                 "title": "Please select"
             }
+            self._created_tagnames.add(id_)
 
             dmscript_button_pressed_handlers = []
             dmscript_button_creations = []
@@ -375,6 +378,7 @@ class DMView(AbstractView):
             "object kill_dialog = alloc(handler_{}).init(Dialog)".format(id_),
             "kill_dialog.display(\"Kill task\");",
         ))
+        self._created_tagnames.add(self._progress_dialog_kill_tagname)
 
         with execdmscript.exec_dmscript(dmscript, debug=self._exec_debug):
             pass
@@ -392,6 +396,9 @@ class DMView(AbstractView):
             "text_tn": self._progress_dialog_text_tagname,
             "success_tn": self._progress_dialog_success_tagname
         }
+        self._created_tagnames.add(self._progress_dialog_progress_tagname)
+        self._created_tagnames.add(self._progress_dialog_success_tagname)
+        self._created_tagnames.add(self._progress_dialog_text_tagname)
         rv = {
             "success": bool
         }
@@ -476,6 +483,12 @@ class DMView(AbstractView):
                 id_
             )
             self._progress_dialog_success = None
+
+            self._created_tagnames.add(self._progress_dialog_progress_tagname)
+            self._created_tagnames.add(self._progress_dialog_success_tagname)
+            self._created_tagnames.add(self._progress_dialog_text_tagname)
+            self._created_tagnames.add(self._progress_dialog_kill_tagname)
+
             self.deleteObservedTags()
             self._updateRunning()
             # self._createKillDialog()
@@ -483,6 +496,7 @@ class DMView(AbstractView):
         
         # block the thread until the user pressed ok or cancel
         self._observeProgressDialogSuccessThread()
+        self.deleteObservedTags()
 
         if not self._progress_dialog_success:
             raise StopProgram()
@@ -512,6 +526,9 @@ class DMView(AbstractView):
                 DM.GetPersistentTagGroup().SetTagAsString(
                     self._progress_dialog_text_tagname, self._out
                 )
+            
+            self._created_tagnames.add(self._progress_dialog_progress_tagname)
+            self._created_tagnames.add(self._progress_dialog_text_tagname)
     
     def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
         """Show the measurement creation, the configuration and the custom
@@ -951,3 +968,9 @@ class DMView(AbstractView):
         else:
             raise StopProgram
         
+    def __del__(self):
+        """Make sure that all added persistent tagnames are removed again."""
+
+        for tagname in self._created_tagnames:
+            if isinstance(tagname, str):
+                execdmscript.remove_global_tag(tagname)
