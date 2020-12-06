@@ -533,6 +533,7 @@ class DMView(AbstractView):
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
+            custom_tags=self._getCustomTagsFromConfiguration(controller.configuration),
             dialog_type=0b10 | 0b01 | 0b100
         )
 
@@ -552,7 +553,9 @@ class DMView(AbstractView):
             configuration = None
         
         if len(results) > 4:
-            custom_tags = results[4]
+            custom_tags = self._convertCustomTagsToDict(controller.configuration, 
+                                                        results[4], 
+                                                        save_to_config=True)
         else:
             custom_tags = None
 

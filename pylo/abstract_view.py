@@ -161,8 +161,44 @@ class AbstractView:
             The custom tags as key-value pairs
         """
         
+        tags = self._getCustomTagsFromConfiguration(configuration)
+        tags = self._showCustomTags(tags)
+        return self._convertCustomTagsToDict(configuration, tags, 
+                                             save_to_config=True)
+
+    def _getCustomTagsFromConfiguration(self, configuration: "AbstractConfiguration",
+                                        additional_tags: typing.Optional[typing.Dict[str, typing.Any]]={}):
+        """Get the custom tags from the configuration.
+
+        If more tags should be added, the `additional_tags` can be set to a 
+        dict containing the key-value pairs for the tags.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        tags : mapping
+            The custom tags as key-value pairs
+        
+        Returns
+        -------
+        dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        """
         from .config import CUSTOM_TAGS_GROUP_NAME
+        
         tags = {}
+
+        try:
+            additional_tags = dict(additional_tags)
+        except TypeError:
+            additional_tags = None
+        
+        if isinstance(additional_tags, dict):
+            for key, value in additional_tags.items():
+                additional_tags[key] = {"value": value, "save": False}
+        
         try:
             for key in configuration.getKeys(CUSTOM_TAGS_GROUP_NAME):
                 try:
@@ -176,7 +212,33 @@ class AbstractView:
         except KeyError:
             pass
         
-        tags = self._showCustomTags(tags)
+        return tags
+    
+    def _convertCustomTagsToDict(self, configuration: "AbstractConfiguration", 
+                                 tags: typing.Dict[str, typing.Dict[str, typing.Any]],
+                                 save_to_config: typing.Optional[bool]=True) -> typing.Dict[str, str]:
+        """Converts the `tags` to a dict.
+
+        The `tags` is a dict where the tags key is the dict key and the value
+        is a dict with the "value" and the "save" keys.
+
+        Parameters
+        ----------
+        configuration : AbstractConfiguration
+            The configuration
+        tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices
+        save_to_config : bool, optional
+            Whether to save the tags with a True "save" index to the 
+            configuration, default: True
+        
+        Returns
+        -------
+        dict
+            The custom tags as key-value pairs
+        """
+        from .config import CUSTOM_TAGS_GROUP_NAME
 
         keys = list(tags.keys())
         for key in keys:
@@ -184,10 +246,12 @@ class AbstractView:
                 del tags[key]
             elif not isinstance(tags[key]["value"], str):
                 tags[key]["value"] = str(tags[key]["value"])
-            
-        for key, tag in tags.items():
-            if "save" in tag and tag["save"]:
-                configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, tag["value"])
+        
+        if save_to_config:
+            for key, tag in tags.items():
+                if "save" in tag and tag["save"]:
+                    configuration.setValue(CUSTOM_TAGS_GROUP_NAME, key, 
+                                           tag["value"])
         
         return dict(zip(tags.keys(), map(lambda x: x["value"], tags.values())))
     
