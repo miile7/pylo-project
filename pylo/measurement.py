@@ -581,8 +581,8 @@ class Measurement:
 
         tags = {
             "Measurement Step": {
-                "Human readable": copy.deepcopy(step),
-                "Machine values": beautified_step
+                "Human readable": beautified_step,
+                "Machine values": copy.deepcopy(step)
             },
             "Acquire time": datetime.datetime.now().isoformat(),
             "{} configuration".format(PROGRAM_NAME): self.controller.configuration.asDict()
