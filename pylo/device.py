@@ -1,5 +1,6 @@
 import re
 import typing
+import logging
 
 if hasattr(typing, "Literal"):
     device_kinds = typing.Literal["camera", "microscope"]
@@ -61,6 +62,13 @@ class Device:
 
         self.config_defaults = config_defaults
         self.description = description
+        self._logger = logging.Logger("pylo.Device")
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._log_debug = True
+        else:
+            self._log_debug = False
+        if self._log_debug:
+            self._logger.debug("Creating device '{}'".format(self))
 
     @staticmethod
     def getNameOfObject(obj: object) -> str:

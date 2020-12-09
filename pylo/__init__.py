@@ -4,6 +4,63 @@ This provides both, the GUI and the backend for measuring. Multiple GUIs are
 offered together with various cameras and TEM implementations.
 """
 
+import io
+import csv
+import logging
+
+# create logger
+logger = logging.getLogger('pylo')
+logger.setLevel(logging.DEBUG)
+
+class InvertedFilter(logging.Filter):
+    """Allow all records except those with the given `name`."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def filter(self, record):
+        if record.name != self.name:
+            return 1
+        else:
+            return 0
+class CsvFormatter(logging.Formatter):
+    """Format the log output as a csv."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.output = io.StringIO()
+        self.writer = csv.writer(self.output, quoting=csv.QUOTE_ALL)
+
+    def format(self, record: logging.LogRecord):
+        self.writer.writerow([record.name, record.funcName, record.levelname,
+                              record.message, record.threadName, 
+                              record.filename, record.lineno, record.asctime,
+                              record.pathname, record.exc_info, record.exc_text,
+                              record.stack_info])
+        data = self.output.getvalue()
+        self.output.truncate(0)
+        self.output.seek(0)
+        return data.strip()
+
+# create file handler which logs even debug messages
+from .config import PROGRAM_LOG_FILE
+# dfm = logging.Formatter('%(name)s - %(funcName)s: %(levelname)s: %(message)s | %(threadName)s - %(filename)s - %(lineno)d - %(asctime)s - %(pathname)s - %(exc_info)s')
+dfm = CsvFormatter()
+fh = logging.FileHandler(PROGRAM_LOG_FILE, mode="a+", encoding="utf-8")
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(dfm)
+# exclude from loggings
+fh.addFilter(InvertedFilter("pylo.Datatype"))
+fh.addFilter(InvertedFilter("pylo.OptionsDatatype"))
+
+# create console handler with a higher log level
+ifm = logging.Formatter('%(name)s - %(funcName)s: %(message)s')
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+ch.setFormatter(ifm)
+
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
+
 class __Docs(list):
     """A class for creating the docstring easily."""
     def __call__(self, name, text):
@@ -94,6 +151,7 @@ def get_loader(*args, **kwargs) -> DeviceLoader:
     """
     global loader
     if not isinstance(loader, DeviceLoader):
+        logger.debug("Creating new loader instance")
         loader = DeviceLoader(*args, **kwargs)
     
     return loader
@@ -103,6 +161,7 @@ from .config import DEFAULT_DEVICE_INI_PATHS
 for p in DEFAULT_DEVICE_INI_PATHS:
     if (os.path.exists(p) and os.path.isfile(p) and 
         not p in loader.device_ini_files):
+        logger.debug("Adding ini file '{}' to loader".format(p))
         loader.device_ini_files.append(p)
 
 # controller = None
@@ -132,6 +191,7 @@ def get_controller(view: typing.Optional[AbstractView]=None,
 
     # global controller
     # if controller is None or not isinstance(controller, Controller):
+    logger.debug("Creating new controller instance")
     controller = Controller(view, configuration)
     
     return controller

@@ -1,6 +1,7 @@
 import re
 import math
 import typing
+import logging
 
 # the regular expression that matches any valid format specification, each 
 # group contains one specification item
@@ -88,6 +89,13 @@ class Datatype:
         self._format = format
         self._parse = parse
         self.default_parse = None
+        self._logger = logging.Logger("pylo.Datatype")
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._log_debug = True
+        else:
+            self._log_debug = False
+        if self._log_debug:
+            self._logger.debug("Creating new datatype with name '{}'".format(name))
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.
@@ -109,7 +117,10 @@ class Datatype:
         """
 
         if callable(self._parse):
-            return self._parse(value)
+            ret = self._parse(value)
+            if self._log_debug:
+                self._logger.debug("Parsing value '{}' to '{}'".format(value, ret))
+            return ret
         else:
             return value
     
@@ -129,7 +140,10 @@ class Datatype:
         str
             The string representation of the `value` in the current datatype
         """
-        return self._format(value, format)
+        ret = self._format(value, format)
+        if self._log_debug:
+            self._logger.debug("Formatting value '{}' to '{}'".format(value, ret))
+        return ret
     
     def __call__(self, *args: typing.Any) -> typing.Any:
         """Parse the `value` to this datatype.

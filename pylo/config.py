@@ -75,6 +75,13 @@ Default: os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
 """)
 DEFAULT_USER_DIRECTORY = os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
 
+__config_docs__("PROGRAM_LOG_FILE",
+"""The path to the log file to log all program events. This is for debugging
+only.
+Default: os.path.join(DEFAULT_USER_DIRECTORY, "{:%Y-%m-%d}.log".format(datetime.datetime.now()))
+""")
+PROGRAM_LOG_FILE = os.path.join(DEFAULT_USER_DIRECTORY, "{:%Y-%m-%d}".format(datetime.datetime.now()))
+
 __config_docs__("DEFAULT_SAVE_DIRECTORY",
 """The path to save the images to if the user does not change it
 Default: os.path.join(os.path.expanduser("~"), "pylo", "measurements")

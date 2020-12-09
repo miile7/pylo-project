@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import typing
+import logging
 import textwrap
 import threading
 import traceback
@@ -77,6 +78,14 @@ class DMView(AbstractView):
         # therefore restarting the program) for debugging every time
         self._exec_debug = False
 
+        self._logger = logging.Logger("pylo.DMView")
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._log_debug = True
+        else:
+            self._log_debug = False
+        if self._log_debug:
+            self._logger.debug("Creating new instance of DMView")
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 
@@ -90,8 +99,12 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with execdmscript.exec_dmscript("showAlert(msg, 2);", 
-                                        setvars={"msg": hint}, 
+        dmscript = "showAlert(msg, 2);"
+        setvars = {"msg": hint}
+        if self._log_debug:
+            self._logger.debug(("Showing alert by executing dmscript '{}' " + 
+                                "with setvars '{}'").format(dmscript, setvars))
+        with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                         debug=self._exec_debug):
             pass
 
@@ -131,12 +144,20 @@ class DMView(AbstractView):
 
         if isinstance(error, Exception):
             traceback.print_exc()
+            self._logger.error("{}: {}".format(error.__class__.__name__, error), 
+                               exc_info=error)
+        else:
+            self._logger.error(msg)
 
         if isinstance(how_to_fix, str) and how_to_fix != "":
             msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
 
-        with execdmscript.exec_dmscript("showAlert(msg, 0);", 
-                                        setvars={"msg": msg}, 
+        dmscript = "showAlert(msg, 0);"
+        setvars = setvars={"msg": msg}
+        if self._log_debug:
+            self._logger.debug("Executing dmscript '{}' with setvars '{}'".format(
+                               dmscript, setvars))
+        with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                         debug=self._exec_debug):
             pass
 
@@ -183,6 +204,11 @@ class DMView(AbstractView):
                 "button1": options[1]
             }
         
+            if self._log_debug:
+                self._logger.debug(("Asking for decision by executing " + 
+                                    "dmscript '{}' with setvars '{}' and " + 
+                                    "readvars '{}'").format(dmscript, setvars,
+                                    readvars))
             with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                             readvars=readvars, 
                                             debug=self._exec_debug) as script:
@@ -253,6 +279,13 @@ class DMView(AbstractView):
                 "alloc(ButtonDialog).init().display(title);"
             ])
 
+            if self._log_debug:
+                self._logger.debug(("Asking for decision by executing " + 
+                                    "dmscript '{}' with setvars '{}' and " + 
+                                    "readvars '{}'").format(dmscript, setvars,
+                                    readvars))
+                self._logger.debug("Deleting persistent tag with label '{}'".format(
+                                    id_))
             DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
             with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                             debug=self._exec_debug):
@@ -260,17 +293,26 @@ class DMView(AbstractView):
                 # to react anyway
                 time.sleep(0.5)
             
+            if self._log_debug:
+                self._logger.debug(("Repetitively checking persistent tag " + 
+                                    "'{}' as a short").format(id_))
             while DM is not None:
                 s, v = DM.GetPersistentTagGroup().GetTagAsShort(id_)
 
                 if s:
                     index = v
                     DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
+                    if self._log_debug:
+                        self._logger.debug(("Found tag '{}' with value '{}', " + 
+                                            "deleted it now.").format(id_, v))
                     break
                 
                 time.sleep(0.1)
         
         if 0 <= index and index < len(options):
+            if self._log_debug:
+                self._logger.debug("User was asked '{}' and clicked '{}'".format(
+                                text, options[index]))
             return index
         else:
             raise StopProgram()

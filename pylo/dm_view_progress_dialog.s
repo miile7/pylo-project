@@ -65,6 +65,24 @@ class ProgressDialog : UIFrame{
 	TagGroup textbox;
 
 	/**
+	 * Sets the progress to be finished.
+	 */
+	void _done(object self, number state){
+		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
+			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
+		}
+		GetPersistentTagGroup().TagGroupSetTagAsShort(success_tagname, state);
+		RemoveMainThreadTask(update_task);
+
+		if(!closed && state == 1){
+			done = 1;
+
+			self.SetElementIsEnabled("ok_button", 1);
+			self.SetElementIsEnabled("cancel_button", 0);
+		}
+	}
+
+	/**
 	 * Close the dialog
 	 */
 	void _close(object self, number state){
@@ -90,24 +108,6 @@ class ProgressDialog : UIFrame{
 	 */
 	void confirm(object self){
 		self._close(1);
-	}
-
-	/**
-	 * Sets the progress to be finished.
-	 */
-	void _done(object self, number state){
-		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
-			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
-		}
-		GetPersistentTagGroup().TagGroupSetTagAsShort(success_tagname, state);
-		RemoveMainThreadTask(update_task);
-
-		if(!closed && state == 1){
-			done = 1;
-
-			self.SetElementIsEnabled("ok_button", 1);
-			self.SetElementIsEnabled("cancel_button", 0);
-		}
 	}
 	
 	/**

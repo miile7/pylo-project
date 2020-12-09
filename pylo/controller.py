@@ -3,6 +3,7 @@ import sys
 import time
 import typing
 import inspect
+import logging
 import importlib
 import threading
 
@@ -100,6 +101,14 @@ class Controller:
         self._running_thread = None
         self._measurement_thread = None
 
+        self._logger = logging.Logger("pylo.Controller")
+        if self._logger.isEnabledFor(logging.DEBUG):
+            self._log_debug = True
+        else:
+            self._log_debug = False
+        if self._log_debug:
+            self._logger.debug("Creating new instance of controller")
+
         self.stopProgramLoop()
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
@@ -147,6 +156,10 @@ class Controller:
         # the values to ask
         input_params = {}
 
+        if self._log_debug:
+            self._logger.debug("Getting values for configuration values " + 
+                               "'{}'".format(config_lookup))
+
         for i, (group, key, *_) in enumerate(config_lookup):
             try:
                 val = self.configuration.getValue(
@@ -164,6 +177,10 @@ class Controller:
                 else:
                     # save the index and the ask parameters
                     input_params[i] = (group, key)
+            elif self._log_debug:
+                self._logger.debug(("Found value for key '{}' and group '{}' " + 
+                                    "in the configuration, value is '{}'").format(
+                                        group, key, val))
         
         # ordering of dict.values() and dict.keys() changes between python
         # versions, this makes sure the order is the same
@@ -176,6 +193,8 @@ class Controller:
         # check if there are values to ask for
         if len(input_params) > 0:
             # save the results of the user
+            if self._log_debug:
+                self._logger.debug("Asking user for values '{}'".format(params_values))
             results = self.askForConfigValues(*params_values)
 
             for i, result in enumerate(results):
@@ -191,7 +210,8 @@ class Controller:
                         config_lookup[original_index][1],
                         result
                     )
-
+        if self._log_debug:
+            self._logger.debug("Returning configuration values '{}'".format(values))
         return tuple(values)
     
     def askIfNotPresentConfigurationOptions(self, ask_if_default: typing.Optional[bool]=False) -> None:
@@ -219,7 +239,9 @@ class Controller:
                     )
                 except KeyError:
                     input_params.append((group, key))
-        
+        if self._log_debug:
+            self._logger.debug(("Asking for required but not present " + 
+                                "configuration values '{}'").format(input_params))
         if len(input_params) > 0:
             input_vals = self.askForConfigValues(*input_params)
 
@@ -291,7 +313,11 @@ class Controller:
             
             input_params.append(input_param)
 
-        return self.view.askFor(*input_params)
+        values = self.view.askFor(*input_params)
+        if self._log_debug:
+            self._logger.debug("Asking vor values '{}' returned '{}'".format(
+                            input_params, values))
+        return values
             
     def _loadCameraAndMicroscope(self) -> bool:
         """Load the camera and/or the microscope from the settings.
@@ -357,6 +383,10 @@ class Controller:
             if not isinstance(self.microscope, MicroscopeInterface):
                 args.append((CONFIG_SETUP_GROUP, "microscope"))
                 load_kinds.append("microscope")
+            
+            if self._log_debug:
+                self._logger.debug("Trying to load {} for the {}th time".format(
+                                load_kinds, security_counter))
 
             names = list(self.getConfigurationValuesOrAsk(*args))
             
@@ -365,6 +395,8 @@ class Controller:
             for name, kind in zip(names, load_kinds):
                 device = None
                 try:
+                    if self._log_debug:
+                        self._logger.debug("Loading device with name '{}'".format(name))
                     device = loader.getDevice(name, self)
                     if device is None:
                         msg = ("The device '{}' neither is defined one of " +
@@ -382,35 +414,56 @@ class Controller:
                             "moment:\n".format() + 
                             "\n".join(map(lambda x: "- '{}'".format(x), 
                                             loader.device_ini_files)))
+                        self._logger.error("Device is None", exc_info=True)
                         self.view.showError(msg, fix)
                 except StopProgram as e:
+                    if self._log_debug:
+                        self._logger.debug("Stopping program", exc_info=e)
                     raise e
                 except (DeviceImportError, DeviceClassNotDefined, 
                         DeviceCreationError) as e:
+                    self._logger.error("{}: {}".format(e.__class__.__name__, e),
+                                       exc_info=e)
                     self.view.showError(e, self._getFixForError(e))
                 except Exception as e:
                     fix = ("Fix the error was raised during creation of " + 
                            "the '{}' object in the file '{}'. Fix the error " + 
                            "there, then the loading should work.").format(
                             name, loader.getDeviceClassFile(name))
+                    self._logger.error("{}: {}".format(e.__class__.__name__, e),
+                                       exc_info=e)
                     self.view.showError(e, fix)
                 
                 if kind == "camera":
                     if device is not None:
+                        if self._log_debug:
+                            self._logger.debug("Setting camera to '{}'".format(device))
                         self.camera = device
                     else:
+                        if self._log_debug:
+                            self._logger.debug("Removing configuration value " + 
+                                            "for camera to allow reloading a " + 
+                                            "new one.")
                         self.configuration.removeValue(CONFIG_SETUP_GROUP,
                                                        "camera")
                 elif kind == "microscope":
                     if device is not None:
+                        if self._log_debug:
+                            self._logger.debug("Setting microscope to '{}'".format(device))
                         self.microscope = device
                     else:
+                        if self._log_debug:
+                            self._logger.debug("Removing configuration value " + 
+                                            "for microscope to allow reloading a " + 
+                                            "new one.")
                         self.configuration.removeValue(CONFIG_SETUP_GROUP,
                                                        "microscope")
 
         # show an error that the max loop count is reached and stop the
         # execution
         if security_counter + 1 >= MAX_LOOP_COUNT:
+            self._logger.error("Security counter is out of range: '{}'".format(
+                               security_counter))
             self.view.showError(("The program is probably trapped in an " + 
                                 "infinite loop when trying to get the " + 
                                 "camera. The execution will be stopped now " + 
@@ -458,7 +511,10 @@ class Controller:
         try:
             config_changes = (self.configuration.getAdditions(state_id, True, True) | 
                               self.configuration.getChanges(state_id))
-        except KeyError:
+        except KeyError as e:
+            if self._log_debug:
+                self._logger.debug("{}: {}".format(e.__class__.__name__, e), 
+                                exc_info=e)
             return False
         
         self.configuration.dropStateMark(state_id)
@@ -490,8 +546,15 @@ class Controller:
                                         restart_settings_text
                                     ))
             
+            if self._log_debug:
+                self._logger.debug(("Found config changes '{}', '{}' of them " + 
+                                    "force a restart").format(config_changes, 
+                                    restart_required))
             return restart_required
         else:
+            if self._log_debug:
+                self._logger.debug(("Found config changes '{}', but none of them " + 
+                                    "need a restart").format(config_changes))
             return []
 
     def startProgramLoop(self) -> None:
@@ -505,12 +568,18 @@ class Controller:
         init_ready
             Fired after the initializiation is done
         """
+        if self._log_debug:
+            self._logger.debug("Starting program loop")
 
         try:
             # mark the initial state to track changes that require a restart 
             # of the program loop
+            if self._log_debug:
+                self._logger.debug("Marking configuration state")
             state_id = self.configuration.markState()
 
+            if self._log_debug:
+                self._logger.debug("Firing 'before_init' event")
             before_init()
             
             if not isinstance(self.microscope, MicroscopeInterface):
@@ -523,6 +592,11 @@ class Controller:
             else:
                 load_camera = False
             
+            if self._log_debug:
+                self._logger.debug("Microscope {} be loaded, camera {} be loaded".format(
+                                "must" if load_microscope else "does not need to",
+                                "must" if load_camera else "does not need to"))
+
             if load_microscope or load_camera:
                 # the function will check itself if it has to load something,
                 # this has to be one function so the user will get asked only
@@ -535,13 +609,21 @@ class Controller:
                 # microscope is set from outside, load configuration options
                 if (hasattr(self.microscope, "defineConfigurationOptions") and 
                     callable(self.microscope.defineConfigurationOptions)):
-                    self.microscope.defineConfigurationOptions(self.configuration)
+                    if self._log_debug:
+                        self._logger.debug("Defining configuration options of microscope")
+                    self.microscope.defineConfigurationOptions(self.configuration,
+                        self.microscope.config_group_name, 
+                        self.microscope.config_defaults)
 
             if not load_camera:
                 # camera is set from outside, load configuration options
                 if (hasattr(self.camera, "defineConfigurationOptions") and 
                     callable(self.camera.defineConfigurationOptions)):
-                    self.camera.defineConfigurationOptions(self.configuration)
+                    if self._log_debug:
+                        self._logger.debug("Defining configuration options of camera")
+                    self.camera.defineConfigurationOptions(self.configuration,
+                        self.camera.config_group_name, 
+                        self.camera.config_defaults)
 
             # ask all non-existing but required configuration values
             self.askIfNotPresentConfigurationOptions()
@@ -549,6 +631,8 @@ class Controller:
             self.measurement = None
 
             # save the config
+            if self._log_debug:
+                self._logger.debug("Saving configuration")
             self.configuration.saveConfiguration()
 
             # not needed to check changes here, the user did not have a chance
@@ -557,9 +641,13 @@ class Controller:
             #     self.restartProgramLoop()
             #     return
             
+            if self._log_debug:
+                self._logger.debug("Marking configuration state again")
             state_id = self.configuration.markState()
 
             # fire init_ready event
+            if self._log_debug:
+                self._logger.debug("Firing 'init_read' event")
             init_ready()
 
             # prevent infinite loop
@@ -574,17 +662,29 @@ class Controller:
                 # index 1: measurement series paramters
                 # index 2: configuration as a dict
                 # index 3: custom tags as a dict
+                if self._log_debug:
+                    self._logger.debug(("Showing all program dialogs for the " + 
+                                        "{}th time").format(security_counter))
                 interactions = self.view.showProgramDialogs(self)
+
+                if self._log_debug:
+                    self._logger.debug("User entered the following values {}".format(
+                                    interactions))
                 
                 if (not isinstance(interactions, typing.Sequence) or 
                     len(interactions) < 4):
-                    raise RuntimeError("The view does not return all required " + 
+                    err = RuntimeError("The view does not return all required " + 
                                        "user values.")
+                    self._logger.error("{}: {}".format(err.__class__.__name__,
+                                       err), exc_info=err)
+                    raise err
 
                 # update configuration
                 self.configuration.loadFromMapping(interactions[2])
             
                 # fire user_ready event
+                if self._log_debug:
+                    self._logger.debug("Firing 'user_ready' event")
                 user_ready()
 
                 # save the config again, the view may show options
@@ -602,6 +702,11 @@ class Controller:
                         restart_required_changes):
                         self.camera = None
 
+                    if self._log_debug:
+                        self._logger.debug("Restarting program loop because some " + 
+                                        "configuration values change that " + 
+                                        "force a restart, restart keys: {}".format(
+                                            restart_required_changes))
                     self.restartProgramLoop()
                     return
 
@@ -615,6 +720,8 @@ class Controller:
                            "value for this. If this error keeps appearing " + 
                            "even though all values are correct, there is " + 
                            "an internal problem with the Measurement class.")
+                    self._logger.error("{}: {}".format(e.__class__.__name__, e),
+                                       exc_info=e)
                     self.view.showError(msg, fix)
 
                 # set the custom tags to the measurement
@@ -627,29 +734,46 @@ class Controller:
                        "when trying to initialize the measurement. The " + 
                        "execution will be stopped now  after {} " + 
                        "iterations.").format(security_counter)
+                self._logger.error(msg, exc_info=True)
                 self.view.showError(msg)
                 return
             
             # fire series_ready event
+            if self._log_debug:
+                self._logger.debug("Firing 'series_ready' event")
             series_ready()
 
+            if self._log_debug:
+                self._logger.debug("Creating measurement thread")
             self._measurement_thread = ExceptionThread(
                 target=self.measurement.start, name="measurement"
             )
+            if self._log_debug:
+                self._logger.debug("Starting measurement thread")
             self._measurement_thread.start()
 
+            if self._log_debug:
+                self._logger.debug("Setting progress max, progress and clearing view")
             self.view.progress_max = len(self.measurement.steps)
             self.view.progress = 0
             self.view.clear()
             
+            if self._log_debug:
+                self._logger.debug("Creating view running indicator thread")
             self._running_thread = ExceptionThread(
                 target=self.view.showRunning, name="running"
             )
+            if self._log_debug:
+                self._logger.debug("Starting view running indicator thread")
             self._running_thread.start()
-        except StopProgram:
+        except StopProgram as e:
+            if self._log_debug:
+                self._logger.debug("Stopping program", exc_info=e)
             self.stopProgramLoop()
             return
         except Exception as e:
+            self._logger.error("{}: {}".format(e.__class__.__name__, e), 
+                               exc_info=e)
             self._handleErrorWhileProgramIsRunning(e)
     
     def waitForProgram(self, raise_error_when_not_started: typing.Optional[bool]=False) -> None:
@@ -671,12 +795,16 @@ class Controller:
             program loop is not started
         """
 
+        if self._log_debug:
+            self._logger.debug("Waiting for program to finish")
         # check if the start function has been called, that is the case if 
         # the threads are set and they are alive
         if ((isinstance(self._measurement_thread, threading.Thread) and 
              self._measurement_thread.is_alive()) or 
             (isinstance(self._running_thread, threading.Thread) and 
              self._running_thread.is_alive())):
+            if self._log_debug:
+                self._logger.debug("Measurement and/or view running thread are alive")
             running = True
         else:
             running = False
@@ -688,6 +816,8 @@ class Controller:
         # measurement may be finished before this function is called to wait 
         # for the finish, therefore skip the waiting completely
         if running and not self.measurement.finished:
+            if self._log_debug:
+                self._logger.debug("Measurement has started and not finished ")
             start_time = time.time()
 
             # wait until the measurement is running
@@ -698,7 +828,7 @@ class Controller:
             if (not self.measurement.running and not self.measurement.finished and
                 (not isinstance(self._measurement_thread, ExceptionThread) or 
                  len(self._measurement_thread.exceptions) == 0)):
-                raise RuntimeError("The measurement was told to start by the " + 
+                err = RuntimeError("The measurement was told to start by the " + 
                                 "controller but when the controller is " + 
                                 "waiting for the measurement to end, the " + 
                                 "measurement still has not started. This " + 
@@ -707,11 +837,20 @@ class Controller:
                                 "maximum time does not help, this is " + 
                                 "a fatal error caused by a big internal " + 
                                 "problem.")
+                self._logger.error("{}: {}".format(err.__class__.__name__, err),
+                                   exc_info=err)
+                raise err
 
         try:
+            if self._log_debug:
+                self._logger.debug("Starting loop and waiting for the measurement " + 
+                                "to finish.")
             while running and self.measurement.running:
                 self.raiseThreadErrors()
                 time.sleep(0.05)
+            
+            if self._log_debug:
+                self._logger.debug("Measurement is not running anymore")
             
             # if the measurement detects an error, Measurement.running will be 
             # False, so the while-loop is not executed and if an exception 
@@ -720,11 +859,17 @@ class Controller:
             self.raiseThreadErrors()
             
             # finished
-        except StopProgram:
+        except StopProgram as e:
+            if self._log_debug:
+                self._logger.debug("Stopping program", exc_info=e)
             pass
         except Exception as e:
+            self._logger.error("{}: {}".format(e.__class__.__name__, e), 
+                               exc_info=e)
             self._handleErrorWhileProgramIsRunning(e)
         
+        if self._log_debug:
+            self._logger.debug("Stopping program loop, waiting is done")
         self.stopProgramLoop()
 
         if not running and raise_error_when_not_started:
@@ -742,17 +887,26 @@ class Controller:
         """
 
         if isinstance(error, StopProgram):
+            if self._log_debug:
+                self._logger.debug("Stopping program", exc_info=error)
             self.stopProgramLoop()
         else:
             try:
                 # stop before the error, mostly the view raises the python 
                 # error too so the program would not end then
-                print("Controller._handleErrorWhileProgramIsRunning(): Error " + 
-                      "detected:", error.__class__.__name__, error)
+                if self._log_debug:
+                    self._logger.debug("{}: {}".format(error.__class__.__name__,
+                                         error), exc_info=error)
                 self.stopProgramLoop()
+                if self._log_debug:
+                    self._logger.debug("Setting to emergency mode because an " + 
+                                    "error occurred while executing the " + 
+                                    "program.")
                 self._setEmergency()
                 self.view.showError(error, self._getFixForError(error))
-            except StopProgram:
+            except StopProgram as e:
+                if self._log_debug:
+                    self._logger.debug("Stopping program", exc_info=e)
                 self.stopProgramLoop()
     
     def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
@@ -774,15 +928,23 @@ class Controller:
             if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
                 for error in thread.exceptions:
                     if not isinstance(error, StopProgram):
-                        print("Raising error from thread '{}'.".format(thread.name))
-                    else:
-                        print("Thread '{}' stops program.".format(thread.name))
+                        if self._log_debug:
+                            self._logger.debug(("{} in thread '{}': {}").format(
+                                                error.__class__.__name__, 
+                                                thread.name, error), 
+                                                exc_info=error)
+                    elif self._log_debug:
+                        self._logger.debug(("Stopping program from thread " + 
+                                            "'{}'").format(thread.name), 
+                                            exc_info=error)
                     raise error
     
     def _setEmergency(self) -> None:
         """Set the microscope and the camera to be in emergency state."""
 
         try:
+            if self._log_debug:
+                self._logger.debug("Setting microscope to emergency state")
             self.microscope.resetToEmergencyState()
         except BlockedFunctionError:
             # emergency event is called, microscope goes in emergency state by 
@@ -790,6 +952,8 @@ class Controller:
             pass
 
         try:
+            if self._log_debug:
+                self._logger.debug("Setting camera to emergency state")
             self.camera.resetToEmergencyState()
         except BlockedFunctionError:
             # emergency event is called, camera goes in emergency state by 
@@ -842,30 +1006,44 @@ class Controller:
         This funciton will also wait for all threads to join.
         """
 
-        print("Stopping loop.")
+        self._logger.info("Stopping loop.")
 
         if (isinstance(self.measurement, Measurement) and 
             self.measurement.running):
+            if self._log_debug:
+                self._logger.debug("Stopping measurement, was still running")
             self.measurement.stop()
 
         if isinstance(self.view, AbstractView):
+            if self._log_debug:
+                self._logger.debug("Stopping view to show the running indicator")
             self.view.hideRunning()
             self.view.show_running = False
 
         if isinstance(self._measurement_thread, ExceptionThread):
+            if self._log_debug:
+                self._logger.debug("Joining measurement thread")
             self._measurement_thread.join()
         
         if isinstance(self._running_thread, ExceptionThread):
+            if self._log_debug:
+                self._logger.debug("Joining view running thread")
             self._running_thread.join()
             
         if isinstance(self.measurement, Measurement):
+            if self._log_debug:
+                self._logger.debug("Waiting for images to save")
             self.measurement.waitForAllImageSavings()
         
+        if self._log_debug:
+            self._logger.debug("Unsetting measurement thread and running thread")
         self._measurement_thread = None
         self._running_thread = None
     
     def restartProgramLoop(self) -> None:
         """Stop and restart the program loop."""
+        if self._log_debug:
+            self._logger.debug("Restarting program loop")
         self.stopProgramLoop()
         self.startProgramLoop()
     
