@@ -60,8 +60,8 @@ class DMView(AbstractView):
         self._progress_dialog_success_tagname = None
         # the name to use for killing the progress dialog
         self._progress_dialog_kill_tagname = None
-        # True if the user pressed ok, False if the user cancelled, None if the
-        # result is unknown
+        # 1 if the user pressed ok, 0 if the user cancelled, -1 if the dialog 
+        # is told to kill itself from outside, None if the result is unknown
         self._progress_dialog_success = None
         # the path where all the dm_view_*.s files are in
         self._rel_path = os.path.dirname(__file__)
@@ -382,81 +382,6 @@ class DMView(AbstractView):
 
         with execdmscript.exec_dmscript(dmscript, debug=self._exec_debug):
             pass
-
-    def _createRunningDialog(self) -> None:
-        """Create and show the running dialog in another thread.
-        
-        Note: Make sure to set the `DMView.progress_max` before calling this 
-        function!
-        """
-        path = os.path.join(self._rel_path, "dm_view_progress_dialog.s")
-        sv = {
-            "max_progress": self.progress_max,
-            "progress_tn": self._progress_dialog_progress_tagname,
-            "text_tn": self._progress_dialog_text_tagname,
-            "success_tn": self._progress_dialog_success_tagname
-        }
-        self._created_tagnames.add(self._progress_dialog_progress_tagname)
-        self._created_tagnames.add(self._progress_dialog_success_tagname)
-        self._created_tagnames.add(self._progress_dialog_text_tagname)
-        rv = {
-            "success": bool
-        }
-        create_dialog = "\n".join((
-            "number success;",
-            "object progress_dialog = alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn);"
-        ))
-        show_dialog = "\n".join((
-            "progress_dialog.display(title);",
-        ))
-        # while self.show_running:
-        #     print("Displaying dialog")
-        #     time.sleep(0.1)
-        # with execdmscript.exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
-        #     pass
-        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, 
-                                        setvars=sv, readvars=rv, 
-                                        debug=self._exec_debug):
-            pass
-    
-    def _observeProgressDialogSuccessThread(self) -> None:
-        """Observe the persistent tag with the name 
-        `DMView._progress_dialog_success_tagname` and set the 
-        `DMView._progress_dialog_success` to the value as soon as the value is 
-        present.
-        """
-
-        while DM is not None and self.show_running:
-            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
-                self._progress_dialog_success_tagname
-            )
-            
-            if s:
-                self._progress_dialog_success = v
-                break
-                
-            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
-                self._progress_dialog_kill_tagname
-            )
-
-            if s and v:
-                break
-            
-            time.sleep(0.05)
-    
-    def deleteObservedTags(self) -> None:
-        """Delete all the observed tags."""
-        if isinstance(self._progress_dialog_progress_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_progress_tagname)
-        
-        if isinstance(self._progress_dialog_text_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_text_tagname)
-        
-        if isinstance(self._progress_dialog_success_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_success_tagname)
-        
-        if isinstance(self._progress_dialog_kill_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_kill_tagname)
         
     def showRunning(self) -> None:
         """Show the progress dialog.
@@ -494,12 +419,77 @@ class DMView(AbstractView):
             # self._createKillDialog()
             self._createRunningDialog()
         
-        # block the thread until the user pressed ok or cancel
-        self._observeProgressDialogSuccessThread()
-        self.deleteObservedTags()
+            # block the thread until the user pressed ok or cancel
+            self._observeProgressDialogSuccessThread()
+            self.deleteObservedTags()
 
-        if not self._progress_dialog_success:
+        if self._progress_dialog_success <= 0:
             raise StopProgram()
+
+    def _createRunningDialog(self) -> None:
+        """Create and show the running dialog in another thread.
+        
+        Note: Make sure to set the `DMView.progress_max` before calling this 
+        function!
+
+        Notes
+        -----
+        This function creates a dialog that is running in the current dm-script
+        main thread. UI components always run in the main thread!
+        """
+        path = os.path.join(self._rel_path, "dm_view_progress_dialog.s")
+        sv = {
+            "max_progress": self.progress_max,
+            "progress_tn": self._progress_dialog_progress_tagname,
+            "text_tn": self._progress_dialog_text_tagname,
+            "success_tn": self._progress_dialog_success_tagname,
+            "kill_tn": self._progress_dialog_kill_tagname
+        }
+        self._created_tagnames.add(self._progress_dialog_progress_tagname)
+        self._created_tagnames.add(self._progress_dialog_success_tagname)
+        self._created_tagnames.add(self._progress_dialog_text_tagname)
+        
+        with execdmscript.exec_dmscript(path, setvars=sv, debug=self._exec_debug):
+            pass
+    
+    def _observeProgressDialogSuccessThread(self) -> None:
+        """Observe the persistent tag with the name 
+        `DMView._progress_dialog_success_tagname` and set the 
+        `DMView._progress_dialog_success` to the value as soon as the value is 
+        present.
+        """
+
+        while DM is not None and self.show_running:
+            s, v = DM.GetPersistentTagGroup().GetTagAsShort(
+                self._progress_dialog_success_tagname
+            )
+            
+            if s:
+                self._progress_dialog_success = v
+                break
+                
+            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
+                self._progress_dialog_kill_tagname
+            )
+
+            if s and v:
+                break
+            
+            time.sleep(0.05)
+    
+    def deleteObservedTags(self) -> None:
+        """Delete all the observed tags."""
+        if isinstance(self._progress_dialog_progress_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_progress_tagname)
+        
+        if isinstance(self._progress_dialog_text_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_text_tagname)
+        
+        if isinstance(self._progress_dialog_success_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_success_tagname)
+        
+        if isinstance(self._progress_dialog_kill_tagname, str):
+            execdmscript.remove_global_tag(self._progress_dialog_kill_tagname)
     
     def hideRunning(self) -> None:
         """Hides the progress dialog."""
