@@ -22,6 +22,8 @@ if load_from_dev:
 import logging
 import execdmscript
 
+from .logginglib import do_log
+from .logginglib import get_logger
 from .abstract_configuration import AbstractConfiguration
 
 class DMConfiguration(AbstractConfiguration):
@@ -29,19 +31,15 @@ class DMConfiguration(AbstractConfiguration):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._logger = logging.Logger("pylo.DMConfiguration")
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._log_debug = True
-        else:
-            self._log_debug = False
-        if self._log_debug:
+        self._logger = get_logger(self)
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Creating instance of DMConfiguration")
 
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Starting to load configuration from persistent " + 
                                 "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
         try:
@@ -61,11 +59,11 @@ class DMConfiguration(AbstractConfiguration):
                 else:
                     del tags[group]
 
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("Loading tags '{}' in abstract configuration".format(
                                 tags))
             self.loadFromMapping(tags)
-        elif self._log_debug:
+        elif do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Skipping loading because tags are not a " + 
                                 "dict but '{}' (type {})").format(tags, type(tags)))
     
@@ -73,7 +71,7 @@ class DMConfiguration(AbstractConfiguration):
         """Save the configuration to be persistant."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Starting to save configuration to persistent " + 
                                 "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
 
@@ -91,7 +89,7 @@ class DMConfiguration(AbstractConfiguration):
                         )
                         value = self.getValue(group, key)
 
-                        if self._log_debug:
+                        if do_log(self._logger, logging.DEBUG):
                             self._logger.debug(("Saving value '{}' for key '{}' " + 
                                                 "in group '{}' with path '{}' " + 
                                                 "as a '{}'").format(value, key, 

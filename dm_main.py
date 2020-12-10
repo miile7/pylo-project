@@ -75,8 +75,9 @@ try:
 		__file__ = ""
 
 	import os
+	import sys
+	import logging
 	if __file__ != "":
-		import sys
 		
 		base_path = str(os.path.dirname(__file__))
 		
@@ -84,78 +85,95 @@ try:
 			sys.path.insert(0, base_path)
 
 	import pylo
+	logger = pylo.logginglib.get_logger("dm_main.py", create_msg=False)
+	if pylo.logginglib.do_log(logger, logging.DEBUG):
+		logger.debug("Imported 'pylo' in 'dm_main.py', created logger")
 
-	title = "Starting {}".format(pylo.config.PROGRAM_NAME)
-	print(title)
-	print("*" * len(title))
-	print("")
+	try:
+		# starting from here the logger is present so errors are logged
+		title = "Starting {}".format(pylo.config.PROGRAM_NAME)
+		print(title)
+		print("*" * len(title))
+		print("")
 
-	print("Initializing...")
+		print("Initializing...")
 
-	# adding device paths
-	# get device paths from dm-script and save them into global tags
-	application_dir_names = ("application", "preference", "plugin")
-	dir_path_tag_name = "__pylo_dir_path_{dirname}"
-	dmscript_template = "\n".join((
-		"if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{tagname}\")){{",
-			"GetPersistentTagGroup().TagGroupCreateNewLabeledTag(\"{tagname}\");",
-		"}}",
-		"GetPersistentTagGroup().TagGroupSetTagAsString(\"{tagname}\", GetApplicationDirectory(\"{dirname}\", 0));"
-	))
-	# create the script
-	dmscript = []
-	for name in application_dir_names:
-		dmscript.append(dmscript_template.format(tagname=dir_path_tag_name.format(dirname=name),
-												 dirname=name))
-	# execute the script
-	DM.ExecuteScriptString("\n".join(dmscript))
-	# read the values from the global tags
-	for name in application_dir_names:
-		tn = dir_path_tag_name.format(dirname=name)
-		s, dir_path = DM.GetPersistentTagGroup().GetTagAsString(tn)
-		if s and os.path.exists(dir_path):
-			ini_path = os.path.realpath(os.path.join(dir_path, "devices.ini"))
-			if os.path.exists(ini_path) and os.path.isfile(ini_path):
-				# add the values to the ini loader
-				pylo.loader.device_ini_files.append(ini_path)
-		DM.GetPersistentTagGroup().DeleteTagWithLabel(tn)
-	
-	if len(pylo.loader.device_ini_files) > 0:
-		print("Found device files:")
-		for f in pylo.loader.device_ini_files:
-			print("  ", f)
-	else:
-		print("Did not find any device files (devices.ini)")
+		# adding device paths
+		# get device paths from dm-script and save them into global tags
+		application_dir_names = ("application", "preference", "plugin")
+		dir_path_tag_name = "__pylo_dir_path_{dirname}"
+		dmscript_template = "\n".join((
+			"if(!GetPersistentTagGroup().TagGroupDoesTagExist(\"{tagname}\")){{",
+				"GetPersistentTagGroup().TagGroupCreateNewLabeledTag(\"{tagname}\");",
+			"}}",
+			"GetPersistentTagGroup().TagGroupSetTagAsString(\"{tagname}\", GetApplicationDirectory(\"{dirname}\", 0));"
+		))
+		# create the script
+		dmscript = []
+		for name in application_dir_names:
+			dmscript.append(dmscript_template.format(tagname=dir_path_tag_name.format(dirname=name),
+													dirname=name))
+		if pylo.logginglib.do_log(logger, logging.DEBUG):
+			logger.debug(("Getting dm paths for device ini files by executing " + 
+						"dmscript '{}'").format(dmscript))
+		# execute the script
+		DM.ExecuteScriptString("\n".join(dmscript))
+		# read the values from the global tags
+		for name in application_dir_names:
+			tn = dir_path_tag_name.format(dirname=name)
+			s, dir_path = DM.GetPersistentTagGroup().GetTagAsString(tn)
+			if s and os.path.exists(dir_path):
+				ini_path = os.path.realpath(os.path.join(dir_path, "devices.ini"))
+				if os.path.exists(ini_path) and os.path.isfile(ini_path):
+					# add the values to the ini loader
+					pylo.loader.device_ini_files.append(ini_path)
+			DM.GetPersistentTagGroup().DeleteTagWithLabel(tn)
+		
+		if pylo.logginglib.do_log(logger, logging.INFO):
+			if len(pylo.loader.device_ini_files) > 0:
+				logger.info("Found device files:")
+				for f in pylo.loader.device_ini_files:
+					logger.info("  {}".format(f))
+			else:
+				logger.info("Did not find any device files (devices.ini)")
 
-	# create view and configuration, both using the DM environmnent
-	view = pylo.DMView()
-	configuration = pylo.DMConfiguration()
+		# create view and configuration, both using the DM environmnent
+		view = pylo.DMView()
+		configuration = pylo.DMConfiguration()
 
-	# remove loading dialog, dialog deletes tag
-	DM.GetPersistentTagGroup().SetTagAsBoolean(close_tag_name, True)
+		# remove loading dialog, dialog deletes tag
+		DM.GetPersistentTagGroup().SetTagAsBoolean(close_tag_name, True)
 
-	print("Done.")
-	print("Starting...")
+		print("Done.")
+		print("Starting...")
 
-	# redirect all print() calls to the debug window
-	DM.SetOutputTo(2)
-	DM.ExecuteScriptString("ClearDebug();")
-	title = "{} runtime debug output".format(pylo.config.PROGRAM_NAME)
-	print(title)
-	print("*" * len(title))
-	print("")
+		# redirect all print() calls to the debug window
+		DM.SetOutputTo(2)
+		DM.ExecuteScriptString("ClearDebug();")
+		title = "{} runtime debug output".format(pylo.config.PROGRAM_NAME)
+		print(title)
+		print("*" * len(title))
+		print("")
 
-	pylo.execute(view, configuration)
-	# set everything back to the results window
+		pylo.execute(view, configuration)
+		# set everything back to the results window
 
-	print("Stopping.")
-	DM.SetOutputTo(0)
+		print("Stopping.")
+		DM.SetOutputTo(0)
 
-	print("Stopping.")
-	print("Exiting.")
+		print("Stopping.")
+		print("Exiting.")
+	except Exception as e:
+		if isinstance(e, pylo.StopProgram):
+			if pylo.logginglib.do_log(logger, logging.DEBUG):
+				logger.debug("Stopping program", exc_info=e)
+		else:
+			pylo.logginglib.log_error(logger, e)
+		raise e
 except Exception as e:
 	# dm-script error messages are very bad, use this for getting the error 
 	# text and the correct traceback
 	print("{}: ".format(e.__class__.__name__), e)
+	
 	import traceback
 	traceback.print_exc()

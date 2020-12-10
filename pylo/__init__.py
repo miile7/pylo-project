@@ -4,62 +4,7 @@ This provides both, the GUI and the backend for measuring. Multiple GUIs are
 offered together with various cameras and TEM implementations.
 """
 
-import io
-import csv
 import logging
-
-# create logger
-logger = logging.getLogger('pylo')
-logger.setLevel(logging.DEBUG)
-
-class InvertedFilter(logging.Filter):
-    """Allow all records except those with the given `name`."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-    
-    def filter(self, record):
-        if record.name != self.name:
-            return 1
-        else:
-            return 0
-class CsvFormatter(logging.Formatter):
-    """Format the log output as a csv."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.output = io.StringIO()
-        self.writer = csv.writer(self.output, quoting=csv.QUOTE_ALL)
-
-    def format(self, record: logging.LogRecord):
-        self.writer.writerow([record.name, record.funcName, record.levelname,
-                              record.message, record.threadName, 
-                              record.filename, record.lineno, record.asctime,
-                              record.pathname, record.exc_info, record.exc_text,
-                              record.stack_info])
-        data = self.output.getvalue()
-        self.output.truncate(0)
-        self.output.seek(0)
-        return data.strip()
-
-# create file handler which logs even debug messages
-from .config import PROGRAM_LOG_FILE
-# dfm = logging.Formatter('%(name)s - %(funcName)s: %(levelname)s: %(message)s | %(threadName)s - %(filename)s - %(lineno)d - %(asctime)s - %(pathname)s - %(exc_info)s')
-dfm = CsvFormatter()
-fh = logging.FileHandler(PROGRAM_LOG_FILE, mode="a+", encoding="utf-8")
-fh.setLevel(logging.DEBUG)
-fh.setFormatter(dfm)
-# exclude from loggings
-fh.addFilter(InvertedFilter("pylo.Datatype"))
-fh.addFilter(InvertedFilter("pylo.OptionsDatatype"))
-
-# create console handler with a higher log level
-ifm = logging.Formatter('%(name)s - %(funcName)s: %(message)s')
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-ch.setFormatter(ifm)
-
-# add the handlers to the logger
-logger.addHandler(fh)
-logger.addHandler(ch)
 
 class __Docs(list):
     """A class for creating the docstring easily."""
@@ -103,6 +48,15 @@ from .errors import BlockedFunctionError
 from .errors import DeviceClassNotDefined
 from .errors import FallbackModuleNotFoundError
 from .errors import ExecutionOutsideEnvironmentError
+
+# create logger
+logger = logging.getLogger('pylo')
+logger.setLevel(logging.DEBUG)
+
+from .logginglib import create_handlers
+for handler in create_handlers():
+    # add the handlers to the logger
+    logger.addHandler(handler)
 
 from .image import Image
 from .device import Device

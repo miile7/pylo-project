@@ -1,7 +1,11 @@
 import math
+import logging
 import typing
 
+from .logginglib import do_log
+from .logginglib import log_error
 from .datatype import Datatype
+from .logginglib import get_logger
 
 class MeasurementVariable:
     """A physical variable that can be changed.
@@ -135,6 +139,7 @@ class MeasurementVariable:
             the normal `format` parameter, the calibrated value will be shown
             to the user, default: float
         """
+        self._logger = get_logger(self, instance_args=(unique_id, name))
         self.unique_id = unique_id
         self.name = name
         self.min_value = min_value
@@ -147,27 +152,45 @@ class MeasurementVariable:
             self._calibration = calibration
             self._uncalibration = uncalibration
             self.has_calibration = True
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Setting calibration and uncalibration to " + 
+                                   "callback functions")
         elif callable(calibration):
-            raise ValueError("The calibration is a callable but the " + 
+            err = ValueError("The calibration is a callable but the " + 
                              "uncalibration is not. Either both or none " + 
                              "of the values can be a callable.")
+            log_error(self._logger, err)
+            raise err
         elif callable(uncalibration):
-            raise ValueError("The uncalibration is a callable but the " + 
+            err = ValueError("The uncalibration is a callable but the " + 
                              "calibration is not. Either both or none " + 
                              "of the values can be a callable.")
+            log_error(self._logger, err)
+            raise err
         elif isinstance(calibration, (int, float)) and calibration != 0:
             self._calibration = calibration
             self._uncalibration = 1 / calibration
             self.has_calibration = True
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug(("Setting calibration to '{}', " + 
+                                    "uncalibration is the reciprocal '{}'").format(
+                                    self._calibration, self._uncalibration))
         elif isinstance(uncalibration, (int, float)) and uncalibration != 0:
             self._calibration = 1 / uncalibration
             self._uncalibration = uncalibration
             self.has_calibration = True
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug(("Setting uncalibration to '{}', " + 
+                                    "calibration is the reciprocal '{}'").format(
+                                    self._uncalibration, self._calibration))
         elif calibration is not None or uncalibration is not None:
-            raise TypeError(("The calibration and the uncalibration have to " + 
+            err = TypeError(("The calibration and the uncalibration have to " + 
                              "either be both callables or one of them has to " + 
                              "be a number but the calibration is '{}' and the " + 
-                             "uncalibration is '{}'.").format(calibration, uncalibration))
+                             "uncalibration is '{}'.").format(calibration,
+                                                              uncalibration))
+            log_error(self._logger, err)
+            raise err
         else:
             # no calibration given
             self.has_calibration = False

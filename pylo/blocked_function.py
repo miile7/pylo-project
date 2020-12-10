@@ -1,5 +1,8 @@
 import logging
 
+from .logginglib import do_log
+from .logginglib import get_logger
+
 from .errors import BlockedFunctionError
 
 class BlockedFunction:
@@ -28,12 +31,8 @@ class BlockedFunction:
 
         self.func = func
         self.func_name = func_name
-        self._logger = logging.Logger("pylo.BlockedFunction")
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._log_debug = True
-        else:
-            self._log_debug = False
-        if self._log_debug:
+        self._logger = get_logger(self)
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Blocking function '{}'".format(func_name))
     
     def __call__(self, *args, **kwargs) -> None:
@@ -48,7 +47,7 @@ class BlockedFunction:
             Always
         """
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Blocked function '{}' is called".format(self.func_name),
                             stack_info=True)
         raise BlockedFunctionError(

@@ -1,10 +1,14 @@
 import os
 import json
 import typing
+import logging
 import numpy as np
 
 from PIL import Image as PILImage
 
+from .logginglib import do_log
+from .logginglib import log_error
+from .logginglib import get_logger
 from .exception_thread import ExceptionThread
 
 # from .config import PROGRAM_NAME
@@ -106,6 +110,7 @@ class Image:
         self.image_data = np.array(image_data, dtype=np.uint8)
         self.tags = tags
         self.tags["recording program"] = PROGRAM_NAME
+        self._logger = get_logger(self)
     
     def _executeSave(self, file_type: str, file_path: str) -> None:
         """Execute the save.
@@ -124,15 +129,17 @@ class Image:
             The file path to save the image to (including the extension), 
             existing files will be silently overwritten
         """
-
+        if do_log(self._logger, logging.DEBUG):
+            self._logger.debug(("Performing image save as '{}' to the " + 
+                                 "path '{}'").format(file_type, file_path))
         if (file_type in self.export_extensions and 
             callable(self.export_extensions[file_type])):
             self.export_extensions[file_type](file_path, self)
         else:
-            raise ValueError(
-                "The file extension {} is not supported.".format(file_type)
-            )
-        
+            err = ValueError(("The file extension {} is not " + 
+                              "supported.").format(file_type))
+            log_error(self._logger, err)
+            raise err
     
     def saveTo(self, file_path: str, overwrite: typing.Optional[bool]=True, 
                create_directories: typing.Optional[bool]=False, 
@@ -182,19 +189,22 @@ class Image:
 
         if not os.path.isdir(save_dir) or not os.path.exists(save_dir):
             if create_directories:
+                if do_log(self._logger, logging.DEBUG):
+                    self._logger.debug("Creating save directory '{}'".format(
+                                       save_dir))
                 os.makedirs(save_dir, exist_ok=True)
             else:
-                raise FileNotFoundError(
-                    "The directory {} does not exist.".format(save_dir)
-                )
+                err = FileNotFoundError(("The directory {} does not " + 
+                                         "exist.").format(save_dir))
+                log_error(self._logger, err)
+                raise err
         
         if (not overwrite and os.path.isfile(file_path) and 
             os.path.exists(file_path)):
-            raise FileExistsError(
-                "The file {} exists already and overwriting is not allowed.".format(
-                    file_path
-                )
-            )
+            err = FileExistsError(("The file {} exists already and " + 
+                                   "overwriting is not allowed.").format(file_path))
+            log_error(self._logger, err)
+            raise err
         
         if ((isinstance(file_type, str) and 
              file_type.lower() == "auto") or file_type == None):
@@ -206,12 +216,18 @@ class Image:
             
             file_type = file_type.lower()
 
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Creating thread for saving image '{}'".format(
+                                   file_path))
             thread = ExceptionThread(target=self._executeSave, 
                                      args=(file_type, file_path),
                                      name="save {}".format(os.path.basename(file_path)))
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Starting thread")
             thread.start()
             return thread
         else:
-            raise TypeError(
-                "The file extension {} is not supported.".format(file_type)
-            )
+            err = TypeError(("The file extension {} is not " + 
+                             "supported.").format(file_type))
+            log_error(self._logger, err)
+            raise err

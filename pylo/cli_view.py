@@ -7,6 +7,9 @@ import typing
 import textwrap
 import linecache
 
+from .logginglib import do_log
+from .logginglib import log_error
+from .logginglib import get_logger
 from .pylolib import parse_value
 from .pylolib import format_value
 from .pylolib import get_datatype_human_text
@@ -47,17 +50,14 @@ class CLIView(AbstractView):
         super().__init__()
         # self.clear()
         # self.printTitle()
-        self._logger = logging.Logger("pylo.CLIView")
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._log_debug = True
-        else:
-            self._log_debug = False
-        if self._log_debug:
+        self._logger = get_logger(self)
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Creating new instance of cliview")
     
     def clear(self) -> None:
         """Clear the current command line."""
-        self._logger("Clearing view")
+        if do_log(self._logger, logging.DEBUG):
+            self._logger.debug("Clearing view")
         try:
             # for custom implementations of the stdout, especially in the test
             sys.stdout.clear()
@@ -132,10 +132,12 @@ class CLIView(AbstractView):
                              replace_whitespace=False)
         text = ("\n" + inset).join(text)
 
-        self._logger("Waiting for input with text '{}'".format(text))
+        if do_log(self._logger, logging.DEBUG):
+            self._logger.debug("Waiting for input with text '{}'".format(text))
 
         i = input(text)
-        self._logger("Input is '{}'".format(i))
+        if do_log(self._logger, logging.DEBUG):
+            self._logger.debug("Input is '{}'".format(i))
         return i
 
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
@@ -164,7 +166,7 @@ class CLIView(AbstractView):
         """
 
         measurement = self._showCreateMeasurementLoop(controller)
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("User defined measurement '{}'".format(measurement))
         return measurement
     
@@ -445,7 +447,7 @@ class CLIView(AbstractView):
         
         if isinstance(error, Exception):
             error_msg = "{}: {}".format(error.__class__.__name__, error)
-            self._logger.error(error_msg, exc_info=error)
+            log_error(self._logger, error)
         else:
             error_msg = "{}".format(error)
 
@@ -478,7 +480,7 @@ class CLIView(AbstractView):
             self.progress,
             self.progress_max
         ), sep="", end="")
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Updating the running indicator, progress is " + 
                                 "now '{}'/'{}'").format(self.progress, self.progress_max))
     
@@ -520,7 +522,7 @@ class CLIView(AbstractView):
         values = self._showSettingsLoop(configuration, keys)
         
         configuration.loadFromMapping(values)
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("User defined settings '{}'".format(values))
         
         return values
@@ -691,7 +693,7 @@ class CLIView(AbstractView):
                           "valid command listed below.").format(user_input)
             return self.askForDecision(text, options)
         else:
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("User was asked '{}' and entered '{}'".format(
                                 text, options[commands.index(user_input)]))
             return commands.index(user_input)
@@ -730,7 +732,7 @@ class CLIView(AbstractView):
         """
 
         values = self._askForLoop(inputs, None, **kwargs)
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("User was asked for values '{}' with kwargs '{}'" + 
                                 "and entered '{}'").format(inputs, kwargs, values))
         return values
@@ -898,11 +900,11 @@ class CLIView(AbstractView):
             
             return self._showCustomTags(tags)
         elif cmd == True:
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("User entered custom tags '{}'".format(tags))
             return tags
         elif cmd == False:
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("User cancelled custom tags")
             raise StopProgram
         else:

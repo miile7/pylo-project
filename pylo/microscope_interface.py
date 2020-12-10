@@ -1,8 +1,12 @@
 import typing
+import logging
 import threading
 
 from .device import Device
+from .logginglib import do_log
 from .datatype import Datatype
+from .logginglib import log_error
+from .logginglib import get_logger
 from .vulnerable_machine import VulnerableMachine
 class MicroscopeInterface(Device, VulnerableMachine):
     """
@@ -51,6 +55,7 @@ class MicroscopeInterface(Device, VulnerableMachine):
         super(MicroscopeInterface, self).__init__(kind="microscope", 
             name=name, config_group_name=config_group_name,
             config_defaults=config_defaults, description=description)
+        self._logger = get_logger(self)
         
         self.supported_measurement_variables = []
         self.supports_parallel_measurement_variable_setting = False
@@ -115,6 +120,10 @@ class MicroscopeInterface(Device, VulnerableMachine):
             the instance of the microscope, the second is the the value to 
             apply
         """
+
+        if do_log(self._logger, logging.DEBUG):
+            self._logger.debug("Registering measurement variable '{}'".format(
+                variable.unique_id))
 
         self.supported_measurement_variables.append(variable)
         self._measurement_variable_getter_setter_map[variable.unique_id] = (
@@ -183,17 +192,25 @@ class MicroscopeInterface(Device, VulnerableMachine):
             # make sure only this function is currently using the microscope,
             # otherwise two functions may change microscope values at the same time
             # which will mess up things
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Locking microscope")
+            
             self.action_lock.acquire()
         
         var = self.getMeasurementVariableById(id_)
 
         if not self.isValidMeasurementVariableValue(id_, value):
-            raise ValueError(("The value '{}' is not valid for the " + 
+            err = ValueError(("The value '{}' is not valid for the " + 
                               "measurement variable '{}'.").format(value, id_))
+            log_error(self._logger, err)
+            raise err
 
         elif id_ in self._measurement_variable_getter_setter_map:
             if isinstance(var.format, (type, Datatype)):
                 value = var.format(value)
+            
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Setting '{}' to '{}'".format(id_, value))
             
             self._measurement_variable_getter_setter_map[id_][1](value)
         else:
@@ -201,12 +218,19 @@ class MicroscopeInterface(Device, VulnerableMachine):
             # MicroscopeInterface::isValidMeasurementVariableValue returns 
             # false
             if not self.supports_parallel_measurement_variable_setting:
+                if do_log(self._logger, logging.DEBUG):
+                    self._logger.debug("Releasing microscope lock")
                 self.action_lock.release()
             
-            raise ValueError("The id {} does not exist.".format(id_))
+            err = ValueError("The id {} does not exist.".format(id_))
+            log_error(self._logger, err)
+            raise err
 
         if not self.supports_parallel_measurement_variable_setting:
             # let other functions access the microscope
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Releasing microscope lock")
+            
             self.action_lock.release()
 
     def getMeasurementVariableValue(self, id_: str) -> typing.Union[int, float, str]:
@@ -239,19 +263,34 @@ class MicroscopeInterface(Device, VulnerableMachine):
             # make sure only this function is currently using the microscope,
             # otherwise two functions may change microscope values at the same time
             # which will mess up things
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Locking microscope")
+
             self.action_lock.acquire()
 
         if id_ in self._measurement_variable_getter_setter_map:
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Asking for value of '{}'".format(id_))
+            
             value = self._measurement_variable_getter_setter_map[id_][0]()
+            
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Received value '{}' for '{}'".format(value, id_))
         else:
             if not self.supports_parallel_measurement_variable_setting:
+                if do_log(self._logger, logging.DEBUG):
+                    self._logger.debug("Releasing microscope lock")
                 self.action_lock.release()
             
-            raise ValueError(("There is no MeasurementVariable for the " + 
+            err = ValueError(("There is no MeasurementVariable for the " + 
                               "id {}.").format(id_))
+            log_error(self._logger, err)
+            raise err
 
         if not self.supports_parallel_measurement_variable_setting:
             # let other functions access the microscope
+            if do_log(self._logger, logging.DEBUG):
+                self._logger.debug("Releasing microscope lock")
             self.action_lock.release()
         
         return value

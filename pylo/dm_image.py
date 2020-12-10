@@ -5,7 +5,6 @@ import typing
 import logging
 import pathlib
 
-from .image import Image
 from .errors import ExecutionOutsideEnvironmentError
 # python <3.6 does not define a ModuleNotFoundError, use this fallback
 from .errors import FallbackModuleNotFoundError
@@ -32,6 +31,11 @@ if DM is not None:
     import execdmscript
 else:
     raise ExecutionOutsideEnvironmentError("Could not load module execdmscript.")
+
+from .image import Image
+from .logginglib import do_log
+from .logginglib import log_error
+from .logginglib import get_logger
 
 class DMImage(Image):
     """An image that adds more export options and showing images.
@@ -81,12 +85,8 @@ class DMImage(Image):
 
         super(DMImage, self).__init__(image_data, tags)
 
-        self._logger = logging.Logger("pylo.DMImage")
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._log_debug = True
-        else:
-            self._log_debug = False
-        if self._log_debug:
+        self._logger = get_logger(self)
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Creating new DMImage instance")
 
         self.show_image = False
@@ -104,7 +104,7 @@ class DMImage(Image):
         # delete the Py_Image reference, this should be automatically but just
         # to be sure
         if hasattr(self, "_py_image"):
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug(("Deleting this instance but deleting " + 
                                     "the _py_image attribute before"))
             del self._py_image
@@ -124,7 +124,7 @@ class DMImage(Image):
             coordinates of the available space for images in the stated order
         """
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Trying to get the workspace rect")
 
         readvars = {
@@ -138,7 +138,7 @@ class DMImage(Image):
             "GetMaximalDocumentWindowRect(1+2+240, top, left, bottom, right);"
         ))
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Executing dm-script '{}' with readvars '{}'".format(
                             dmscript, readvars))
         workspace_rect = None
@@ -146,13 +146,12 @@ class DMImage(Image):
             workspace_rect = (script["top"], script["left"], script["bottom"], 
                               script["right"])
         
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Found workspace rect to be '{}'".format(workspace_rect))
         
         if not isinstance(workspace_rect, tuple):
             err = LookupError("Could not detect the workspace area in GMS.")
-            self._logger.error("{}: {}".format(err.__class__.__name__, err), 
-                               exc_info=err)
+            log_error(self._logger, err)
             raise err
             
         return workspace_rect
@@ -205,7 +204,7 @@ class DMImage(Image):
             name, _ = os.path.splitext(os.path.basename(file_path))
             image_doc = self._getImageDocument(name)
 
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug(("Saving image by dm image document '{}' with " + 
                                     "the file type '{}' to the path '{}'").format(
                                     image_doc, file_type, file_path))
@@ -220,11 +219,11 @@ class DMImage(Image):
             elif isinstance(self._py_image, DM.Py_Image):
                 # image is saved, drop the Py_Image reference for memory leaks,
                 # this is recommended in the docs
-                if self._log_debug:
+                if do_log(self._logger, logging.DEBUG):
                     self._logger.debug("Deleting _py_image reference")
                 del self._py_image
         else:
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug(("Saving image by parent class Image with " + 
                                     "the file type '{}' to the path '{}'").format(
                                     file_type, file_path))
@@ -249,7 +248,7 @@ class DMImage(Image):
             The DM image object
         """
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Creating DigitalMicrograph.Py_Image object from " + 
                             "current image")
 
@@ -258,18 +257,18 @@ class DMImage(Image):
         else:
             img = self._py_image
         
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Created DigitalMicrograph.Py_Image object '{}'".format(
                             img))
         
         # save the tags
         if isinstance(self.tags, dict) and self.tags != {}:
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug(("Converting dict tags '{}' to " + 
                                     "DigitalMicrograph.Py_TagGroup").format(self.tags))
             tag_group = execdmscript.convert_to_taggroup(
                 self.tags, replace_invalid_chars=True)
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug(("Copying DigitalMicrograph.Py_TagGroup tags " + 
                                     "'{}' to image").format(tag_group))
             img.GetTagGroup().CopyTagsFrom(tag_group)
@@ -278,7 +277,7 @@ class DMImage(Image):
         if isinstance(name, str):
             img.SetName(name)
         
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Returning DigitalMicrograph.Py_Image object")
         return img
 
@@ -303,7 +302,7 @@ class DMImage(Image):
 
         img = self.getDMPyImageObject(name)
         
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Trying to get image document of " + 
                             "DigitalMicrograph.Py_Image object '{}'".format(img))
         # create an image document that contains the image
@@ -311,14 +310,14 @@ class DMImage(Image):
         # image_doc.AddImageDisplay(img, -2)
         image_doc = img.GetOrCreateImageDocument()
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Got DigitalMicrograph.Py_ImageDocument object " + 
                                 "'{}'").format(image_doc))
 
         if isinstance(name, str):
             image_doc.SetName(name)
         
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Returning image object")
         return image_doc
     
@@ -347,7 +346,7 @@ class DMImage(Image):
             The image document that shows the image
         """
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Showing image '{}'".format(name))
         image_doc = self._getImageDocument(name)
         return self._show(image_doc, workspace_id, file_path)
@@ -375,15 +374,15 @@ class DMImage(Image):
         DigitalMicrograph.Py_ImageDocument
             The image document that shows the image
         """
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug(("Showing image with " + 
                                 "DigitalMicrograph.Py_ImageDocument '{}'").format(
                                 image_doc))
         if (isinstance(workspace_id, int) and 
             DM.WorkspaceCountWindows(workspace_id) > 0):
-        if self._log_debug:
-                self._logger.debug("Moving image document '{}' to workspace '{}'".format(
-                                image_doc, workspace_id))
+            if do_log(self._logger, logging.DEBUG):
+                    self._logger.debug("Moving image document '{}' to workspace '{}'".format(
+                                    image_doc, workspace_id))
             # check if the workspace exists (if not it does not have windows),
             # if the workspace does not exist and ImageDocument.MoveToWorkspace()
             # is called, a RuntimeError is raised
@@ -409,7 +408,7 @@ class DMImage(Image):
             self.workspace_rect[1] + (col_index + 1) * length
         )
 
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Setting image document to position '{}'".format(pos))
         # show in the workspace
         image_doc.ShowAtRect(*pos)
@@ -421,7 +420,7 @@ class DMImage(Image):
             else:
                 wsid = ""
             
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("Trying to link image document to the file")
             dmscript = "\n".join((
                 "if(WorkspaceGetIndex({}) >= 0){{".format(wsid),
@@ -452,7 +451,7 @@ class DMImage(Image):
                 "format": file_format
             }
 
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("Executing dmscript '{}' with setvars '{}'".format(
                                 dmscript, svars))
             with execdmscript.exec_dmscript(dmscript, setvars=svars):

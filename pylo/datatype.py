@@ -3,6 +3,9 @@ import math
 import typing
 import logging
 
+from .logginglib import do_log
+from .logginglib import get_logger
+
 # the regular expression that matches any valid format specification, each 
 # group contains one specification item
 format_reg = re.compile(r"^((?:.(?=(?:<|>|\^)))?)([<>=^]?)([\-+ ]?)(#?)(0?)([\d]*)([_,]?)((?:\.[\d]+)?)([bcdeEfFgGnosxX%]?)$")
@@ -89,12 +92,8 @@ class Datatype:
         self._format = format
         self._parse = parse
         self.default_parse = None
-        self._logger = logging.Logger("pylo.Datatype")
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._log_debug = True
-        else:
-            self._log_debug = False
-        if self._log_debug:
+        self._logger = get_logger(self)
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Creating new datatype with name '{}'".format(name))
     
     def parse(self, value: typing.Any) -> typing.Any:
@@ -118,7 +117,7 @@ class Datatype:
 
         if callable(self._parse):
             ret = self._parse(value)
-            if self._log_debug:
+            if do_log(self._logger, logging.DEBUG):
                 self._logger.debug("Parsing value '{}' to '{}'".format(value, ret))
             return ret
         else:
@@ -141,7 +140,7 @@ class Datatype:
             The string representation of the `value` in the current datatype
         """
         ret = self._format(value, format)
-        if self._log_debug:
+        if do_log(self._logger, logging.DEBUG):
             self._logger.debug("Formatting value '{}' to '{}'".format(value, ret))
         return ret
     

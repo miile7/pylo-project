@@ -1,9 +1,13 @@
 import inspect
+import logging
 import traceback
 
 from .errors import BlockedFunctionError
 
 from .events import emergency
+
+from .logginglib import do_log
+from .logginglib import get_logger
 from .blocked_function import BlockedFunction
 
 class VulnerableMachine:
@@ -31,6 +35,8 @@ class VulnerableMachine:
         super(VulnerableMachine, self).__init__()
         self._in_emergency_state = False
 
+        self._logger = get_logger(self)
+
         # add a listener to the emergency event to go in emergency state 
         # whenever the emergency event is created
         emergency.append(self.resetToEmergencyState)
@@ -45,6 +51,9 @@ class VulnerableMachine:
         Calling this function will make all functions (except the 
         resolveEmergencyState() function) to throw a BlockedFunctionError.
         """
+
+        if do_log(self._logger, logging.CRITICAL):
+            self._logger.critical("Setting to emergency mode")
 
         msg = "CRITICAL ERROR -- EMERGENCY STATE IS EXECUTED!"
 
