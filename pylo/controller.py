@@ -507,9 +507,7 @@ class Controller:
             config_changes = (self.configuration.getAdditions(state_id, True, True) | 
                               self.configuration.getChanges(state_id))
         except KeyError as e:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("{}: {}".format(e.__class__.__name__, e), 
-                                exc_info=e)
+            log_error(self._logger, e, logging.DEBUG)
             return False
         
         self.configuration.dropStateMark(state_id)

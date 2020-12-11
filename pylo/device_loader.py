@@ -60,8 +60,6 @@ class DeviceLoader:
         self._device_class_files = []
         self._device_objects = []
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new loader instance")
     
     def addDeviceFromFile(self, kind: device_kinds, name: str, 
                           file_path: typing.Union[path_like], 

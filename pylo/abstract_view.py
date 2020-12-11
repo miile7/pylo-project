@@ -29,8 +29,6 @@ class AbstractView:
     def __init__(self):
         """Get the view object."""
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Initializing abstract view")
         self.show_running = False
         self.progress_max = 100
         self.progress = 0

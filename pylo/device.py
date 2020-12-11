@@ -66,8 +66,6 @@ class Device:
         self.config_defaults = config_defaults
         self.description = description
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating device '{}'".format(self))
 
     @staticmethod
     def getNameOfObject(obj: object) -> str:

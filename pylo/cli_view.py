@@ -51,8 +51,6 @@ class CLIView(AbstractView):
         # self.clear()
         # self.printTitle()
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new instance of cliview")
     
     def clear(self) -> None:
         """Clear the current command line."""
@@ -904,9 +902,11 @@ class CLIView(AbstractView):
                 self._logger.debug("User entered custom tags '{}'".format(tags))
             return tags
         elif cmd == False:
+            err = StopProgram
             if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("User cancelled custom tags")
-            raise StopProgram
+                self._logger.debug("Stopping program, User cancelled custom " + 
+                                   "tags", exc_info=err)
+            raise err
         else:
             return self._showCustomTags(tags)
 

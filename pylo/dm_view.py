@@ -82,8 +82,6 @@ class DMView(AbstractView):
         self._exec_debug = False
 
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new instance of DMView")
 
     def showHint(self, hint : str) -> None:
         """Show the user a hint.

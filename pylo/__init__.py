@@ -53,6 +53,7 @@ from .errors import ExecutionOutsideEnvironmentError
 logger = logging.getLogger('pylo')
 logger.setLevel(logging.DEBUG)
 
+from .logginglib import do_log
 from .logginglib import create_handlers
 for handler in create_handlers():
     # add the handlers to the logger
@@ -105,7 +106,8 @@ def get_loader(*args, **kwargs) -> DeviceLoader:
     """
     global loader
     if not isinstance(loader, DeviceLoader):
-        logger.debug("Creating new loader instance")
+        if do_log(logger, logging.DEBUG):
+            logger.debug("Creating new loader instance")
         loader = DeviceLoader(*args, **kwargs)
     
     return loader
@@ -115,7 +117,8 @@ from .config import DEFAULT_DEVICE_INI_PATHS
 for p in DEFAULT_DEVICE_INI_PATHS:
     if (os.path.exists(p) and os.path.isfile(p) and 
         not p in loader.device_ini_files):
-        logger.debug("Adding ini file '{}' to loader".format(p))
+        if do_log(logger, logging.DEBUG):
+            logger.debug("Adding ini file '{}' to loader".format(p))
         loader.device_ini_files.append(p)
 
 # controller = None
@@ -145,7 +148,8 @@ def get_controller(view: typing.Optional[AbstractView]=None,
 
     # global controller
     # if controller is None or not isinstance(controller, Controller):
-    logger.debug("Creating new controller instance")
+    if do_log(logger, logging.DEBUG):
+        logger.debug("Creating new controller instance")
     controller = Controller(view, configuration)
     
     return controller

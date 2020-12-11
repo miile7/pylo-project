@@ -32,8 +32,6 @@ class DMConfiguration(AbstractConfiguration):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating instance of DMConfiguration")
 
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""

@@ -51,8 +51,6 @@ class AbstractConfiguration:
         This calls the loadConfiguration() function automatically."""
         # create logger
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Initializing abstract configuration")
         self.configuration = {}
         self.marked_states = {}
         self.loadConfiguration()

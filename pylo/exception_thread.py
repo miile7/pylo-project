@@ -21,8 +21,6 @@ class ExceptionThread(threading.Thread):
 
         self.exceptions = []
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new instance of Exception thread")
         
         super(ExceptionThread, self).__init__(*args, **kwargs)
     

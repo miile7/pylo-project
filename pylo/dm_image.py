@@ -86,8 +86,6 @@ class DMImage(Image):
         super(DMImage, self).__init__(image_data, tags)
 
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new DMImage instance")
 
         self.show_image = False
         self.workspace_id = None

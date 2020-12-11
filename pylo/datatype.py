@@ -93,8 +93,6 @@ class Datatype:
         self._parse = parse
         self.default_parse = None
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating new datatype with name '{}'".format(name))
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.

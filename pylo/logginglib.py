@@ -82,7 +82,8 @@ def clear_do_log_cache() -> None:
     global __do_log_cache
     __do_log_cache = {}
 
-def log_error(logger: logging.Logger, error: Exception) -> None:
+def log_error(logger: logging.Logger, error: Exception, 
+              logging_level: typing.Optional[int]=logging.ERROR) -> None:
     """Log the given exception if the error level is allowed to log for this 
     logger.
     
@@ -93,9 +94,10 @@ def log_error(logger: logging.Logger, error: Exception) -> None:
     error : Exception
         The exception to log
     """
-    if do_log(logger, logging.ERROR):
-        logger.error("{}: {}".format(error.__class__.__name__, error), 
-                     exc_info=error)
+    if do_log(logger, logging_level):
+        logger.log(logging_level, 
+                   "{}: {}".format(error.__class__.__name__, error), 
+                   exc_info=error)
 
 def get_logger(obj: typing.Union[str, object], 
                create_msg: typing.Optional[bool]=True, 

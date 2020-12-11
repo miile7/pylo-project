@@ -32,8 +32,6 @@ class BlockedFunction:
         self.func = func
         self.func_name = func_name
         self._logger = get_logger(self)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Blocking function '{}'".format(func_name))
     
     def __call__(self, *args, **kwargs) -> None:
         """Allow calling this, this will always raise an error.
