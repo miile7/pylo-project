@@ -2,7 +2,7 @@ import math
 import logging
 import typing
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .datatype import Datatype
 from .logginglib import get_logger
@@ -152,8 +152,7 @@ class MeasurementVariable:
             self._calibration = calibration
             self._uncalibration = uncalibration
             self.has_calibration = True
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Setting calibration and uncalibration to " + 
+            log_debug(self._logger, "Setting calibration and uncalibration to " + 
                                    "callback functions")
         elif callable(calibration):
             err = ValueError("The calibration is a callable but the " + 
@@ -171,16 +170,14 @@ class MeasurementVariable:
             self._calibration = calibration
             self._uncalibration = 1 / calibration
             self.has_calibration = True
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Setting calibration to '{}', " + 
+            log_debug(self._logger, ("Setting calibration to '{}', " + 
                                     "uncalibration is the reciprocal '{}'").format(
                                     self._calibration, self._uncalibration))
         elif isinstance(uncalibration, (int, float)) and uncalibration != 0:
             self._calibration = 1 / uncalibration
             self._uncalibration = uncalibration
             self.has_calibration = True
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Setting uncalibration to '{}', " + 
+            log_debug(self._logger, ("Setting uncalibration to '{}', " + 
                                     "calibration is the reciprocal '{}'").format(
                                     self._uncalibration, self._calibration))
         elif calibration is not None or uncalibration is not None:

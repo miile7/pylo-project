@@ -6,7 +6,7 @@ import numpy as np
 
 from PIL import Image as PILImage
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
 from .exception_thread import ExceptionThread
@@ -129,8 +129,7 @@ class Image:
             The file path to save the image to (including the extension), 
             existing files will be silently overwritten
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Performing image save as '{}' to the " + 
+        log_debug(self._logger, ("Performing image save as '{}' to the " + 
                                  "path '{}'").format(file_type, file_path))
         if (file_type in self.export_extensions and 
             callable(self.export_extensions[file_type])):
@@ -189,8 +188,7 @@ class Image:
 
         if not os.path.isdir(save_dir) or not os.path.exists(save_dir):
             if create_directories:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Creating save directory '{}'".format(
+                log_debug(self._logger, "Creating save directory '{}'".format(
                                        save_dir))
                 os.makedirs(save_dir, exist_ok=True)
             else:
@@ -216,14 +214,12 @@ class Image:
             
             file_type = file_type.lower()
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Creating thread for saving image '{}'".format(
+            log_debug(self._logger, "Creating thread for saving image '{}'".format(
                                    file_path))
             thread = ExceptionThread(target=self._executeSave, 
                                      args=(file_type, file_path),
                                      name="save {}".format(os.path.basename(file_path)))
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Starting thread")
+            log_debug(self._logger, "Starting thread")
             thread.start()
             return thread
         else:

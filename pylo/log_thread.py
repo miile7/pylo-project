@@ -6,7 +6,7 @@ import typing
 import logging
 import pathlib
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
 from .pylolib import path_like
@@ -50,9 +50,8 @@ class LogThread(ExceptionThread):
 
         log_dir = os.path.dirname(self.log_path)
         if not os.path.exists(log_dir):
-            if do_log(logger, logging.DEBUG):
-                logger.debug("Directory '{}' does not exist, creating it".format(
-                             log_dir))
+            log_debug(logger, ("Directory '{}' does not exist, creating " + 
+                      "it").format(log_dir))
             os.makedirs(log_dir, 0o660, exist_ok=True)
         
         super().__init__(name="log")
@@ -69,8 +68,7 @@ class LogThread(ExceptionThread):
         self.running = True
         self._finish = False
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Starting log thread")
+        log_debug(self._logger, "Starting log thread")
         
         while self.running:
             if not self.queue.empty():
@@ -82,9 +80,8 @@ class LogThread(ExceptionThread):
     def _writeQueueToLog(self) -> None:
         """Write the current queue to the log file."""
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Queue is not empty, writing to log")
-            self._logger.debug("Opening file '{}'".format(self.log_path))
+        log_debug(self._logger, "Queue is not empty, writing to log")
+        log_debug(self._logger, "Opening file '{}'".format(self.log_path))
         
         # open file
         try:
@@ -100,8 +97,7 @@ class LogThread(ExceptionThread):
             quoting=csv.QUOTE_MINIMAL
         )
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Writing '{}' elements until queue is empty".format(
+        log_debug(self._logger, "Writing '{}' elements until queue is empty".format(
                                self.queue.qsize()))
         
         # write all new rows
@@ -109,9 +105,8 @@ class LogThread(ExceptionThread):
             cells = self.queue.get()
             log_writer.writerow(cells)
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Done with writing, queue is now empty")
-            self._logger.debug("Closing file '{}'".format(self.log_path))
+        log_debug(self._logger, "Done with writing, queue is now empty")
+        log_debug(self._logger, "Closing file '{}'".format(self.log_path))
         
         # close the files
         log_file.close()
@@ -120,15 +115,13 @@ class LogThread(ExceptionThread):
         
     def finishAndStop(self) -> None:
         """Finish the current queue and then stop the execution."""
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Writing all elements from queue and then stopping")
+        log_debug(self._logger, "Writing all elements from queue and then stopping")
         self._writeQueueToLog()
         self.stop()
     
     def stop(self) -> None:
         """Stop the thread loop."""
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Stopping")
+        log_debug(self._logger, "Stopping")
         self.running = False
 
     def addToLog(self, cells: typing.Sequence) -> None:
@@ -139,6 +132,5 @@ class LogThread(ExceptionThread):
         cells : list
             The list of cells to add to the current row of the log
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Adding row '{}' to log".format(cells))
+        log_debug(self._logger, "Adding row '{}' to log".format(cells))
         self.queue.put(cells)

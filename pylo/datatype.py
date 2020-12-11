@@ -3,7 +3,7 @@ import math
 import typing
 import logging
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import get_logger
 
 # the regular expression that matches any valid format specification, each 
@@ -115,8 +115,7 @@ class Datatype:
 
         if callable(self._parse):
             ret = self._parse(value)
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Parsing value '{}' to '{}'".format(value, ret))
+            log_debug(self._logger, "Parsing value '{}' to '{}'".format(value, ret))
             return ret
         else:
             return value
@@ -138,8 +137,7 @@ class Datatype:
             The string representation of the `value` in the current datatype
         """
         ret = self._format(value, format)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Formatting value '{}' to '{}'".format(value, ret))
+        log_debug(self._logger, "Formatting value '{}' to '{}'".format(value, ret))
         return ret
     
     def __call__(self, *args: typing.Any) -> typing.Any:

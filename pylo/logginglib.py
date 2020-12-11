@@ -93,11 +93,38 @@ def log_error(logger: logging.Logger, error: Exception,
         The logger object
     error : Exception
         The exception to log
+    loggin_level : int, optional
+        The level to log for, default: logging.ERROR
     """
     if do_log(logger, logging_level):
         logger.log(logging_level, 
                    "{}: {}".format(error.__class__.__name__, error), 
                    exc_info=error)
+
+def log_debug(logger: logging.Logger, msg: str, *args,
+              logging_level: typing.Optional[int]=logging.DEBUG, **kwargs) -> None:
+    """Log the given `msg` to the `logger` if logging is enabled.
+
+    All `args` and `kwargs` will be passed to the `logger` instance. 
+
+    Logging can be disabled on either the logging module or in the `pylo.config`.
+    The result defines whether to log or not. This result is cached to prevent
+    walking through logger hierarchies or to import the config module over and
+    over again.
+
+    Changing logging on runtime is not supported.
+    
+    Parameters
+    ----------
+    logger : logging.Logger
+        The logger object
+    msg : str
+        The message to log
+    loggin_level : int, optional
+        The level to log for, default: logging.DEBUG
+    """
+    if do_log(logger, logging_level):
+        logger.log(logging_level, msg, *args, **kwargs)
 
 def get_logger(obj: typing.Union[str, object], 
                create_msg: typing.Optional[bool]=True, 

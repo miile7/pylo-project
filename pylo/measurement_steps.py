@@ -5,7 +5,7 @@ import logging
 import functools
 import collections.abc
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
 from .pylolib import get_datatype_human_text
@@ -119,8 +119,7 @@ class MeasurementSteps(collections.abc.Sequence):
             The valid `start` dict
         """
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Formatting series '{}'".format(series))
+        log_debug(self._logger, "Formatting series '{}'".format(series))
 
         if isinstance(series_path, (list, tuple)):
             error_str = "".join([" in 'on-each-point' of {}".format(p) 
@@ -213,8 +212,7 @@ class MeasurementSteps(collections.abc.Sequence):
             else:
                 del series["on-each-point"]
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Done with formatting, series is now '{}'".format(series))
+        log_debug(self._logger, "Done with formatting, series is now '{}'".format(series))
         return series
         
     def _formatStart(self, controller: "Controller", start: dict, series: dict) -> dict:
@@ -257,8 +255,7 @@ class MeasurementSteps(collections.abc.Sequence):
             The valid `start` dict
         """
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Formatting start '{}' with series " + 
+        log_debug(self._logger, ("Formatting start '{}' with series " + 
                                 "'{}'").format(start, series))
 
         # extract the start values from the series
@@ -310,8 +307,7 @@ class MeasurementSteps(collections.abc.Sequence):
                 log_error(self._logger, err)
                 raise err
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Done with formatting, start is now '{}'".format(start))
+        log_debug(self._logger, "Done with formatting, start is now '{}'".format(start))
         return start
     
     def __len__(self) -> int:
@@ -330,8 +326,7 @@ class MeasurementSteps(collections.abc.Sequence):
         # returned by MeasurementSteps._getNestLengths()
         nests = self._getNestLengths()
         self._cached_len = functools.reduce(lambda x, y: x * y, nests, 1)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Returning length '{}' calculated with " + 
+        log_debug(self._logger, ("Returning length '{}' calculated with " + 
                                 "product of '{}'").format(self._cached_len, 
                                 list(nests)))
         return self._cached_len
@@ -513,8 +508,7 @@ class MeasurementSteps(collections.abc.Sequence):
         """
 
         if self._cached_nests is None:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Creating nests and caching them")
+            log_debug(self._logger, "Creating nests and caching them")
             # nest_lengths = list(self._getNestLengths())
             # r_commulative_nest_lengths = tuple(reversed(tuple(self._getCommulativeNestLengths())))
             # commulative_nest_lengths = tuple(self._getCommulativeNestLengths())
@@ -526,8 +520,7 @@ class MeasurementSteps(collections.abc.Sequence):
                                   commulative_nest_lengths,
                                   nest_series)
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Returning cached nests '{}'".format(
+        log_debug(self._logger, "Returning cached nests '{}'".format(
                                self._cached_nests))
         
         return self._cached_nests
@@ -548,8 +541,7 @@ class MeasurementSteps(collections.abc.Sequence):
             The measurement step dict containing all measurement variable ids
             and their corresponding value for the given `index`
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Getting item for index '{}'".format(index))
+        log_debug(self._logger, "Getting item for index '{}'".format(index))
         
         if index < 0:
             err = IndexError(("The index has to be greater than 0 but it " + 
@@ -571,8 +563,7 @@ class MeasurementSteps(collections.abc.Sequence):
         # print("MeasurementSteps.__getitem__() for index {}".format(index))
         # for i, series in enumerate(nest_series):
         #     print("   {}: {}: {} values".format(i, series["variable"], commulative_nest_lengths[i]))
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Iterating over nests '{}'".format(nest_series))
+        log_debug(self._logger, "Iterating over nests '{}'".format(nest_series))
         
         remaining_index = index
         for i, series in enumerate(nest_series):
@@ -596,8 +587,7 @@ class MeasurementSteps(collections.abc.Sequence):
                 )
             )
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Setting '{}' of step to start value " + 
+            log_debug(self._logger, ("Setting '{}' of step to start value " + 
                                     "'{}' plus '{}' times the step width "+ 
                                     "'{}' (= '{}') calculated from the '{}'th " + 
                                     "series (counting from outer to inner = " + 
@@ -609,8 +599,7 @@ class MeasurementSteps(collections.abc.Sequence):
                                     remaining_index))
 
         # print("-> returning", step)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Returning step '{}'".format(step))
+        log_debug(self._logger, "Returning step '{}'".format(step))
 
         return step
     
@@ -622,8 +611,7 @@ class MeasurementSteps(collections.abc.Sequence):
         Iterator
             This object
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Initializing iteration over measurement steps")
+        log_debug(self._logger, "Initializing iteration over measurement steps")
         self._current_step = None
         self._carry = False
         self._r_nest_series = tuple(reversed(tuple(self._getNestSeries())))
@@ -642,16 +630,13 @@ class MeasurementSteps(collections.abc.Sequence):
         """
 
         # print("MeasurementSteps.__next__()")
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Creating next measurement step")
+        log_debug(self._logger, "Creating next measurement step")
 
         if self._current_step is None:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Returing start '{}'".format(self.start))
+            log_debug(self._logger, "Returing start '{}'".format(self.start))
             self._current_step = self.start
         elif self._carry:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Stopping iteration because carry is '{}'".format(
+            log_debug(self._logger, "Stopping iteration because carry is '{}'".format(
                     self._carry))
             raise StopIteration()
         else:
@@ -663,8 +648,7 @@ class MeasurementSteps(collections.abc.Sequence):
             for series in self._r_nest_series:
                 if (math.isclose(self._current_step[series["variable"]] + series["step-width"], series["end"]) or
                     self._current_step[series["variable"]] + series["step-width"] < series["end"]):
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Adding step width '{}' of '{}' " + 
+                    log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
                                             "to current step is still " + 
                                             "smaller or equal than the end " + 
                                             "value '{}'").format(
@@ -674,8 +658,7 @@ class MeasurementSteps(collections.abc.Sequence):
                     self._carry = False
                     break
                 else:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Adding step width '{}' of '{}' " + 
+                    log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
                                             "to current step is greater " + 
                                             " than the end value '{}', " + 
                                             "resetting value to start value " + 
@@ -686,16 +669,14 @@ class MeasurementSteps(collections.abc.Sequence):
                     self._carry = True
             
             if self._carry:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Carry is true but all series are " + 
+                log_debug(self._logger, "Carry is true but all series are " + 
                                        "visited, that means that all steps " + 
                                        "are visited which means the " + 
                                        "measurement is done. Stopping " + 
                                        "iteration")
                 raise StopIteration()
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Returning step '{}'".format(self._current_step))
+        log_debug(self._logger, "Returning step '{}'".format(self._current_step))
         # make sure to copy the step, otherwise the step will be modified after 
         # returning it
         return copy.deepcopy(self._current_step)

@@ -20,7 +20,7 @@ from .events import measurement_ready
 from .errors import BlockedFunctionError
 
 from .image import Image
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .datatype import Datatype
 from .logginglib import get_logger
@@ -96,8 +96,7 @@ class Measurement:
         # make sure the directory exists
         if not os.path.exists(self.save_dir):
             try:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Creating measurement save directory " + 
+                log_debug(self._logger, ("Creating measurement save directory " + 
                                         "'{}'").format(self.save_dir))
                 os.makedirs(self.save_dir, exist_ok=True)
             except OSError as e:
@@ -116,8 +115,9 @@ class Measurement:
         measurement_log_dir = os.path.dirname(self._measurement_log_path)
         if not os.path.exists(measurement_log_dir):
             try:
-                self._logger.debug(("Creating measurement log directory " + 
-                                    "'{}'").format(measurement_log_dir))
+                log_debug(self._logger, ("Creating measurement log " + 
+                                         "directory '{}'").format(
+                                         measurement_log_dir))
                 os.makedirs(measurement_log_dir, exist_ok=True)
             except OSError as e:
                 err = OSError(("The log directory '{}' does not exist and " + 
@@ -132,8 +132,7 @@ class Measurement:
                 "microscope-to-safe-state-after-measurement"
             )
         except KeyError:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Could not find key '{}' in group '{}'").format(
+            log_debug(self._logger, ("Could not find key '{}' in group '{}'").format(
                 "microscope-to-safe-state-after-measurement",
                 CONFIG_MEASUREMENT_GROUP))
             self.microscope_safe_after = None
@@ -147,8 +146,7 @@ class Measurement:
                 "camera-to-safe-state-after-measurement"
             )
         except KeyError:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Could not find key '{}' in group '{}'").format(
+            log_debug(self._logger, ("Could not find key '{}' in group '{}'").format(
                 "camera-to-safe-state-after-measurement",
                 CONFIG_MEASUREMENT_GROUP))
             self.camera_safe_after = None
@@ -169,8 +167,7 @@ class Measurement:
             self.relaxation_time < 0):
             self.relaxation_time = 0
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Setting relaxation time to '{}'".format(self.relaxation_time))
+        log_debug(self._logger, "Setting relaxation time to '{}'".format(self.relaxation_time))
 
         self.current_image = None
         self.running = False
@@ -179,8 +176,7 @@ class Measurement:
         self._image_save_threads = []
 
         # stop the measurement when the emergency event is fired
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Adding stop() function call to emergency " + 
+        log_debug(self._logger, "Adding stop() function call to emergency " + 
                                "event")
         emergency.append(self.stop)
 
@@ -259,15 +255,13 @@ class Measurement:
             variables=variables, var=variables, imgtags=imgtags, time=time,
             date=time, datetime=time, counter=counter, number=counter, 
             num=counter))
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Formatting name to '{}'".format(name))
+        log_debug(self._logger, "Formatting name to '{}'".format(name))
         return name
     
     def _setSafe(self) -> None:
         """Set the microscope and the camera to be in safe state."""
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Setting micorsocpe and camera to safe state",
+        log_debug(self._logger, "Setting micorsocpe and camera to safe state",
                                exc_info=True)
 
         try:
@@ -301,8 +295,7 @@ class Measurement:
         measurement_ready
             Fired when the measurement has fully finished
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Starting measurement with microscope '{}'" + 
+        log_debug(self._logger, ("Starting measurement with microscope '{}'" + 
                                 "and camera '{}'").format(
                                 self.controller.microscope, self.controller.camera))
         
@@ -323,8 +316,7 @@ class Measurement:
         self._image_save_threads = []
 
         if self.measurement_logging:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Initializing measurement log")
+            log_debug(self._logger, "Initializing measurement log")
             self.setupMeasurementLog(
                 [v.unique_id for v in self.controller.microscope.supported_measurement_variables],
                 ["Action"],
@@ -332,16 +324,14 @@ class Measurement:
             )
 
         try:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Setting microscope to lorentz mode")
+            log_debug(self._logger, "Setting microscope to lorentz mode")
             # set to lorentz mode
             self.controller.view.print("Setting to lorentz mode...")
             self.controller.microscope.setInLorentzMode(True)
         
             if (isinstance(self.relaxation_time, (int, float)) and 
                 self.relaxation_time > 0):
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Waiting relaxation time of '{}' " + 
+                log_debug(self._logger, ("Waiting relaxation time of '{}' " + 
                                         "seconds").format(self.relaxation_time))
                 start_time = time.time()
 
@@ -353,31 +343,26 @@ class Measurement:
                         # stop() is called
                         return
                 
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Continuing with measurement")
+                log_debug(self._logger, "Continuing with measurement")
 
             if not self.running:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Stopping measurement because running " + 
+                log_debug(self._logger, ("Stopping measurement because running " + 
                                         "is now '{}'").format(self.running))
                 # stop() is called
                 return
             
             # trigger microscope ready event
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Firing 'microscope_ready' event")
+            log_debug(self._logger, "Firing 'microscope_ready' event")
             microscope_ready()
             self.controller.view.print("Done.")
 
             for self._step_index, step in enumerate(self.steps):
                 # start going through steps
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Starting step '{}': '{}'".format(
+                log_debug(self._logger, "Starting step '{}': '{}'".format(
                                        self._step_index, step))
 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
@@ -386,13 +371,11 @@ class Measurement:
                 self.raiseThreadErrors()
                 
                 # fire event before recording
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Firing 'before_record' event")
+                log_debug(self._logger, "Firing 'before_record' event")
                 before_record()
 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
@@ -411,14 +394,12 @@ class Measurement:
                 measurement_variable_threads = []
 
                 for variable_name in step:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Setting variable '{}' of step to " + 
+                    log_debug(self._logger, ("Setting variable '{}' of step to " + 
                                             "value '{}'").format(variable_name,
                                            step[variable_name]))
                     # set each measurement variable
                     if not self.running:
-                        if do_log(self._logger, logging.DEBUG):
-                            self._logger.debug(("Stopping measurement because " + 
+                        log_debug(self._logger, ("Stopping measurement because " + 
                                                 "running is now '{}'").format(self.running))
                         # stop() is called
                         return
@@ -426,8 +407,7 @@ class Measurement:
                     if self.controller.microscope.supports_parallel_measurement_variable_setting:
                         # MicroscopeInterface.setMeasurementVariableValue() can
                         # set parallel
-                        if do_log(self._logger, logging.DEBUG):
-                            self._logger.debug(("Microscope can set variables " + 
+                        log_debug(self._logger, ("Microscope can set variables " + 
                                                 "parallely, creating new " + 
                                                 "thread for variable"))
                         thread = ExceptionThread(
@@ -437,8 +417,7 @@ class Measurement:
                                 variable_name, self._step_index
                             )
                         )
-                        if do_log(self._logger, logging.DEBUG):
-                            self._logger.debug("Starting variable setting " + 
+                        log_debug(self._logger, "Starting variable setting " + 
                                                "thread")
                         thread.start()
                         measurement_variable_threads.append(thread)
@@ -449,8 +428,7 @@ class Measurement:
                             step[variable_name]
                         )
                 
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Waiting for '{}' variable setting " + 
+                log_debug(self._logger, ("Waiting for '{}' variable setting " + 
                                         "threads").format(len(measurement_variable_threads)))
                 # Wait for all measurement variable threads to finish
                 for thread in measurement_variable_threads:
@@ -462,24 +440,21 @@ class Measurement:
                 self.controller.view.print("Done.", inset="  ")
                 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
 
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Receiving values from microscope")
+                log_debug(self._logger, "Receiving values from microscope")
                 # get the actual values
                 variable_values = {}
                 for variable_name in step:
                     variable_values[variable_name] = (
                         self.controller.microscope.getMeasurementVariableValue(variable_name)
                     )
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Got values '{}' from microscope".format(
-                                       variable_values))
-                    self._logger.debug("Recording image")
+                log_debug(self._logger, "Got values '{}' from microscope".format(
+                                        variable_values))
+                log_debug(self._logger, "Recording image")
                 
                 self.controller.view.print("Recording image...", inset="  ")
                 # record measurement, add the real values to the image
@@ -489,8 +464,7 @@ class Measurement:
                 name = self.formatName()
                 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
@@ -501,26 +475,22 @@ class Measurement:
                                   datetime.datetime.now().isoformat())
                 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
                 
                 # fire event after recording but before saving
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Firing 'after_record' event")
+                log_debug(self._logger, "Firing 'after_record' event")
                 after_record()
 
                 if not self.running:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Stopping measurement because " + 
+                    log_debug(self._logger, ("Stopping measurement because " + 
                                             "running is now '{}'").format(self.running))
                     # stop() is called, maybe by after_record() event handler
                     return
                 
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Starting image save thread for " +
+                log_debug(self._logger, ("Starting image save thread for " +
                                         "image '{}'").format(name))
                 
                 # save the image parallel to working on, saveTo() funciton
@@ -536,13 +506,11 @@ class Measurement:
                 # check all thread exceptions
                 self.raiseThreadErrors()
 
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Increasing progress to '{}'".format(self._step_index + 1))
+                log_debug(self._logger, "Increasing progress to '{}'".format(self._step_index + 1))
                 
                 self.controller.view.progress = self._step_index + 1
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Done with all steps")
+            log_debug(self._logger, "Done with all steps")
             
             self.controller.view.print("Done with measurement.")
 
@@ -551,8 +519,7 @@ class Measurement:
             # for the operator to come back very quickly, do this while waiting
             # for the save threads to finish
             if self.microscope_safe_after:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Setting microscope to safe state " + 
+                log_debug(self._logger, "Setting microscope to safe state " + 
                                        "in other thread because settings " + 
                                        "told so")
                 thread = ExceptionThread(
@@ -563,8 +530,7 @@ class Measurement:
                 reset_threads.append(thread)
                 self.controller.view.print("Setting microscope to safe state...")
             if self.camera_safe_after:
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Setting camera to safe state " + 
+                log_debug(self._logger, "Setting camera to safe state " + 
                                        "in other thread because settings " + 
                                        "told so")
                 thread = ExceptionThread(
@@ -582,8 +548,7 @@ class Measurement:
             # check all thread exceptions
             self.raiseThreadErrors(*reset_threads)
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Waiting for images to finish saving")
+            log_debug(self._logger, "Waiting for images to finish saving")
 
             # wait for all saving threads to finish
             self.waitForAllImageSavings()
@@ -602,16 +567,13 @@ class Measurement:
             self.running = False
             self._step_index = -1
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Setting 'finished' to True")
+            log_debug(self._logger, "Setting 'finished' to True")
             self.finished = True
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Firing 'measurement_ready' event")
+            log_debug(self._logger, "Firing 'measurement_ready' event")
             measurement_ready()
         except StopProgram as e:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Stopping program", exc_info=e)
+            log_debug(self._logger, "Stopping program", exc_info=e)
             self.stop()
             raise e
         except Exception as e:
@@ -623,13 +585,11 @@ class Measurement:
     def waitForAllImageSavings(self) -> None:
         """Wait until all threads where images or the log are saved have 
         finished."""
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Waiting for all save threads")
+        log_debug(self._logger, "Waiting for all save threads")
         
         for thread in self._image_save_threads + [self._measurement_log_thread]:
             if isinstance(thread, ExceptionThread):
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug("Joining thread '{}'".format(thread.name))
+                log_debug(self._logger, "Joining thread '{}'".format(thread.name))
                 thread.join()
                 
                 if len(thread.exceptions):
@@ -637,8 +597,7 @@ class Measurement:
                         log_error(error)
                         raise error
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Done with waiting")
+        log_debug(self._logger, "Done with waiting")
     
     def stop(self) -> None:
         """Stop the measurement. 
@@ -652,20 +611,17 @@ class Measurement:
             Fired when this function is executed
         """
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Stopping measurement")
+        log_debug(self._logger, "Stopping measurement")
         
         self.running = False
         self._setSafe()
 
         if isinstance(self._measurement_log_thread, LogThread):
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Stopping measurement log thread")
+            log_debug(self._logger, "Stopping measurement log thread")
             self._measurement_log_thread.stop()
 
         # fire stop event
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Firing 'after_stop' event")
+        log_debug(self._logger, "Firing 'after_stop' event")
         after_stop()
     
     def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
@@ -792,8 +748,7 @@ class Measurement:
                 )
         column_headlines += after_columns
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Setting up measurement log with columns " + 
+        log_debug(self._logger, "Setting up measurement log with columns " + 
                                "'{}'".format(column_headlines))
         
         self._measurement_log_thread.addToLog(column_headlines)
@@ -846,8 +801,7 @@ class Measurement:
             else:
                 cells.append("")
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Adding cells '{}' to measurement log".format(cells))
+        log_debug(self._logger, "Adding cells '{}' to measurement log".format(cells))
         
         self._measurement_log_thread.addToLog(cells)
     

@@ -22,7 +22,7 @@ if load_from_dev:
 import logging
 import execdmscript
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import get_logger
 from .abstract_configuration import AbstractConfiguration
 
@@ -37,8 +37,7 @@ class DMConfiguration(AbstractConfiguration):
         """Load the configuration from the persistant data."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Starting to load configuration from persistent " + 
+        log_debug(self._logger, ("Starting to load configuration from persistent " + 
                                 "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
         try:
             tags = execdmscript.get_persistent_tag(DM_CONFIGURATION_PERSISTENT_TAG_NAME)
@@ -57,20 +56,18 @@ class DMConfiguration(AbstractConfiguration):
                 else:
                     del tags[group]
 
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug("Loading tags '{}' in abstract configuration".format(
+            log_debug(self._logger, "Loading tags '{}' in abstract configuration".format(
                                 tags))
             self.loadFromMapping(tags)
-        elif do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Skipping loading because tags are not a " + 
+        else:
+            log_debug(self._logger, ("Skipping loading because tags are not a " + 
                                 "dict but '{}' (type {})").format(tags, type(tags)))
     
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Starting to save configuration to persistent " + 
+        log_debug(self._logger, ("Starting to save configuration to persistent " + 
                                 "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
 
         if DM is not None:
@@ -87,8 +84,7 @@ class DMConfiguration(AbstractConfiguration):
                         )
                         value = self.getValue(group, key)
 
-                        if do_log(self._logger, logging.DEBUG):
-                            self._logger.debug(("Saving value '{}' for key '{}' " + 
+                        log_debug(self._logger, ("Saving value '{}' for key '{}' " + 
                                                 "in group '{}' with path '{}' " + 
                                                 "as a '{}'").format(value, key, 
                                                 group, path, datatype))

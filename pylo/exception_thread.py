@@ -26,9 +26,10 @@ class ExceptionThread(threading.Thread):
     
     def run(self, *args, **kwargs):
         """Run the thread."""
-        self._logger.info(("Starting thread '{}' (#{}), currently {} active " + 
-                           "threads").format(self.name, self.ident, 
-                           threading.active_count() - 1))
+        if do_log(self._logger, logging.INFO):
+            self._logger.info(("Starting thread '{}' (#{}), currently {} " + 
+                            "active threads").format(self.name, self.ident, 
+                            threading.active_count() - 1))
         
         try:
             super(ExceptionThread, self).run(*args, **kwargs)
@@ -45,6 +46,7 @@ class ExceptionThread(threading.Thread):
         else:
             e = "."
         
-        self._logger.info(("Ending thread '{}' (#{}), currently {} active " + 
-                           "threads{}").format(self.name, self.ident, 
-                           threading.active_count() - 1, e))
+        if do_log(self._logger, logging.INFO):
+            self._logger.info(("Ending thread '{}' (#{}), currently {} " + 
+                            "active threads{}").format(self.name, self.ident, 
+                            threading.active_count() - 1, e))

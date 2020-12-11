@@ -3,7 +3,7 @@ import copy
 import typing
 import logging
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import get_logger
 from .pylolib import parse_value
 from .datatype import Datatype
@@ -226,8 +226,7 @@ class AbstractConfiguration:
         self.addConfigurationOption(group, key, **kwargs)
 
         self.configuration[group][key]["value"] = [value]
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Setting key '{}' in group '{}' to '{}' (type " + 
+        log_debug(self._logger, ("Setting key '{}' in group '{}' to '{}' (type " + 
                                 "{})").format(key, group, value, type(value)))
     
     def addConfigurationOption(self, group: str, key: str, 
@@ -318,8 +317,7 @@ class AbstractConfiguration:
                 else:
                     self.configuration[group][key][k] = kwargs[k]
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Setting configuration option '{}' in group " + 
+        log_debug(self._logger, ("Setting configuration option '{}' in group " + 
                                 "'{}' to '{}'").format(key, group, 
                                 self.configuration[group][key]))
     
@@ -681,8 +679,7 @@ class AbstractConfiguration:
                             "overwriting temporarily.").format(key, group))
         
         self.configuration[group][key]["value"].append(value)
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Temporary overwriting key '{}' in group '{}' " + 
+        log_debug(self._logger, ("Temporary overwriting key '{}' in group '{}' " + 
                                 "with value '{}'").format(key, group, value))
     
     def resetValue(self, group: str, key: str, count: typing.Optional[int]=1) -> None:
@@ -714,8 +711,7 @@ class AbstractConfiguration:
                             "group '{}', therefore cannot be resetted.").format(key, group))
 
         if count == 0 or len(self.configuration[group][key]) <= 1:
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Trying to reset key '{}' of group '{}' but " + 
+            log_debug(self._logger, ("Trying to reset key '{}' of group '{}' but " + 
                                     "either the count is zero or there is no " + 
                                     "value to reset to").format(key, group))
             return
@@ -728,8 +724,7 @@ class AbstractConfiguration:
         
         # taken from https://stackoverflow.com/a/15715924/5934316
         del self.configuration[group][key]["value"][-count:]
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Resetting key '{}' in group '{}', the value is " + 
+        log_debug(self._logger, ("Resetting key '{}' in group '{}', the value is " + 
                                 "now '{}'").format(key, group, 
                                 self.configuration[group][key]["value"][-1]))
     
@@ -752,8 +747,7 @@ class AbstractConfiguration:
 
         if self._keyExists(group, key):
             self.configuration[group][key]["value"] = []
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Removing value of key '{}' in group " + 
+        log_debug(self._logger, ("Removing value of key '{}' in group " + 
                                 "'{}'").format(key, group))
     
     def removeElement(self, group: str, key: str) -> None:
@@ -775,14 +769,12 @@ class AbstractConfiguration:
 
         if self._keyExists(group, key):
             del self.configuration[group][key]
-            if do_log(self._logger, logging.DEBUG):
-                self._logger.debug(("Removing key '{}' in group '{}'").format(key, group))
+            log_debug(self._logger, ("Removing key '{}' in group '{}'").format(key, group))
 
             if len(self.configuration[group]) == 0:
                 # group is empty, delete it too
                 del self.configuration[group]
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Removing group '{}'").format(group))
+                log_debug(self._logger, ("Removing group '{}'").format(group))
 
     def markState(self) -> int:
         """Mark the current state of the configuration.
@@ -1116,8 +1108,7 @@ class AbstractConfiguration:
             raise KeyError("The state '{}' does not exist.".format(state_id))
         
         self.configuration = self.marked_states[state_id]
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug(("Resetting configuration to previous marked " + 
+        log_debug(self._logger, ("Resetting configuration to previous marked " + 
                                 "state '{}', configuration is now '{}'").format(
                                     state_id, self.configuration))
 

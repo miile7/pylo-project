@@ -86,8 +86,7 @@ try:
 
 	import pylo
 	logger = pylo.logginglib.get_logger("dm_main.py", create_msg=False)
-	if pylo.logginglib.do_log(logger, logging.DEBUG):
-		logger.debug("Imported 'pylo' in 'dm_main.py', created logger")
+	pylo.logginglib.log_debug(logger, "Imported 'pylo' in 'dm_main.py', created logger")
 
 	try:
 		# starting from here the logger is present so errors are logged
@@ -113,8 +112,7 @@ try:
 		for name in application_dir_names:
 			dmscript.append(dmscript_template.format(tagname=dir_path_tag_name.format(dirname=name),
 													dirname=name))
-		if pylo.logginglib.do_log(logger, logging.DEBUG):
-			logger.debug(("Getting dm paths for device ini files by executing " + 
+		pylo.logginglib.log_debug(logger, ("Getting dm paths for device ini files by executing " + 
 						"dmscript '{}'").format(dmscript))
 		# execute the script
 		DM.ExecuteScriptString("\n".join(dmscript))
@@ -165,8 +163,7 @@ try:
 		print("Exiting.")
 	except Exception as e:
 		if isinstance(e, pylo.StopProgram):
-			if pylo.logginglib.do_log(logger, logging.DEBUG):
-				logger.debug("Stopping program", exc_info=e)
+			pylo.logginglib.log_debug(logger, "Stopping program", exc_info=e)
 		else:
 			pylo.logginglib.log_error(logger, e)
 		raise e

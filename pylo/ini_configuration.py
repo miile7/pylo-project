@@ -4,7 +4,7 @@ import logging
 import textwrap
 import configparser
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import log_error
 from .pylolib import path_like
 from .logginglib import get_logger
@@ -48,8 +48,7 @@ class IniConfiguration(AbstractConfiguration):
             from .config import DEFAULT_INI_PATH
             file_path = DEFAULT_INI_PATH
 
-            if do_log(logger, logging.DEBUG):
-                logger.debug("Using file path '{}' from config".format(file_path))
+            log_debug(logger, "Using file path '{}' from config".format(file_path))
 
             try:
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -72,8 +71,7 @@ class IniConfiguration(AbstractConfiguration):
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Loading configuration from ini file '{}'".format(
+        log_debug(self._logger, "Loading configuration from ini file '{}'".format(
                                self.file_path))
         config = configparser.ConfigParser(interpolation=None)
         config.read(self.file_path)
@@ -160,8 +158,7 @@ class IniConfiguration(AbstractConfiguration):
                     # save the value, adding new line for better looks
                     config[group][key] = str(val) + "\n"
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Saving ini configuration to file '{}'".format(
+        log_debug(self._logger, "Saving ini configuration to file '{}'".format(
                                self.file_path))
         with open(self.file_path, 'w+') as configfile:
             config.write(configfile)

@@ -1,6 +1,6 @@
 import logging
 
-from .logginglib import do_log
+from .logginglib import log_debug
 from .logginglib import get_logger
 
 from .errors import BlockedFunctionError
@@ -45,8 +45,7 @@ class BlockedFunction:
             Always
         """
 
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Blocked function '{}' is called".format(self.func_name),
+        log_debug(self._logger, "Blocked function '{}' is called".format(self.func_name),
                             stack_info=True)
         raise BlockedFunctionError(
             "The function {} is currently blocked.".format(self.func_name)

@@ -1,11 +1,11 @@
 import typing
 import logging
 
-from .logginglib import do_log
-from .logginglib import get_logger
+from .datatype import Datatype
 from .pylolib import parse_value
 from .pylolib import human_concat_list
-from .datatype import Datatype
+from .logginglib import log_debug
+from .logginglib import get_logger
 
 if hasattr(typing, "TypedDict"):
     AskInput = typing.TypedDict("AskInput", {
@@ -49,8 +49,7 @@ class AbstractView:
         else:
             self.__progress = progress
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Setting progress to '{}' (was initially '{}')".format(
+        log_debug(self._logger, "Setting progress to '{}' (was initially '{}')".format(
                                self.__progress, progress))
         
         if self.show_running:
@@ -73,8 +72,7 @@ class AbstractView:
             and the tags at index 2 in the way defined by the individual 
             functions
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Showing program dialogs")
+        log_debug(self._logger, "Showing program dialogs")
         start, series = self.showCreateMeasurement(controller)
         configuration = self.showSettings(controller.configuration)
         custom_tags = self.showCustomTags(controller)
@@ -171,8 +169,7 @@ class AbstractView:
             The custom tags as key-value pairs
         """
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Showing custom tags dialog")
+        log_debug(self._logger, "Showing custom tags dialog")
         tags = self._getCustomTagsFromConfiguration(configuration)
         tags = self._showCustomTags(tags)
         return self._convertCustomTagsToDict(configuration, tags, 
@@ -353,14 +350,12 @@ class AbstractView:
         """Show the progress bar and the outputs of the `AbstractView::print()`
         function.
         """
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Showing a running indicator")
+        log_debug(self._logger, "Showing a running indicator")
         self.show_running = True
     
     def hideRunning(self) -> None:
         """Hides the progress bar shown by `AbstractView::showRunning()`."""
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Hiding the running indicator")
+        log_debug(self._logger, "Hiding the running indicator")
         self.show_running = False
 
     def _updateRunning(self) -> None:
@@ -522,8 +517,7 @@ class AbstractView:
         for v in measurement_variables.values():
             if not isinstance(start, dict):
                 if not add_defaults:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Trying to parse start but the " + 
+                    log_debug(self._logger, ("Trying to parse start but the " + 
                                             "given start is not a dict but " + 
                                             "'{}' (type {})").format(start, type(start)))
                     return None, errors
@@ -536,8 +530,7 @@ class AbstractView:
             if (not v.unique_id in start or 
                 not isinstance(start[v.unique_id], (int, float))):
                 if not add_defaults:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Trying to parse start but the " + 
+                    log_debug(self._logger, ("Trying to parse start but the " + 
                                             "measurement variable '{}' (id " + 
                                             "'{}') is missing").format(v.name, 
                                             v.unique_id))
@@ -563,8 +556,7 @@ class AbstractView:
                                 ))
                     start[v.unique_id] = v.min_value
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Parsing start to '{}' with errors '{}'".format(
+        log_debug(self._logger, "Parsing start to '{}' with errors '{}'".format(
                                start, errors))
         return start, errors
     
@@ -638,8 +630,7 @@ class AbstractView:
             if len(ids) == 0:
                 errors.append(("There is no variable left to make a series " + 
                                "on each point."))
-                if do_log(self._logger, logging.DEBUG):
-                    self._logger.debug(("Parsing series but the following errors " + 
+                log_debug(self._logger, ("Parsing series but the following errors " + 
                                         "occurred: '{}'").format(errors))
                 return None, errors
             elif "variable" in series and series["variable"] in path:
@@ -651,8 +642,7 @@ class AbstractView:
                                 human_concat_list(ids)
                             ))
                 if not add_defaults:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Parsing series but the following errors " + 
+                    log_debug(self._logger, ("Parsing series but the following errors " + 
                                             "occurred: '{}'").format(errors))
                     return None, errors
             else:
@@ -677,8 +667,7 @@ class AbstractView:
             
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:
-                    if do_log(self._logger, logging.DEBUG):
-                        self._logger.debug(("Parsing series but the variable " + 
+                    log_debug(self._logger, ("Parsing series but the variable " + 
                                             "'{}' is missing. Other errors: '{}'").format(
                                                 k, errors))
                     return None, errors
@@ -738,6 +727,5 @@ class AbstractView:
             if series["on-each-point"] is None:
                 del series["on-each-point"]
         
-        if do_log(self._logger, logging.DEBUG):
-            self._logger.debug("Parsing the series to '{}'".format(series))
+        log_debug(self._logger, "Parsing the series to '{}'".format(series))
         return series, errors

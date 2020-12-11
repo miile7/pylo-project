@@ -2,7 +2,6 @@ import re
 import typing
 import logging
 
-from .logginglib import do_log
 from .logginglib import get_logger
 
 if hasattr(typing, "Literal"):
