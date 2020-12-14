@@ -172,7 +172,26 @@ def get_logger(obj: typing.Union[str, object],
                      instance_args, instance_kwargs))
     return logger
 
-def create_handlers():
+def create_handlers() -> typing.Sequence[logging.Handler]:
+    """Create the logging handlers to write debug information into the debug 
+    file and the info logs into the output stream.
+
+    Use:
+    ```python
+    >>> logger = logging.getLogger('pylo')
+    >>> logger.setLevel(logging.DEBUG)
+    
+    >>> # add the handlers to the logger
+    >>> for handler in create_handlers():
+    ...     logger.addHandler(handler)
+    ```
+
+    Returns
+    -------
+    sequence of handlers
+        The handlers to add to the logger
+    """
+
     # create file handler which logs even debug messages
     from .config import PROGRAM_LOG_FILE
     dfm = CsvFormatter()
