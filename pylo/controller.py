@@ -876,7 +876,7 @@ class Controller:
                                                 error.__class__.__name__, 
                                                 thread.name, error), 
                                                 exc_info=error, 
-                                                logging_level=ERROR)
+                                                logging_level=logging.ERROR)
                     else:
                         log_debug(self._logger, ("Stopping program from thread " + 
                                             "'{}'").format(thread.name), 
