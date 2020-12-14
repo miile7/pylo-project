@@ -16,7 +16,7 @@ DMCamera = loader.getDeviceClass("Digital Micrograph Camera")
 
 class _DMDummyCamera:
     def PrepareForAcquire(self):
-        pass
+        self.SetInserted(True)
     
     def AcquireImage(self, exposure_time, binning_x=1, binning_y=1, 
                      process_level=1, ccd_area_top=0, ccd_area_left=0,
@@ -29,6 +29,12 @@ class _DMDummyCamera:
         img = DM.CreateImage(data)
         time.sleep(0.1)
         return img
+    
+    def IsRetractable(self):
+        return True
+    
+    def SetInserted(self, inserted):
+        self.inserted = inserted
 
 class DMTestCamera(DMCamera):
     def __init__(self, *args, **kwargs) -> None:
