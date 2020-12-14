@@ -50,6 +50,14 @@ class CsvFormatter(logging.Formatter):
     def formatCell(self, cell: typing.Any) -> str:
         return str(cell).replace("\n", "\\n").replace("\r", "\\r")
 
+def record_factory(name, level, fn, lno, msg, args, exc_info, func=None, 
+                   extra=None, sinfo=None) -> logging.LogRecord:
+    frames = traceback.extract_stack(limit=6)
+    frame = frames[0]
+    return logging.LogRecord(name, level, frame.filename, frame.lineno,
+                             msg, args, exc_info, frame.name, sinfo)
+    
+
 __do_log_cache = {}
 def do_log(logger: logging.Logger, log_level: int) -> bool:
     """Whether to log the `log_level` to the given `logger` or not.
@@ -180,7 +188,7 @@ def create_handlers() -> typing.Sequence[logging.Handler]:
     ```python
     >>> logger = logging.getLogger('pylo')
     >>> logger.setLevel(logging.DEBUG)
-    
+
     >>> # add the handlers to the logger
     >>> for handler in create_handlers():
     ...     logger.addHandler(handler)
