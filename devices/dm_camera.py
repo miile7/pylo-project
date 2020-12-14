@@ -177,7 +177,15 @@ class DMCamera(CameraInterface):
         return image
     
     def resetToSafeState(self) -> None:
-        pass
+        """Move the camera to a safe state by retracting it."""
+        
+        logginglib.log_debug(self._logger, "Trying to retract the camera")
+        if self.camera.IsRetractable():
+            self.camera.SetInserted(False)
+            logginglib.log_debug(self._logger, "Retracted camera")
+        else:
+            logginglib.log_debug(self._logger, "Retracting camera is not " + 
+                                               "allowed by this camera")
 
     def _ensureWorkspace(self, activate_new: typing.Optional[bool]=True, 
                          force_active: typing.Optional[bool]=False) -> None:
