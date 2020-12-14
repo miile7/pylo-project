@@ -689,7 +689,8 @@ class Controller:
                     self.view.showError(msg, fix)
 
                 # set the custom tags to the measurement
-                self.measurement.tags = interactions[3]
+                if isinstance(interactions, dict):
+                    self.measurement.tags = interactions[3]
 
             # show an error that the max loop count is reached and stop the
             # execution
