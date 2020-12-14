@@ -1,9 +1,13 @@
 import copy
 import math
 import typing
+import logging
 import functools
 import collections.abc
 
+from .logginglib import log_debug
+from .logginglib import log_error
+from .logginglib import get_logger
 from .pylolib import get_datatype_human_text
 
 class MeasurementSteps(collections.abc.Sequence):
@@ -62,10 +66,15 @@ class MeasurementSteps(collections.abc.Sequence):
             The full list represents the measurement defined by the 
             `start_condition` and the `series`.
         """
+
+        self._logger = get_logger(self, instance_args=(series, start))
         
         self.controller = controller
         self.series = self._formatSeries(controller, series)
         self.start = self._formatStart(controller, start, self.series)
+
+        self._cached_len = None
+        self._cached_nests = None
     
     def _formatSeries(self, controller: "Controller", series: dict, 
                       series_path: typing.Optional[list]=[]) -> dict:
@@ -110,6 +119,8 @@ class MeasurementSteps(collections.abc.Sequence):
             The valid `start` dict
         """
 
+        log_debug(self._logger, "Formatting series '{}'".format(series))
+
         if isinstance(series_path, (list, tuple)):
             error_str = "".join([" in 'on-each-point' of {}".format(p) 
                                   for p in series_path])
@@ -128,15 +139,19 @@ class MeasurementSteps(collections.abc.Sequence):
         # correct
         for key, datatype in series_definition.items():
             if key not in series:
-                raise KeyError(("The series{} does not have a '{}' " + 
+                err = KeyError(("The series{} does not have a '{}' " + 
                                 "index.").format(error_str, key))
+                log_error(self._logger, err)
+                raise err
             elif not isinstance(series[key], datatype):
-                raise TypeError(("The series{} '{}' key has to be of type {} " + 
+                err = TypeError(("The series{} '{}' key has to be of type {} " + 
                                  "but it is {}.").format(
                                      error_str,
                                      key, 
                                      get_datatype_human_text(datatype),
                                      type(series[key])))
+                log_error(self._logger, err)
+                raise err
         
         # check if the series variable exists
         try:
@@ -144,26 +159,32 @@ class MeasurementSteps(collections.abc.Sequence):
                 series["variable"]
             )
         except KeyError:
-            raise ValueError(("The variable '{}' in the series{} is not a " + 
+            err = ValueError(("The variable '{}' in the series{} is not a " + 
                               "valid measurement variable id.").format(
                                   series["variable"], error_str))
+            log_error(self._logger, err)
+            raise err
         
         # prevent recursive series, the series variable must not be in one of 
         # the parent series (if there are parent series)
         if series["variable"] in series_path:
-            raise ValueError(("The variable '{}' in the series{} is " + 
+            err = ValueError(("The variable '{}' in the series{} is " + 
                               "already measured in one of the parent " +
                               "series.").format(series["variable"], error_str))
+            log_error(self._logger, err)
+            raise err
         # test if step is > 0
         if series["step-width"] <= 0:
-            raise ValueError(("The 'step-width' in the series{} must be "+ 
+            err = ValueError(("The 'step-width' in the series{} must be "+ 
                               "greater than 0.").format(error_str))
+            log_error(self._logger, err)
+            raise err
         
         # test if the start and end values are in the boundaries
         for index in ("start", "end"):
             if (series[index] < series_variable.min_value or 
                 series[index] > series_variable.max_value):
-                raise ValueError(("The '{index}' index in the series{path} is " + 
+                err = ValueError(("The '{index}' index in the series{path} is " + 
                                   "out of bounds. The {index} has to be " + 
                                   "{min} <= {index} <= {max} but it is " + 
                                   "{val}.").format(
@@ -173,6 +194,8 @@ class MeasurementSteps(collections.abc.Sequence):
                                       max=series_variable.max_value,
                                       val=series[index]
                                 ))
+                log_error(self._logger, err)
+                raise err
 
         if isinstance(series_path, (tuple, list)):
             series_path = list(series_path)
@@ -189,6 +212,7 @@ class MeasurementSteps(collections.abc.Sequence):
             else:
                 del series["on-each-point"]
         
+        log_debug(self._logger, "Done with formatting, series is now '{}'".format(series))
         return series
         
     def _formatStart(self, controller: "Controller", start: dict, series: dict) -> dict:
@@ -231,6 +255,9 @@ class MeasurementSteps(collections.abc.Sequence):
             The valid `start` dict
         """
 
+        log_debug(self._logger, ("Formatting start '{}' with series " + 
+                                "'{}'").format(start, series))
+
         # extract the start values from the series
         series_starts = {}
         s = series
@@ -249,22 +276,26 @@ class MeasurementSteps(collections.abc.Sequence):
                 # make sure also the measured variable is correct
                 start[var.unique_id] = series_starts[var.unique_id]
             elif var.unique_id not in start:
-                raise KeyError(("The measurement variable {} (id: {}) "  + 
+                err = KeyError(("The measurement variable {} (id: {}) "  + 
                                   "is neither contained in the start " + 
                                   "conditions nor in the series. All " + 
                                   "parameters (measurement variables) " + 
                                   "values must be known!").format(
                                       var.name, var.unique_id))
+                log_error(self._logger, err)
+                raise err
 
             if not isinstance(start[var.unique_id], (int, float)):
-                raise TypeError(("The '{}' index in the start conditions " + 
+                err = TypeError(("The '{}' index in the start conditions " + 
                                  "contains a {} but only int or float are " + 
                                  "supported.").format(
                                      var.unique_id, 
                                      type(start[var.unique_id])))
+                log_error(self._logger, err)
+                raise err
             elif (start[var.unique_id] < var.min_value or 
                   start[var.unique_id] > var.max_value):
-                raise ValueError(("The '{index}' index in the start " + 
+                err = ValueError(("The '{index}' index in the start " + 
                                   "conditions is out of bounds. The {index} " + 
                                   "has to be {min} <= {index} <= {max} but " + 
                                   "it is {val}.").format(
@@ -273,7 +304,10 @@ class MeasurementSteps(collections.abc.Sequence):
                                     max=var.max_value,
                                     val=start[var.unique_id]
                                 ))
+                log_error(self._logger, err)
+                raise err
 
+        log_debug(self._logger, "Done with formatting, start is now '{}'".format(start))
         return start
     
     def __len__(self) -> int:
@@ -285,9 +319,17 @@ class MeasurementSteps(collections.abc.Sequence):
             The number of steps
         """
 
+        if isinstance(self._cached_len, int):
+            return self._cached_len
+
         # calculate the product of each "on-each-point" series length which is 
         # returned by MeasurementSteps._getNestLengths()
-        return functools.reduce(lambda x, y: x * y, self._getNestLengths(), 1)
+        nests = self._getNestLengths()
+        self._cached_len = functools.reduce(lambda x, y: x * y, nests, 1)
+        log_debug(self._logger, ("Returning length '{}' calculated with " + 
+                                "product of '{}'").format(self._cached_len, 
+                                list(nests)))
+        return self._cached_len
     
     def _getNestLengths(self) -> typing.Generator[int, None, None]:
         """Get a list containing the lengths of each nested series calculating 
@@ -465,8 +507,8 @@ class MeasurementSteps(collections.abc.Sequence):
             series
         """
 
-        if (not hasattr(self, "_cached_nests") or 
-            self._cached_nests is None):
+        if self._cached_nests is None:
+            log_debug(self._logger, "Creating nests and caching them")
             # nest_lengths = list(self._getNestLengths())
             # r_commulative_nest_lengths = tuple(reversed(tuple(self._getCommulativeNestLengths())))
             # commulative_nest_lengths = tuple(self._getCommulativeNestLengths())
@@ -477,6 +519,9 @@ class MeasurementSteps(collections.abc.Sequence):
                                 #   nest_lengths,
                                   commulative_nest_lengths,
                                   nest_series)
+        
+        log_debug(self._logger, "Returning cached nests '{}'".format(
+                               self._cached_nests))
         
         return self._cached_nests
     
@@ -496,16 +541,18 @@ class MeasurementSteps(collections.abc.Sequence):
             The measurement step dict containing all measurement variable ids
             and their corresponding value for the given `index`
         """
+        log_debug(self._logger, "Getting item for index '{}'".format(index))
+        
         if index < 0:
-            raise IndexError(
-                "The index has to be greater than 0 but it is '{}'.".format(index)
-            )
+            err = IndexError(("The index has to be greater than 0 but it " + 
+                              "is '{}'.").format(index))
+            log_error(self._logger, err)
+            raise err
         elif index >= len(self):
-            raise IndexError(
-                "The index has to be smaller than {} but it is '{}'.".format(
-                    len(self), index
-                )
-            )
+            err = IndexError(("The index has to be smaller than {} but it " + 
+                              "is '{}'.").format(len(self), index))
+            log_error(self._logger, err)
+            raise err
         
         nest_count, commulative_nest_lengths, nest_series = self._getCachedNests()
         
@@ -516,6 +563,7 @@ class MeasurementSteps(collections.abc.Sequence):
         # print("MeasurementSteps.__getitem__() for index {}".format(index))
         # for i, series in enumerate(nest_series):
         #     print("   {}: {}: {} values".format(i, series["variable"], commulative_nest_lengths[i]))
+        log_debug(self._logger, "Iterating over nests '{}'".format(nest_series))
         
         remaining_index = index
         for i, series in enumerate(nest_series):
@@ -530,7 +578,7 @@ class MeasurementSteps(collections.abc.Sequence):
             # print("   {}-th value index for value {}".format(value_index, series["variable"]))
 
             # print("   -> value is {}".format(series["start"] + value_index * series["step-width"]))
-            
+
             step[series["variable"]] = max(
                 series["start"], 
                 min(
@@ -539,7 +587,19 @@ class MeasurementSteps(collections.abc.Sequence):
                 )
             )
 
+            log_debug(self._logger, ("Setting '{}' of step to start value " + 
+                                    "'{}' plus '{}' times the step width "+ 
+                                    "'{}' (= '{}') calculated from the '{}'th " + 
+                                    "series (counting from outer to inner = " + 
+                                    "fewest changes to most changes), " + 
+                                    "remaining index is '{}'").format(
+                                    series["variable"], series["start"], 
+                                    value_index, series["step-width"], 
+                                    step[series["variable"]], i, 
+                                    remaining_index))
+
         # print("-> returning", step)
+        log_debug(self._logger, "Returning step '{}'".format(step))
 
         return step
     
@@ -551,6 +611,7 @@ class MeasurementSteps(collections.abc.Sequence):
         Iterator
             This object
         """
+        log_debug(self._logger, "Initializing iteration over measurement steps")
         self._current_step = None
         self._carry = False
         self._r_nest_series = tuple(reversed(tuple(self._getNestSeries())))
@@ -569,10 +630,14 @@ class MeasurementSteps(collections.abc.Sequence):
         """
 
         # print("MeasurementSteps.__next__()")
+        log_debug(self._logger, "Creating next measurement step")
 
         if self._current_step is None:
+            log_debug(self._logger, "Returing start '{}'".format(self.start))
             self._current_step = self.start
         elif self._carry:
+            log_debug(self._logger, "Stopping iteration because carry is '{}'".format(
+                    self._carry))
             raise StopIteration()
         else:
             # use the for-loop as a "carry", when the addition was successfull,
@@ -583,16 +648,35 @@ class MeasurementSteps(collections.abc.Sequence):
             for series in self._r_nest_series:
                 if (math.isclose(self._current_step[series["variable"]] + series["step-width"], series["end"]) or
                     self._current_step[series["variable"]] + series["step-width"] < series["end"]):
+                    log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
+                                            "to current step is still " + 
+                                            "smaller or equal than the end " + 
+                                            "value '{}'").format(
+                                            series["step-width"], 
+                                            series["variable"], series["end"]))
                     self._current_step[series["variable"]] += series["step-width"]
                     self._carry = False
                     break
                 else:
+                    log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
+                                            "to current step is greater " + 
+                                            " than the end value '{}', " + 
+                                            "resetting value to start value " + 
+                                            "and setting carry to True").format(
+                                            series["step-width"], 
+                                            series["variable"], series["end"]))
                     self._current_step[series["variable"]] = series["start"]
                     self._carry = True
             
             if self._carry:
+                log_debug(self._logger, "Carry is true but all series are " + 
+                                       "visited, that means that all steps " + 
+                                       "are visited which means the " + 
+                                       "measurement is done. Stopping " + 
+                                       "iteration")
                 raise StopIteration()
         
+        log_debug(self._logger, "Returning step '{}'".format(self._current_step))
         # make sure to copy the step, otherwise the step will be modified after 
         # returning it
         return copy.deepcopy(self._current_step)

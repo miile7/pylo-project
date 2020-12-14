@@ -3,6 +3,7 @@ import sys
 import copy
 import typing
 import inspect
+import logging
 import importlib
 import configparser
 
@@ -11,8 +12,11 @@ from .errors import DeviceCreationError
 from .errors import DeviceClassNotDefined
 
 from .device import Device
-from .device import device_kinds
+from .logginglib import log_debug
+from .logginglib import log_error
+from .logginglib import get_logger
 from .pylolib import path_like
+from .device import device_kinds
 from .controller import Controller
 from .stop_program import StopProgram
 from .camera_interface import CameraInterface
@@ -55,6 +59,7 @@ class DeviceLoader:
         self.device_ini_files = list(ini_file)
         self._device_class_files = []
         self._device_objects = []
+        self._logger = get_logger(self)
     
     def addDeviceFromFile(self, kind: device_kinds, name: str, 
                           file_path: typing.Union[path_like], 
@@ -78,14 +83,17 @@ class DeviceLoader:
         description : str, optional
             A description of the device, currently not used, default: ""
         """
-        self._device_class_files.append({
+        device_definition = {
             "kind": kind, 
             "name": name, 
             "file_path": file_path, 
             "class_name": class_name, 
             "config_defaults": config_defaults, 
             "description": description
-        })
+        }
+        self._device_class_files.append(device_definition)
+        log_debug(self._logger, ("Registering device from single file " + 
+                                "'{}'").format(device_definition))
 
     def addDeviceObject(self, kind: device_kinds, name: str, device: "Device", 
                         config_defaults: typing.Optional[dict]={}, 
@@ -105,13 +113,16 @@ class DeviceLoader:
         description : str, optional
             A description of the device, currently not used, default: ""
         """
-        self._device_objects.append({
+        device_definition = {
             "kind": kind, 
             "name": name, 
             "object": device,
             "config_defaults": config_defaults, 
             "description": description
-        })
+        }
+        self._device_objects.append(device_definition)
+        log_debug(self._logger, ("Registering device from object " + 
+                                "'{}'").format(device_definition))
     
     def _getDeviceDefinitionsFromInis(self) -> typing.List[dict]:
         """Get the devices dicts from the ini files.
@@ -221,6 +232,8 @@ class DeviceLoader:
             if ("name" in device and device["name"] == name and 
                 "object" in device):
                 found_device = device
+                log_debug(self._logger, ("Getting device '{}' from object list: " + 
+                                        "'{}'").format(name, found_device))
                 break
         
         if found_device is None:
@@ -253,6 +266,8 @@ class DeviceLoader:
                     device["file_path"] = os.path.abspath(device["file_path"])
                     
                     found_device = device
+                    log_debug(self._logger, ("Getting device '{}' from file or " + 
+                                            "ini list: '{}'").format(name, found_device))
                     break
         
         if found_device is not None:
@@ -330,11 +345,17 @@ class DeviceLoader:
         device_definition = self._getDeviceDefinition(name)
 
         if device_definition is None:
+            log_debug(self._logger, "Could not find device '{}'".format(name))
             return None
         elif "object" in device_definition:
-            return device_definition["object"].__class__
+            class_ = device_definition["object"].__class__
+            log_debug(self._logger, ("Returning class '{}' for device '{}' from " + 
+                                    "object device list").format(class_, name))
+            return class_
         else:
             class_, *_ = self._loadClass(device_definition, controller)
+            log_debug(self._logger, ("Returning class '{}' for device '{}' from " + 
+                                    "file device").format(class_, name))
             return class_
     
     def getDevice(self, name: str, 
@@ -407,6 +428,9 @@ class DeviceLoader:
                 if "description" in device_definition:
                     device.description = device_definition["description"]
             
+            log_debug(self._logger, ("Returning device '{}' for name '{}' from " + 
+                                    "object list").format(device, name))
+
             return device
 
         return self._loadObject(device_definition, controller, *constructor_args,
@@ -459,9 +483,6 @@ class DeviceLoader:
         
         file_path = os.path.realpath(os.path.expanduser(file_path))
         if os.path.isfile(file_path):
-            dir_path = not os.path.dirname(file_path)
-            if dir_path in sys.path:
-                sys.path.append(dir_path)
             module_name = os.path.basename(file_path)
         else:
             module_name = file_path
@@ -470,32 +491,50 @@ class DeviceLoader:
         # import the file
         try:
             if file_path is not None:
+                log_debug(self._logger, ("Trying to load module '{}' from file " + 
+                                        "'{}' by loading the spec from the file").format(
+                                        module_name, file_path))
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
+                
+                log_debug(self._logger, "Trying to load the module from the spec")
                 module = importlib.util.module_from_spec(spec)
+                
+                log_debug(self._logger, "Executing module '{}'".format(module))
                 spec.loader.exec_module(module)
             else:
+                log_debug(self._logger, ("Loading module '{}' with the importlib " + 
+                                        "import_module function").format(module_name))
                 module = importlib.import_module(module_name)
         except StopProgram as e:
+            log_debug(self._logger, "Stopping program", exc_info=e)
             raise e
         except Exception as e:
-            raise DeviceImportError(("Could not import the device '{}' " + 
-                                    "because importing '{}' raised a {} " + 
-                                    "with the message '{}'.").format(name, 
-                                    module_name, e.__class__.__name__, str(e))) from e
+            err = DeviceImportError(("Could not import the device '{}' " + 
+                                     "because importing '{}' raised a {} " + 
+                                     "with the message '{}'.").format(name, 
+                                     module_name, e.__class__.__name__, str(e))).with_traceback(e.__traceback__)
+            log_error(self._logger, err)
+            raise err
 
         # get the class
         try:
+            log_debug(self._logger, "Getting class '{}' from module '{}'".format(
+                                class_name, module))
             class_ = getattr(module, class_name)
+            log_debug(self._logger, "Found class '{}'".format(class_))
         except StopProgram as e:
+            log_debug(self._logger, "Stopping program", exc_info=e)
             raise e
         except Exception as e:
-            raise DeviceClassNotDefined(("Could not create the device '{}' " + 
+            err = DeviceClassNotDefined(("Could not create the device '{}' " + 
                                          "because the class name '{}' could " + 
                                          "not be found in the module '{}'. " + 
                                          "Retrieving it raised a '{}' error " + 
                                          "with the message '{}'.").format(
                                          name, class_name, module_name, 
-                                         e.__class__.__name__, str(e))) from e
+                                         e.__class__.__name__, str(e))).with_traceback(e.__traceback__)
+            log_error(self._logger, err)
+            raise err
         
         # define the configuration options if there are some
         config_keys = None
@@ -504,6 +543,8 @@ class DeviceLoader:
             callable(class_.defineConfigurationOptions)):
             state_id = controller.configuration.markState()
 
+            log_debug(self._logger, "Defining configuration options of '{}'".format(
+                                class_))
             class_.defineConfigurationOptions(controller.configuration,
                                               device["config_group_name"],
                                               device["config_defaults"])
@@ -576,6 +617,7 @@ class DeviceLoader:
             The created object
         """
 
+        log_debug(self._logger, "Trying to load object for device '{}'".format(device))
         class_, module_name, config_keys = self._loadClass(device, controller)
         
         # add the kwargs of the device if the class is a device
@@ -588,6 +630,9 @@ class DeviceLoader:
                 if k not in allowed_kwargs:
                     del device_kwargs[k]
             constructor_kwargs.update(device_kwargs)
+            log_debug(self._logger, ("Adding '{}' to constructor kwargs because " + 
+                                    "device is an instance of the Device class").format(
+                                    device_kwargs))
 
         # add the controller to the args if it is a microscope or camera
         if ((MicroscopeInterface in class_.__mro__ or 
@@ -600,25 +645,39 @@ class DeviceLoader:
             # kind and don't support setting it
             if "kind" in constructor_kwargs:
                 del constructor_kwargs["kind"]
+            
+            log_debug(self._logger, ("Adding controller '{}' to the constructor " + 
+                                    "args because device is an instance of " + 
+                                    "the MicroscopeInterface or CameraInterface " + 
+                                    "class").format(controller))
 
         # create the object
         try:
+            log_debug(self._logger, ("Creating object of class '{}' with args " + 
+                                    "'{}' and kwargs '{}'").format(class_,
+                                    repr(constructor_args), repr(constructor_kwargs)))
             obj = class_(*constructor_args, **constructor_kwargs)
         except StopProgram as e:
+            log_debug(self._logger, "Stopping program", exc_info=e)
             raise e
         except Exception as e:
             # unset the added config keys
             if config_keys is not None and isinstance(controller, Controller):
+                log_debug(self._logger, "Removing added configuration keys '{}'".format(
+                                    config_keys))
                 for group, key in config_keys:
                     controller.configuration.removeElement(group, key)
             
-            raise DeviceCreationError(("Could not create the '{}' class " + 
+            err = DeviceCreationError(("Could not create the '{}' class " + 
                                        "for the device '{}' from '{}', " + 
                                        "creating raised a '{}' error with " + 
                                        "the message '{}'.").format(
                                             class_.__name__, device["name"], 
                                             module_name, e.__class__.__name__, 
-                                            str(e))) from e
+                                            str(e))).with_traceback(e.__traceback__)
+            log_error(self._logger, err)
+            raise err
         
+        log_debug(self._logger, "Returning created device instance '{}'".format(obj))
         return obj
         

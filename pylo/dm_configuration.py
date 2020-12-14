@@ -19,18 +19,26 @@ if load_from_dev:
         if not dev_constants.execdmscript_path in sys.path:
             sys.path.insert(0, dev_constants.execdmscript_path)
 
+import logging
 import execdmscript
 
+from .logginglib import log_debug
+from .logginglib import get_logger
 from .abstract_configuration import AbstractConfiguration
 
 class DMConfiguration(AbstractConfiguration):
     delimiter = ";"
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._logger = get_logger(self)
+
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
-        
+        log_debug(self._logger, ("Starting to load configuration from persistent " + 
+                                "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
         try:
             tags = execdmscript.get_persistent_tag(DM_CONFIGURATION_PERSISTENT_TAG_NAME)
         except KeyError:
@@ -48,16 +56,21 @@ class DMConfiguration(AbstractConfiguration):
                 else:
                     del tags[group]
 
+            log_debug(self._logger, "Loading tags '{}' in abstract configuration".format(
+                                tags))
             self.loadFromMapping(tags)
+        else:
+            log_debug(self._logger, ("Skipping loading because tags are not a " + 
+                                "dict but '{}' (type {})").format(tags, type(tags)))
     
     def saveConfiguration(self) -> None:
         """Save the configuration to be persistant."""
 
         from .config import DM_CONFIGURATION_PERSISTENT_TAG_NAME
+        log_debug(self._logger, ("Starting to save configuration to persistent " + 
+                                "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
 
         if DM is not None:
-            keys = {}
-            
             for group in self.getGroups():
                 for key in self.getKeys(group):
                     if self.valueExists(group, key):
@@ -70,6 +83,11 @@ class DMConfiguration(AbstractConfiguration):
                             DM_CONFIGURATION_PERSISTENT_TAG_NAME, group, key
                         )
                         value = self.getValue(group, key)
+
+                        log_debug(self._logger, ("Saving value '{}' for key '{}' " + 
+                                                "in group '{}' with path '{}' " + 
+                                                "as a '{}'").format(value, key, 
+                                                group, path, datatype))
 
                         if datatype == int:
                             DM.GetPersistentTagGroup().SetTagAsLong(path, value)
@@ -84,8 +102,3 @@ class DMConfiguration(AbstractConfiguration):
                                 value = datatype.format(value)
                             
                             DM.GetPersistentTagGroup().SetTagAsString(path, str(value))
-                        
-                        if not group in keys:
-                            keys[group] = []
-                        
-                        keys[group].append(key)

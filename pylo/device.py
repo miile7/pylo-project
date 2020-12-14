@@ -1,5 +1,8 @@
 import re
 import typing
+import logging
+
+from .logginglib import get_logger
 
 if hasattr(typing, "Literal"):
     device_kinds = typing.Literal["camera", "microscope"]
@@ -61,6 +64,7 @@ class Device:
 
         self.config_defaults = config_defaults
         self.description = description
+        self._logger = get_logger(self)
 
     @staticmethod
     def getNameOfObject(obj: object) -> str:

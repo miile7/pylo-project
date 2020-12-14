@@ -1,8 +1,11 @@
 import typing
+import logging
 
+from .datatype import Datatype
 from .pylolib import parse_value
 from .pylolib import human_concat_list
-from .datatype import Datatype
+from .logginglib import log_debug
+from .logginglib import get_logger
 
 if hasattr(typing, "TypedDict"):
     AskInput = typing.TypedDict("AskInput", {
@@ -25,6 +28,7 @@ class AbstractView:
 
     def __init__(self):
         """Get the view object."""
+        self._logger = get_logger(self)
         self.show_running = False
         self.progress_max = 100
         self.progress = 0
@@ -44,6 +48,9 @@ class AbstractView:
             self.__progress = self.progress_max
         else:
             self.__progress = progress
+        
+        log_debug(self._logger, "Setting progress to '{}' (was initially '{}')".format(
+                               self.__progress, progress))
         
         if self.show_running:
             self._updateRunning()
@@ -65,6 +72,7 @@ class AbstractView:
             and the tags at index 2 in the way defined by the individual 
             functions
         """
+        log_debug(self._logger, "Showing program dialogs")
         start, series = self.showCreateMeasurement(controller)
         configuration = self.showSettings(controller.configuration)
         custom_tags = self.showCustomTags(controller)
@@ -161,6 +169,7 @@ class AbstractView:
             The custom tags as key-value pairs
         """
         
+        log_debug(self._logger, "Showing custom tags dialog")
         tags = self._getCustomTagsFromConfiguration(configuration)
         tags = self._showCustomTags(tags)
         return self._convertCustomTagsToDict(configuration, tags, 
@@ -341,10 +350,12 @@ class AbstractView:
         """Show the progress bar and the outputs of the `AbstractView::print()`
         function.
         """
+        log_debug(self._logger, "Showing a running indicator")
         self.show_running = True
     
     def hideRunning(self) -> None:
         """Hides the progress bar shown by `AbstractView::showRunning()`."""
+        log_debug(self._logger, "Hiding the running indicator")
         self.show_running = False
 
     def _updateRunning(self) -> None:
@@ -506,6 +517,9 @@ class AbstractView:
         for v in measurement_variables.values():
             if not isinstance(start, dict):
                 if not add_defaults:
+                    log_debug(self._logger, ("Trying to parse start but the " + 
+                                            "given start is not a dict but " + 
+                                            "'{}' (type {})").format(start, type(start)))
                     return None, errors
                 else:
                     start = {}
@@ -516,6 +530,10 @@ class AbstractView:
             if (not v.unique_id in start or 
                 not isinstance(start[v.unique_id], (int, float))):
                 if not add_defaults:
+                    log_debug(self._logger, ("Trying to parse start but the " + 
+                                            "measurement variable '{}' (id " + 
+                                            "'{}') is missing").format(v.name, 
+                                            v.unique_id))
                     return None, errors
                 else:
                     start[v.unique_id] = min(max(0, v.min_value), v.max_value)
@@ -538,6 +556,8 @@ class AbstractView:
                                 ))
                     start[v.unique_id] = v.min_value
         
+        log_debug(self._logger, "Parsing start to '{}' with errors '{}'".format(
+                               start, errors))
         return start, errors
     
     def parseSeries(self, measurement_variables: typing.Union[list, dict], 
@@ -610,6 +630,8 @@ class AbstractView:
             if len(ids) == 0:
                 errors.append(("There is no variable left to make a series " + 
                                "on each point."))
+                log_debug(self._logger, ("Parsing series but the following errors " + 
+                                        "occurred: '{}'").format(errors))
                 return None, errors
             elif "variable" in series and series["variable"] in path:
                 errors.append(("The series{} over '{}' is invalid, one of " + 
@@ -620,6 +642,8 @@ class AbstractView:
                                 human_concat_list(ids)
                             ))
                 if not add_defaults:
+                    log_debug(self._logger, ("Parsing series but the following errors " + 
+                                            "occurred: '{}'").format(errors))
                     return None, errors
             else:
                 series["variable"] = ids[0]
@@ -643,6 +667,9 @@ class AbstractView:
             
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:
+                    log_debug(self._logger, ("Parsing series but the variable " + 
+                                            "'{}' is missing. Other errors: '{}'").format(
+                                                k, errors))
                     return None, errors
                 
                 series[k] = d
@@ -700,4 +727,5 @@ class AbstractView:
             if series["on-each-point"] is None:
                 del series["on-each-point"]
         
+        log_debug(self._logger, "Parsing the series to '{}'".format(series))
         return series, errors

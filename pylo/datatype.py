@@ -1,6 +1,10 @@
 import re
 import math
 import typing
+import logging
+
+from .logginglib import log_debug
+from .logginglib import get_logger
 
 # the regular expression that matches any valid format specification, each 
 # group contains one specification item
@@ -88,6 +92,7 @@ class Datatype:
         self._format = format
         self._parse = parse
         self.default_parse = None
+        self._logger = get_logger(self)
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.
@@ -109,7 +114,9 @@ class Datatype:
         """
 
         if callable(self._parse):
-            return self._parse(value)
+            ret = self._parse(value)
+            log_debug(self._logger, "Parsing value '{}' to '{}'".format(value, ret))
+            return ret
         else:
             return value
     
@@ -129,7 +136,9 @@ class Datatype:
         str
             The string representation of the `value` in the current datatype
         """
-        return self._format(value, format)
+        ret = self._format(value, format)
+        log_debug(self._logger, "Formatting value '{}' to '{}'".format(value, ret))
+        return ret
     
     def __call__(self, *args: typing.Any) -> typing.Any:
         """Parse the `value` to this datatype.

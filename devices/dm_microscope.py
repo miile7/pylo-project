@@ -1,6 +1,7 @@
 import math
 import time
 import typing
+import logging
 
 from pylo import FallbackModuleNotFoundError
 
@@ -28,6 +29,7 @@ from pylo import microscope_ready
 
 from pylo import pylolib
 from pylo import Datatype
+from pylo import logginglib
 from pylo import StopProgram
 from pylo import MicroscopeInterface
 from pylo import MeasurementVariable
@@ -76,6 +78,8 @@ class DMMicroscope(MicroscopeInterface):
         """Get the microscope instance"""
         super().__init__(*args, **kwargs)
 
+        self._logger = logginglib.get_logger(self)
+
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
 
@@ -92,6 +96,9 @@ class DMMicroscope(MicroscopeInterface):
         if (not isinstance(focus_calibration_factor, (int, float)) or 
             math.isclose(focus_calibration_factor, 0)):
             focus_calibration_factor = None
+        
+        logginglib.log_debug(self._logger, "Focus calibration is '{}'".format(
+                               focus_calibration_factor))
 
         self.registerMeasurementVariable(
             MeasurementVariable(
@@ -109,6 +116,9 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveMiniLensCurrent,
             self._setObjectiveMiniLensCurrent
         )
+        
+        logginglib.log_debug(self._logger, "Asking the user to set the focus to 0")
+        
         # GMS needs some time here, don't know why but this fixes the bug, if 
         # the sleeping is removed, the dialog will never show up but the 
         # program will wait for interaction so it freezes
@@ -118,7 +128,9 @@ class DMMicroscope(MicroscopeInterface):
             ("Focus is 0 now", "Cancel"))
         
         if button == 1:
-            raise StopProgram()
+            err = StopProgram()
+            logginglib.log_debug(self._logger, "Stopping program", exc_info=err)
+            raise err
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
@@ -133,6 +145,10 @@ class DMMicroscope(MicroscopeInterface):
         if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
             math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
             self.objective_lense_coarse_fine_stepwidth = None
+        
+        logginglib.log_debug(self._logger, ("Objective fine-coarse lens stepwidth is " + 
+                                "'{}'").format(
+                                self.objective_lense_coarse_fine_stepwidth))
 
         # the factor to multiply the lense current with to get the magnetic
         # field
@@ -148,6 +164,9 @@ class DMMicroscope(MicroscopeInterface):
             math.isclose(magnetic_field_calibration_factor, 0)):
             magnetic_field_calibration_factor = None
         
+        logginglib.log_debug(self._logger, "Magnetic field calibration factor is '{}'".format(
+                               magnetic_field_calibration_factor))
+        
         if magnetic_field_calibration_factor is not None:
             # the units of the magnetic field that results when multiplying with 
             # the magnetic_field_calibration_factor
@@ -158,6 +177,9 @@ class DMMicroscope(MicroscopeInterface):
                 magnetic_field_unit = None
         else:
             magnetic_field_unit = None
+        
+        logginglib.log_debug(self._logger, "Magnetic field unit is '{}'".format(
+                               magnetic_field_unit))
 
         if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
             max_ol_current = (0xFFFF * self.objective_lense_coarse_fine_stepwidth + 
@@ -189,6 +211,8 @@ class DMMicroscope(MicroscopeInterface):
             self._getXTilt,
             self._setXTilt
         )
+        
+        logginglib.log_debug(self._logger, "Asking the user for the holder")
 
         self.holders = ("Default holder", "Tilt holder") 
         self.installed_probe_holder, *_ = self.controller.view.askFor({
@@ -202,6 +226,9 @@ class DMMicroscope(MicroscopeInterface):
                             "initialize the microscope wrong which may " + 
                             "cause damage.")
         })
+        
+        logginglib.log_debug(self._logger, "User selected '{}' holder".format(
+                               self.installed_probe_holder))
 
         self.holder_confirmed = True
         if self.installed_probe_holder == "Tilt holder":
@@ -221,6 +248,7 @@ class DMMicroscope(MicroscopeInterface):
         from pylo.config import OFFLINE_MODE
 
         if DM is not None and not OFFLINE_MODE:
+            logginglib.log_debug(self._logger, "Creating DigitalMicrograph.Py_Microscope")
             self.dm_microscope = DM.Py_Microscope()
         else:
             self.dm_microscope = None
@@ -236,15 +264,24 @@ class DMMicroscope(MicroscopeInterface):
         """
 
         if not self.holder_confirmed:
+            logginglib.log_debug(self._logger, "Asking user to confirm '{}' holder".format(
+                                   self.installed_probe_holder))
+            
             button = self.controller.view.askForDecision(
                 ("Please confirm, that the probe holder '{}' really is " + 
                  "installed at the microscope.").format(self.installed_probe_holder),
                 ("Yes, it is installed", "Cancel"))
             
             if button == 0:
+                logginglib.log_debug(self._logger, "'{}' holder is confirmed".format(
+                                       self.installed_probe_holder))
+                                    
                 self.holder_confirmed = True
             else:
-                raise StopProgram()
+                err = StopProgram()
+                logginglib.log_debug(self._logger, "Holder rejected, stopping program", 
+                                       exc_info=err)
+                raise err
     
     def setInLorentzMode(self, lorentz_mode : bool) -> None:
         """Set the microscope to be in lorentz mode.
@@ -270,15 +307,27 @@ class DMMicroscope(MicroscopeInterface):
             use_set_function = False
     
         if use_set_function:
-            script = "EMSetImagingOpticsMode(\"{}\");".format(
+            dmscript = "EMSetImagingOpticsMode(\"{}\");".format(
                 IMAGING_OPTICS_MODE_LowMAG)
-            with execdmscript.exec_dmscript(script):
+            
+            logginglib.log_debug(self._logger, ("Setting microscope to lorentz mode by " + 
+                                    "EMControl.dll (mode = '{}') with " + 
+                                    "dmscript '{}'").format(
+                                    IMAGING_OPTICS_MODE_GIF_LowMAG, dmscript))
+
+            with execdmscript.exec_dmscript(dmscript):
                 pass
         else:
+            logginglib.log_debug(self._logger, "Asking the user to set the microscope " + 
+                                   "into lorentz mode manually")
+            
             self.controller.view.askForDecision("Please set the microscope " + 
                                                 "into the lorentz mode.", 
                                                 options=("In lorentz mode now", 
                                                          "Cancel"))
+
+            logginglib.log_debug(self._logger, "User confirmed that the microscope is " + 
+                                   "in lorentz mode now")
     
     def getInLorentzMode(self) -> bool:
         """Get whether the microscope is in the lorentz mode.
@@ -295,10 +344,19 @@ class DMMicroscope(MicroscopeInterface):
         # return True
         
         if self.dm_microscope.CanGetImagingOpticsMode():
-            return (self.dm_microscope.GetImagingOpticsMode() == 
-                    IMAGING_OPTICS_MODE_LowMAG)
+            logginglib.log_debug(self._logger, "Checking if the microscope is in lorentz " + 
+                                   "mode")
+            
+            lorentz = (self.dm_microscope.GetImagingOpticsMode() == 
+                       IMAGING_OPTICS_MODE_LowMAG)
+
+            logginglib.log_debug(self._logger, "Microscope returned '{}'".format(lorentz))
+            
+            return lorentz
         else:
-            raise IOError("Cannot get the optics mode.")
+            err = IOError("Cannot get the optics mode.")
+            logginglib.log_error(self._logger, err)
+            raise err
 
     def _setObjectiveLensCurrent(self, value: float) -> None:
         """Set the objective lense current.
@@ -318,6 +376,11 @@ class DMMicroscope(MicroscopeInterface):
         if ("value" in self._ol_currents and 
             math.isclose(self._ol_currents["value"], value)):
             # value is still the same from the last time
+            logginglib.log_debug(self._logger, ("Setting objectiv lens current to '{}' " + 
+                                    "but the current value is '{}', so the " + 
+                                    "function is now skipped").format(value,
+                                    self._ol_currents["value"]))
+            
             return
         else:
             self._ol_currents["value"] = value
@@ -367,6 +430,9 @@ class DMMicroscope(MicroscopeInterface):
                 label, hexval, decval) + "\n"
         
         text += "\nAfter confirming the measurement will be continued."
+        
+        logginglib.log_debug(self._logger, "Asking the user to set the coarse and fine " + 
+                               "lens to the values '{}'".format(self._ol_currents))
         
         button = self.controller.view.askForDecision(text, options=(msg, "Cancel"))
         if button == 1:
@@ -473,10 +539,12 @@ class DMMicroscope(MicroscopeInterface):
             The objectiv mini lens current value
         """
         if not self.getInLorentzMode():
-            raise RuntimeError("The objective mini lens current (and " + 
+            err = RuntimeError("The objective mini lens current (and " + 
                                "therefore the focus) can only beused if the " + 
                                "microscope is in the LowMAG mode. But the " + 
                                "microscope is not in the LowMag mode.")
+            logginglib.log_error(self._logger, err)
+            raise err
         
         self.dm_microscope.SetFocus(value)
         # self.dm_microscope.SetCalibratedFocus(value)
@@ -500,10 +568,12 @@ class DMMicroscope(MicroscopeInterface):
             The focus
         """
         if not self.getInLorentzMode():
-            raise RuntimeError("The objective mini lens current (and " + 
+            err = RuntimeError("The objective mini lens current (and " + 
                                "therefore the focus) can only beused if the " + 
                                "microscope is in the LowMAG mode. But the " + 
                                "microscope is not in the LowMag mode.")
+            logginglib.log_error(self._logger, err)
+            raise err
         
         return int(self.dm_microscope.GetFocus())
         # return self.dm_microscope.GetCalibratedFocus()
@@ -519,6 +589,8 @@ class DMMicroscope(MicroscopeInterface):
         operating.
         """
 
+        logginglib.log_debug(self._logger, "Setting microscope to safe state")
+
         # reset the lorentz mode
         self.setInLorentzMode(False)
 
@@ -528,6 +600,8 @@ class DMMicroscope(MicroscopeInterface):
         self.action_lock.acquire()
 
         if self.dm_microscope.HasBeamBlanker():
+            logginglib.log_debug(self._logger, "Blanking beam")
+            
             self.dm_microscope.SetBeamBlanked(True)
 
         # release the lock, the setCurrentState() needs the lock again

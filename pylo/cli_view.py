@@ -2,10 +2,14 @@ import os
 import re
 import sys
 import math
+import logging
 import typing
 import textwrap
 import linecache
 
+from .logginglib import log_debug
+from .logginglib import log_error
+from .logginglib import get_logger
 from .pylolib import parse_value
 from .pylolib import format_value
 from .pylolib import get_datatype_human_text
@@ -46,9 +50,11 @@ class CLIView(AbstractView):
         super().__init__()
         # self.clear()
         # self.printTitle()
+        self._logger = get_logger(self)
     
     def clear(self) -> None:
         """Clear the current command line."""
+        log_debug(self._logger, "Clearing view")
         try:
             # for custom implementations of the stdout, especially in the test
             sys.stdout.clear()
@@ -123,7 +129,11 @@ class CLIView(AbstractView):
                              replace_whitespace=False)
         text = ("\n" + inset).join(text)
 
-        return input(text)
+        log_debug(self._logger, "Waiting for input with text '{}'".format(text))
+
+        i = input(text)
+        log_debug(self._logger, "Input is '{}'".format(i))
+        return i
 
     def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
@@ -150,7 +160,9 @@ class CLIView(AbstractView):
             may contain another series (value has to be the uncalibrated value)
         """
 
-        return self._showCreateMeasurementLoop(controller)
+        measurement = self._showCreateMeasurementLoop(controller)
+        log_debug(self._logger, "User defined measurement '{}'".format(measurement))
+        return measurement
     
     def _showCreateMeasurementLoop(self, controller: "Controller",
                                    start: typing.Optional[dict]=None,
@@ -428,17 +440,8 @@ class CLIView(AbstractView):
         self.printTitle()
         
         if isinstance(error, Exception):
-            raise error
-            exc_type, exc_obj, tb = sys.exc_info()
-            lineno = tb.tb_lineno
-            frame = tb.tb_frame
-            filename = frame.f_code.co_filename
-            linecache.checkcache(filename)
-            line = linecache.getline(filename, lineno, frame.f_globals)
-
-            error_msg = "{} (#{} in {})".format(
-                error, line, os.path.basename(filename)
-            )
+            error_msg = "{}: {}".format(error.__class__.__name__, error)
+            log_error(self._logger, error)
         else:
             error_msg = "{}".format(error)
 
@@ -471,6 +474,8 @@ class CLIView(AbstractView):
             self.progress,
             self.progress_max
         ), sep="", end="")
+        log_debug(self._logger, ("Updating the running indicator, progress is " + 
+                                "now '{}'/'{}'").format(self.progress, self.progress_max))
     
     def showSettings(self, configuration: "AbstractConfiguration", 
                      keys: dict=None,
@@ -510,6 +515,7 @@ class CLIView(AbstractView):
         values = self._showSettingsLoop(configuration, keys)
         
         configuration.loadFromMapping(values)
+        log_debug(self._logger, "User defined settings '{}'".format(values))
         
         return values
 
@@ -679,6 +685,8 @@ class CLIView(AbstractView):
                           "valid command listed below.").format(user_input)
             return self.askForDecision(text, options)
         else:
+            log_debug(self._logger, "User was asked '{}' and entered '{}'".format(
+                                text, options[commands.index(user_input)]))
             return commands.index(user_input)
 
     def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
@@ -714,7 +722,10 @@ class CLIView(AbstractView):
             `inputs[0]` and so on
         """
 
-        return self._askForLoop(inputs, None, **kwargs)
+        values = self._askForLoop(inputs, None, **kwargs)
+        log_debug(self._logger, ("User was asked for values '{}' with kwargs '{}'" + 
+                                "and entered '{}'").format(inputs, kwargs, values))
+        return values
 
     def _askForLoop(self, inputs: typing.Sequence[AskInput], 
                     ask_dict: typing.Optional[dict]=None, **kwargs):
@@ -830,7 +841,7 @@ class CLIView(AbstractView):
                 "value": tag["value"]
             })
             tag_inputs.append({
-                "label": "Save for future".format(key),
+                "label": "Save for future",
                 "id": "save-{}".format(key),
                 "datatype": bool,
                 "value": tag["save"] if "save" in tag else False,
@@ -879,9 +890,13 @@ class CLIView(AbstractView):
             
             return self._showCustomTags(tags)
         elif cmd == True:
+            log_debug(self._logger, "User entered custom tags '{}'".format(tags))
             return tags
         elif cmd == False:
-            raise StopProgram
+            err = StopProgram
+            log_debug(self._logger, "Stopping program, User cancelled custom " + 
+                                   "tags", exc_info=err)
+            raise err
         else:
             return self._showCustomTags(tags)
 

@@ -2,6 +2,7 @@ import sys
 import copy
 import math
 import typing
+import logging
 
 import numpy as np
 
@@ -9,6 +10,7 @@ import numpy as np
 from pylo import FallbackModuleNotFoundError
 
 from pylo import DMImage
+from pylo import logginglib
 from pylo import CameraInterface
 from pylo import ExecutionOutsideEnvironmentError
 
@@ -62,6 +64,7 @@ class DMCamera(CameraInterface):
 
         super(DMCamera, self).__init__(*args, **kwargs)
 
+        self._logger = logginglib.get_logger(self)
         self.show_images = None
         self.exposure_time = None
         self.binning_x = None
@@ -73,7 +76,10 @@ class DMCamera(CameraInterface):
         from pylo.config import OFFLINE_MODE
 
         if DM is not None and not OFFLINE_MODE:
+            logginglib.log_debug(self._logger, "Getting active DigitalMicrograph.Py_Camera")
             self.camera = DM.GetActiveCamera()
+            
+            logginglib.log_debug(self._logger, "Preparing camera")
             self.camera.PrepareForAcquire()
         else:
             self.camera = None
@@ -83,6 +89,9 @@ class DMCamera(CameraInterface):
     
     def _loadSettings(self) -> None:
         """Load the settings from the configuration."""
+        
+        logginglib.log_debug(self._logger, "Loading settings from configuration and " + 
+                               "preparing tags")
         
         (self.show_images, self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, *self.ccd_area) = self.controller.getConfigurationValuesOrAsk(
@@ -133,21 +142,37 @@ class DMCamera(CameraInterface):
         
         tags["camera"] = copy.deepcopy(self.tags)
 
+        logginglib.log_debug(self._logger, ("Acquiring image with exposure time '{}', " + 
+                                "binning '{}', process level '{}' and ccd " + 
+                                "area '{}'").format(self.exposure_time, 
+                                (self.binning_x, self.binning_y), 
+                                self.process_level, self.ccd_area))
+        
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
             self.ccd_area[2], self.ccd_area[1])
         
+        logginglib.log_debug(self._logger, "Getting image tags, converting from " + 
+                               "DigitalMicrograph.Py_TagGroup to dict")
+        
         # save the image tags
         tags.update(execdmscript.convert_from_taggroup(image.GetTagGroup()))
 
+        logginglib.log_debug(self._logger, ("Image tags are now '{}'").format(tags))
+        
         # make sure the workspace exists before creating the image
         if self.show_images:
             self._ensureWorkspace()
+
+        logginglib.log_debug(self._logger, ("Creating image object for " + 
+                                "DigitalMicrograph.Py_Image object"))
         
         image = DMImage.fromDMPyImageObject(image, tags)
         image.show_image = self.show_images
         image.workspace_id = self._workspace_id
+
+        logginglib.log_debug(self._logger, "Image is now '{}'".format(image))
 
         return image
     
@@ -169,10 +194,16 @@ class DMCamera(CameraInterface):
             default: False
         """
 
+        logginglib.log_debug(self._logger, "Checking if workspace id '{}' is valid".format(
+                               self._workspace_id))
+
         if (not isinstance(self._workspace_id, int) or 
             DM.WorkspaceCountWindows(self._workspace_id) == 0):
             # either the workspace id does not exist or it exists but the user 
             # closed the workspace already
+            logginglib.log_debug(self._logger, ("Workspace with id '{}' does not exist, " + 
+                                    "creatinga  new one'").format(self._workspace_id))
+
             self._createNewWorkspace(activate_new)
 
             # reset shown images if a new workspace is created
@@ -182,6 +213,10 @@ class DMCamera(CameraInterface):
                 "wsid": self._workspace_id
             }
             dmscript = "WorkspaceSetActive(wsid);"
+
+            logginglib.log_debug(self._logger, ("Forcing workspace to be active by " + 
+                                    "executing dmscript '{}' with setvars " + 
+                                    "'{}'").format(dmscript, setvars))
 
             with execdmscript.exec_dmscript(dmscript, setvars=setvars):
                 pass
@@ -225,8 +260,14 @@ class DMCamera(CameraInterface):
             "wsid": int
         }
 
+        logginglib.log_debug(self._logger, ("Creating new workspace by executing " + 
+                                "dmscript '{}' with readvars '{}'").format(
+                                dmscript, readvars))
+
         with execdmscript.exec_dmscript(dmscript, readvars=readvars) as script:
             self._workspace_id = script["wsid"]
+
+        logginglib.log_debug(self._logger, "New workspac has id '{}'".format(self._workspace_id))
 
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration", 

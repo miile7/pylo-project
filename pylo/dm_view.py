@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import typing
+import logging
 import textwrap
 import threading
 import traceback
@@ -22,6 +23,9 @@ from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
+from .logginglib import log_debug
+from .logginglib import log_error
+from .logginglib import get_logger
 from .pylolib import parse_value
 from .pylolib import get_datatype_name
 
@@ -60,8 +64,8 @@ class DMView(AbstractView):
         self._progress_dialog_success_tagname = None
         # the name to use for killing the progress dialog
         self._progress_dialog_kill_tagname = None
-        # True if the user pressed ok, False if the user cancelled, None if the
-        # result is unknown
+        # 1 if the user pressed ok, 0 if the user cancelled, -1 if the dialog 
+        # is told to kill itself from outside, None if the result is unknown
         self._progress_dialog_success = None
         # the path where all the dm_view_*.s files are in
         self._rel_path = os.path.dirname(__file__)
@@ -77,6 +81,8 @@ class DMView(AbstractView):
         # therefore restarting the program) for debugging every time
         self._exec_debug = False
 
+        self._logger = get_logger(self)
+
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
 
@@ -90,8 +96,11 @@ class DMView(AbstractView):
         hint : str
             The text to show
         """
-        with execdmscript.exec_dmscript("showAlert(msg, 2);", 
-                                        setvars={"msg": hint}, 
+        dmscript = "showAlert(msg, 2);"
+        setvars = {"msg": hint}
+        log_debug(self._logger, ("Showing alert by executing dmscript '{}' " + 
+                                "with setvars '{}'").format(dmscript, setvars))
+        with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                         debug=self._exec_debug):
             pass
 
@@ -131,12 +140,18 @@ class DMView(AbstractView):
 
         if isinstance(error, Exception):
             traceback.print_exc()
+            log_error(self._logger, error)
+        elif do_log(self._logger, logging.ERROR):
+            self._logger.error(msg)
 
         if isinstance(how_to_fix, str) and how_to_fix != "":
             msg += "\n\nPossible Fix:\n{}".format(how_to_fix)
 
-        with execdmscript.exec_dmscript("showAlert(msg, 0);", 
-                                        setvars={"msg": msg}, 
+        dmscript = "showAlert(msg, 0);"
+        setvars = setvars={"msg": msg}
+        log_debug(self._logger, "Executing dmscript '{}' with setvars '{}'".format(
+                               dmscript, setvars))
+        with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                         debug=self._exec_debug):
             pass
 
@@ -183,6 +198,10 @@ class DMView(AbstractView):
                 "button1": options[1]
             }
         
+            log_debug(self._logger, ("Asking for decision by executing " + 
+                                    "dmscript '{}' with setvars '{}' and " + 
+                                    "readvars '{}'").format(dmscript, setvars,
+                                    readvars))
             with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                             readvars=readvars, 
                                             debug=self._exec_debug) as script:
@@ -253,6 +272,12 @@ class DMView(AbstractView):
                 "alloc(ButtonDialog).init().display(title);"
             ])
 
+            log_debug(self._logger, ("Asking for decision by executing " + 
+                                    "dmscript '{}' with setvars '{}' and " + 
+                                    "readvars '{}'").format(dmscript, setvars,
+                                    readvars))
+            log_debug(self._logger, "Deleting persistent tag with label " + 
+                                    "'{}'".format(id_))
             DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
             with execdmscript.exec_dmscript(dmscript, setvars=setvars, 
                                             debug=self._exec_debug):
@@ -260,20 +285,28 @@ class DMView(AbstractView):
                 # to react anyway
                 time.sleep(0.5)
             
+            log_debug(self._logger, ("Repetitively checking persistent tag " + 
+                                    "'{}' as a short").format(id_))
             while DM is not None:
                 s, v = DM.GetPersistentTagGroup().GetTagAsShort(id_)
 
                 if s:
                     index = v
                     DM.GetPersistentTagGroup().DeleteTagWithLabel(id_)
+                    log_debug(self._logger, ("Found tag '{}' with value '{}', " + 
+                                            "deleted it now.").format(id_, v))
                     break
                 
                 time.sleep(0.1)
         
         if 0 <= index and index < len(options):
+            log_debug(self._logger, "User was asked '{}' and clicked '{}'".format(
+                                text, options[index]))
             return index
         else:
-            raise StopProgram()
+            err = StopProgram()
+            log_debug(self._logger, "Stopping program", exc_info=err)
+            raise err
     
     def askFor(self, *inputs: AskInput, **kwargs) -> tuple:
         """Ask for the specific input when the program needs to know something 
@@ -321,9 +354,14 @@ class DMView(AbstractView):
         )
 
         if len(results) <= 3 or results[3] is None:
-            raise RuntimeError("Could not create the resulting ask values from " + 
+            err = RuntimeError("Could not create the resulting ask values from " + 
                                "the dialogs values.")
+            log_debug(self._logger, "{}: {}".format(err.__class__.__name__, err))
+            raise err
 
+        log_debug(self._logger, ("User was asked for values '{}' with kwargs " + 
+                                "'{}' and entered '{}'").format(inputs, kwargs, 
+                                results[3]))
         return results[3]
     
     def clear(self) -> None:
@@ -380,83 +418,9 @@ class DMView(AbstractView):
         ))
         self._created_tagnames.add(self._progress_dialog_kill_tagname)
 
+        log_debug(self._logger, "Creating kill dialg by executing dmscript '{}'")
         with execdmscript.exec_dmscript(dmscript, debug=self._exec_debug):
             pass
-
-    def _createRunningDialog(self) -> None:
-        """Create and show the running dialog in another thread.
-        
-        Note: Make sure to set the `DMView.progress_max` before calling this 
-        function!
-        """
-        path = os.path.join(self._rel_path, "dm_view_progress_dialog.s")
-        sv = {
-            "max_progress": self.progress_max,
-            "progress_tn": self._progress_dialog_progress_tagname,
-            "text_tn": self._progress_dialog_text_tagname,
-            "success_tn": self._progress_dialog_success_tagname
-        }
-        self._created_tagnames.add(self._progress_dialog_progress_tagname)
-        self._created_tagnames.add(self._progress_dialog_success_tagname)
-        self._created_tagnames.add(self._progress_dialog_text_tagname)
-        rv = {
-            "success": bool
-        }
-        create_dialog = "\n".join((
-            "number success;",
-            "object progress_dialog = alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn);"
-        ))
-        show_dialog = "\n".join((
-            "progress_dialog.display(title);",
-        ))
-        # while self.show_running:
-        #     print("Displaying dialog")
-        #     time.sleep(0.1)
-        # with execdmscript.exec_dmscript(path, create_dialog, setvars=sv, readvars=rv, separate_thread=(show_dialog, ), debug=False) as script:
-        #     pass
-        with execdmscript.exec_dmscript(path, create_dialog, show_dialog, 
-                                        setvars=sv, readvars=rv, 
-                                        debug=self._exec_debug):
-            pass
-    
-    def _observeProgressDialogSuccessThread(self) -> None:
-        """Observe the persistent tag with the name 
-        `DMView._progress_dialog_success_tagname` and set the 
-        `DMView._progress_dialog_success` to the value as soon as the value is 
-        present.
-        """
-
-        while DM is not None and self.show_running:
-            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
-                self._progress_dialog_success_tagname
-            )
-            
-            if s:
-                self._progress_dialog_success = v
-                break
-                
-            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
-                self._progress_dialog_kill_tagname
-            )
-
-            if s and v:
-                break
-            
-            time.sleep(0.05)
-    
-    def deleteObservedTags(self) -> None:
-        """Delete all the observed tags."""
-        if isinstance(self._progress_dialog_progress_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_progress_tagname)
-        
-        if isinstance(self._progress_dialog_text_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_text_tagname)
-        
-        if isinstance(self._progress_dialog_success_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_success_tagname)
-        
-        if isinstance(self._progress_dialog_kill_tagname, str):
-            execdmscript.remove_global_tag(self._progress_dialog_kill_tagname)
         
     def showRunning(self) -> None:
         """Show the progress dialog.
@@ -465,6 +429,7 @@ class DMView(AbstractView):
         function!
         """
 
+        log_debug(self._logger, "Showing running indicator")
         running = self.show_running
         super().showRunning()
 
@@ -494,15 +459,103 @@ class DMView(AbstractView):
             # self._createKillDialog()
             self._createRunningDialog()
         
-        # block the thread until the user pressed ok or cancel
-        self._observeProgressDialogSuccessThread()
-        self.deleteObservedTags()
+            # block the thread until the user pressed ok or cancel
+            self._observeProgressDialogSuccessThread()
+            self.deleteObservedTags()
 
-        if not self._progress_dialog_success:
-            raise StopProgram()
+        if (not isinstance(self._progress_dialog_success, int) or 
+            self._progress_dialog_success <= 0):
+            err = StopProgram()
+            log_debug(self._logger, "Stopping program", exc_info=err)
+            raise err
+
+    def _createRunningDialog(self) -> None:
+        """Create and show the running dialog in another thread.
+        
+        Note: Make sure to set the `DMView.progress_max` before calling this 
+        function!
+
+        Notes
+        -----
+        This function creates a dialog that is running in the current dm-script
+        main thread. UI components always run in the main thread!
+        """
+        path = os.path.join(self._rel_path, "dm_view_progress_dialog.s")
+        sv = {
+            "max_progress": self.progress_max,
+            "progress_tn": self._progress_dialog_progress_tagname,
+            "text_tn": self._progress_dialog_text_tagname,
+            "success_tn": self._progress_dialog_success_tagname,
+            "kill_tn": self._progress_dialog_kill_tagname
+        }
+        self._created_tagnames.add(self._progress_dialog_progress_tagname)
+        self._created_tagnames.add(self._progress_dialog_success_tagname)
+        self._created_tagnames.add(self._progress_dialog_text_tagname)
+        
+        log_debug(self._logger, ("Showing running dialog by executing " + 
+                                "dmscript '{}' with setvars '{}'").format(
+                                path, sv))
+        with execdmscript.exec_dmscript(path, setvars=sv, debug=self._exec_debug):
+            pass
+    
+    def _observeProgressDialogSuccessThread(self) -> None:
+        """Observe the persistent tag with the name 
+        `DMView._progress_dialog_success_tagname` and set the 
+        `DMView._progress_dialog_success` to the value as soon as the value is 
+        present.
+        """
+
+        log_debug(self._logger, "Blocking thread until progress dialog is " + 
+                               "done or cancelled.")
+        while DM is not None and self.show_running:
+            s, v = DM.GetPersistentTagGroup().GetTagAsShort(
+                self._progress_dialog_success_tagname
+            )
+            
+            if s:
+                log_debug(self._logger, ("Found success value '{}' in " +
+                                        "persistent tag '{}'").format(
+                                        v, self._progress_dialog_success_tagname))
+                self._progress_dialog_success = v
+                break
+                
+            s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(
+                self._progress_dialog_kill_tagname
+            )
+
+            if s and v:
+                log_debug(self._logger, ("Found kill value '{}' in " +
+                                        "persistent tag '{}'").format(
+                                        v, self._progress_dialog_kill_tagname))
+                break
+            
+            time.sleep(0.05)
+    
+    def deleteObservedTags(self) -> None:
+        """Delete all the observed tags."""
+        if isinstance(self._progress_dialog_progress_tagname, str):
+            log_debug(self._logger, "Deleting persistent tag '{}'".format(
+                                   self._progress_dialog_progress_tagname))
+            execdmscript.remove_global_tag(self._progress_dialog_progress_tagname)
+        
+        if isinstance(self._progress_dialog_text_tagname, str):
+            log_debug(self._logger, "Deleting persistent tag '{}'".format(
+                                   self._progress_dialog_text_tagname))
+            execdmscript.remove_global_tag(self._progress_dialog_text_tagname)
+        
+        if isinstance(self._progress_dialog_success_tagname, str):
+            log_debug(self._logger, "Deleting persistent tag '{}'".format(
+                                   self._progress_dialog_success_tagname))
+            execdmscript.remove_global_tag(self._progress_dialog_success_tagname)
+        
+        if isinstance(self._progress_dialog_kill_tagname, str):
+            log_debug(self._logger, "Deleting persistent tag '{}'".format(
+                                   self._progress_dialog_kill_tagname))
+            execdmscript.remove_global_tag(self._progress_dialog_kill_tagname)
     
     def hideRunning(self) -> None:
         """Hides the progress dialog."""
+        log_debug(self._logger, "Hiding running dialog")
         self.deleteObservedTags()
 
         self._progress_dialog_progress_tagname = None
@@ -518,11 +571,19 @@ class DMView(AbstractView):
         """Update the running indicator, the progress has updated."""
         if DM is not None:
             if self._progress_dialog_progress_tagname is not None:
+                log_debug(self._logger, ("Setting persistent tag '{}' to long " + 
+                                        "value '{}'").format(
+                                        self._progress_dialog_progress_tagname,
+                                        self.progress))
                 DM.GetPersistentTagGroup().SetTagAsLong(
                     self._progress_dialog_progress_tagname, self.progress
                 )
             
             if self._progress_dialog_text_tagname is not None:
+                log_debug(self._logger, ("Setting persistent tag '{}' to string " + 
+                                        "value '{}'").format(
+                                        self._progress_dialog_text_tagname,
+                                        self._out))
                 DM.GetPersistentTagGroup().SetTagAsString(
                     self._progress_dialog_text_tagname, self._out
                 )
@@ -547,12 +608,16 @@ class DMView(AbstractView):
             and the tags at index 2 in the way defined by the individual 
             functions
         """
+        log_debug(self._logger, "Showing all program dialogs")
+        
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
             custom_tags=self._getCustomTagsFromConfiguration(controller.configuration),
             dialog_type=0b10 | 0b01 | 0b100
         )
+
+        log_debug(self._logger, "Results of all dialogs are '{}'".format(results))
 
         if len(results) > 0:
             start = results[0]
@@ -604,6 +669,8 @@ class DMView(AbstractView):
             'end' and 'step-width' key and an optional 'on-each-point' key that 
             may contain another series (value has to be the uncalibrated value)
         """
+        log_debug(self._logger, "Showing measurement")
+        
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
@@ -622,18 +689,19 @@ class DMView(AbstractView):
 
         if start is None or series is None:
             if start is None and series is None:
-                raise RuntimeError("Neither the start nor the series could " + 
+                err = RuntimeError("Neither the start nor the series could " + 
                                    "be created from the dialogs values.")
             elif start is None:
-                raise RuntimeError("The start could not be created from " + 
+                err = RuntimeError("The start could not be created from " + 
                                    "the dialogs values.")
             else:
-                raise RuntimeError("The series could not be created from " + 
+                err = RuntimeError("The series could not be created from " + 
                                    "the dialogs values.")
+            log_error(self._logger, err)
+            raise err
         
-        if len(results) > 2:
-            configuration = results[2]
-            controller.configuration.loadFromMapping(configuration)
+        log_debug(self._logger, "Returning start '{}' and series '{}'".format(
+                               start, series))
 
         return start, series
     
@@ -674,12 +742,17 @@ class DMView(AbstractView):
             another dict for the keys in that group, the value is the newly set
             value
         """
-
+        log_debug(self._logger, "Showing settings")
+        
         results = self._showDialog(configuration=configuration, dialog_type=0b01)
 
         if len(results) <= 2 or results[2] is None:
-            raise RuntimeError("Could not create the configuration from " + 
+            err = RuntimeError("Could not create the configuration from " + 
                                "the dialogs values.")
+            log_error(self._logger, err)
+            raise err
+            
+        log_debug(self._logger, "Returning settings '{}'".format(results[2]))
 
         return results[2]
     
@@ -707,11 +780,17 @@ class DMView(AbstractView):
         dict
             The `tags` parameter dict modified by the user
         """
+        log_debug(self._logger, "Showing custom tags")
+        
         results = self._showDialog(custom_tags=tags, dialog_type=0b1000)
 
         if len(results) <= 4 or results[4] is None:
-            raise RuntimeError("Could not create the tags from " + 
+            err = RuntimeError("Could not create the tags from " + 
                                "the dialogs values.")
+            log_error(self._logger, err)
+            raise err
+            
+        log_debug(self._logger, "Returning tags '{}'".format(results[4]))
 
         return results[4]
     
@@ -747,6 +826,10 @@ class DMView(AbstractView):
             dialog_startup = "custom_tags"
         else:
             dialog_startup = "series"
+        
+        log_debug(self._logger, ("Showing dialog with mode '{:b}' which is " + 
+                                "converted to '{}' as a string value").format(
+                                dialog_type, dialog_startup))
         
         if isinstance(measurement_variables, list):
             m_vars = {}
@@ -912,6 +995,10 @@ class DMView(AbstractView):
         custom_tags = None
         success = None
 
+        log_debug(self._logger, ("Executing dm libs '{}' and dmscript '{}' " + 
+                                "with readvars '{}' and setvars '{}'").format(
+                                libs, path, sync_vars, variables))
+
         # shows the dialog (as a dm-script dialog) in dm_view_series_dialog.s
         # and sets the start and series variables
         with execdmscript.exec_dmscript(*libs, path, readvars=sync_vars, 
@@ -964,13 +1051,20 @@ class DMView(AbstractView):
         if success and ((start is not None and series is not None) or 
            config is not None or ask_for_values is not None or 
            custom_tags is not None):
+            log_debug(self._logger, ("Returning start '{}', series '{}', " + 
+                                    "config '{}', ask_for_values '{}' and " + 
+                                    "custom_tags '{}'").format(start, series,
+                                    config, ask_for_values, custom_tags))
             return start, series, config, ask_for_values, custom_tags
         else:
-            raise StopProgram
+            err = StopProgram()
+            log_debug(self._logger, "Stopping program", exc_info=err)
+            raise err
         
     def __del__(self):
         """Make sure that all added persistent tagnames are removed again."""
 
         for tagname in self._created_tagnames:
             if isinstance(tagname, str):
+                log_debug(self._logger, "Deleting persistent tag '{}'".format(tagname))
                 execdmscript.remove_global_tag(tagname)

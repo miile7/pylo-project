@@ -4,6 +4,8 @@ This provides both, the GUI and the backend for measuring. Multiple GUIs are
 offered together with various cameras and TEM implementations.
 """
 
+import logging
+
 class __Docs(list):
     """A class for creating the docstring easily."""
     def __call__(self, name, text):
@@ -46,6 +48,16 @@ from .errors import BlockedFunctionError
 from .errors import DeviceClassNotDefined
 from .errors import FallbackModuleNotFoundError
 from .errors import ExecutionOutsideEnvironmentError
+
+# create logger
+logger = logging.getLogger('pylo')
+logger.setLevel(logging.DEBUG)
+
+from .logginglib import log_debug
+from .logginglib import create_handlers
+for handler in create_handlers():
+    # add the handlers to the logger
+    logger.addHandler(handler)
 
 from .image import Image
 from .device import Device
@@ -94,6 +106,7 @@ def get_loader(*args, **kwargs) -> DeviceLoader:
     """
     global loader
     if not isinstance(loader, DeviceLoader):
+        log_debug(logger, "Creating new loader instance")
         loader = DeviceLoader(*args, **kwargs)
     
     return loader
@@ -103,6 +116,7 @@ from .config import DEFAULT_DEVICE_INI_PATHS
 for p in DEFAULT_DEVICE_INI_PATHS:
     if (os.path.exists(p) and os.path.isfile(p) and 
         not p in loader.device_ini_files):
+        log_debug(logger, "Adding ini file '{}' to loader".format(p))
         loader.device_ini_files.append(p)
 
 # controller = None
@@ -132,6 +146,7 @@ def get_controller(view: typing.Optional[AbstractView]=None,
 
     # global controller
     # if controller is None or not isinstance(controller, Controller):
+    log_debug(logger, "Creating new controller instance")
     controller = Controller(view, configuration)
     
     return controller

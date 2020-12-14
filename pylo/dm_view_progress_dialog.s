@@ -19,6 +19,12 @@ class ProgressDialog : UIFrame{
 	string success_tagname;
 
 	/**
+	 * If this taganme in the persistent tags is true, the dialog should stop immediately, either 
+	 * due to an error or to user intaraction.
+	 */
+	string kill_tagname;
+
+	/**
 	 * The number the progress can be at the maximum
 	 */
 	number progress_max;
@@ -39,9 +45,9 @@ class ProgressDialog : UIFrame{
 	number done;
 
 	/**
-	 * Whether the cancel button was clicked or not
+	 * Whether the dialog is already closed or not.
 	 */
-	number cancelled;
+	number closed;
 	
 	/**
 	 * The progress bar `TagGroup` object
@@ -57,6 +63,34 @@ class ProgressDialog : UIFrame{
 	 * The text box `TagGroup` object
 	 */
 	TagGroup textbox;
+
+	/**
+	 * Sets the progress to be finished.
+	 */
+	void _done(object self, number state){
+		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
+			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
+		}
+		GetPersistentTagGroup().TagGroupSetTagAsShort(success_tagname, state);
+		RemoveMainThreadTask(update_task);
+
+		if(!closed && state == 1){
+			done = 1;
+
+			self.SetElementIsEnabled("ok_button", 1);
+			self.SetElementIsEnabled("cancel_button", 0);
+		}
+	}
+
+	/**
+	 * Close the dialog
+	 */
+	void _close(object self, number state){
+		closed = 1;
+		self._done(state)
+
+		self.close();
+	}
 	
 	/**
 	 * The callback function when the cancel button is clicked.
@@ -64,12 +98,7 @@ class ProgressDialog : UIFrame{
 	 * This sets the success in the persistent tags to 0 and closes the dialog.
 	 */
 	void cancel(object self){
-		cancelled = 1;
-		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
-			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
-		}
-		GetPersistentTagGroup().TagGroupSetTagAsBoolean(success_tagname, 0);
-		self.close();
+		self._close(0);
 	}
 
 	/**
@@ -78,26 +107,7 @@ class ProgressDialog : UIFrame{
 	 * This closes the dialog
 	 */
 	void confirm(object self){
-		self.close();
-	}
-
-	/**
-	 * Sets the progress to be finished.
-	 */
-	void _done(object self){
-		if(cancelled){
-			return;
-		}
-
-		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
-			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
-		}
-		GetPersistentTagGroup().TagGroupSetTagAsBoolean(success_tagname, 1);
-		done = 1;
-		RemoveMainThreadTask(update_task);
-
-		self.SetElementIsEnabled("ok_button", 1);
-		self.SetElementIsEnabled("cancel_button", 0);
+		self._close(1);
 	}
 	
 	/**
@@ -109,11 +119,20 @@ class ProgressDialog : UIFrame{
 	void updateDialog(object self){
 		number progress;
 		string text;
+		number kill;
 
-		if(cancelled){
+		if(closed){
 			return;
 		}
 		
+		if(GetPersistentTagGroup().TagGroupDoesTagExist(kill_tagname)){
+			if(GetPersistentTagGroup().TagGroupGetTagAsBoolean(kill_tagname, kill)){
+				if(kill){
+					self._close(-1);
+					return;
+				}
+			}
+		}
 		if(GetPersistentTagGroup().TagGroupDoesTagExist(progress_tagname)){
 			if(GetPersistentTagGroup().TagGroupGetTagAsNumber(progress_tagname, progress)){
 				if(progress < 0){
@@ -121,7 +140,7 @@ class ProgressDialog : UIFrame{
 				}
 				else if(progress >= progress_max){
 					progress = progress_max;
-					self._done();
+					self._done(1);
 				}
 				
 				// check if the dialog is initialized already, if not the progress_bar does not 
@@ -140,6 +159,8 @@ class ProgressDialog : UIFrame{
 					last_progress = progress
 				}
 			}
+		}
+		if(GetPersistentTagGroup().TagGroupDoesTagExist(text_tagname)){
 			if(GetPersistentTagGroup().TagGroupGetTagAsString(text_tagname, text)){
 				// check if the dialog is initialized already, if not the textbox does not 
 				// exist and SetTextElementData() will raise an error which warns that the element
@@ -151,8 +172,8 @@ class ProgressDialog : UIFrame{
 					t.DLGInvalid(1);
 				}
 			}
-			self.validateView();
 		}
+		self.validateView();
 	}
 	
 	/**
@@ -170,13 +191,14 @@ class ProgressDialog : UIFrame{
 	 *		The tagname in the persistent tags were to save the success value to if the user 
 	 *		interacts with the dialog
 	 */
-    object init(object self, string title, number prog_max, string prog_tagname, string txt_tagname, string succ_tagname){
+    object init(object self, string title, number prog_max, string prog_tagname, string txt_tagname, string succ_tagname, string kll_tagname){
 		progress_tagname = prog_tagname;
 		text_tagname = txt_tagname;
 		progress_max = prog_max;
 		success_tagname = succ_tagname;
+		kill_tagname = kll_tagname;
 		done = 0;
-		cancelled = 0;
+		closed = 0;
 		last_progress = 0;
 		
         TagGroup dialog_items;
@@ -236,9 +258,16 @@ class ProgressDialog : UIFrame{
 }
 
 string title = "Measuring -- PyLo"
-// number max_progress = 100;
-// string progress_tn = "__progress_dialog_progress"
-// string text_tn = "__progress_dialog_text"
-// string success_tn = "__progress_dialog_success"
 
-// alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn).display(title);
+// @execdmscript.ignore.start
+// the following part is not executed when this file is run in python
+
+number max_progress = 100;
+string progress_tn = "__progress_dialog_progress"
+string text_tn = "__progress_dialog_text"
+string success_tn = "__progress_dialog_success"
+string kill_tn = "__progress_dialog_kill"
+
+// @execdmscript.ignore.end
+
+alloc(ProgressDialog).init(title, max_progress, progress_tn, text_tn, success_tn, kill_tn).display(title);

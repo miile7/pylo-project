@@ -1,9 +1,13 @@
 import os
 import typing
+import logging
 import textwrap
 import configparser
 
+from .logginglib import log_debug
+from .logginglib import log_error
 from .pylolib import path_like
+from .logginglib import get_logger
 from .pylolib import human_concat_list
 from .pylolib import get_datatype_human_text
 from .datatype import Datatype
@@ -28,6 +32,11 @@ class IniConfiguration(AbstractConfiguration):
             default: None
         """
         
+        # logger has to be present for the file opening but super() will 
+        # overwrite self._logger, super() cannot be called here because it
+        # loads the config which is not possible without the file
+        logger = get_logger(self)
+
         if isinstance(file_path, path_like):
             if not os.path.isdir(os.path.dirname(file_path)):
                 try:
@@ -39,23 +48,31 @@ class IniConfiguration(AbstractConfiguration):
             from .config import DEFAULT_INI_PATH
             file_path = DEFAULT_INI_PATH
 
+            log_debug(logger, "Using file path '{}' from config".format(file_path))
+
             try:
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            except OSError:
-                raise
+            except OSError as e:
+                log_error(logger, e)
+                raise e
         
         if os.path.exists(os.path.dirname(file_path)):
             self.file_path = file_path
         else:
-            raise FileNotFoundError(("The parent directory '{}' of the ini " +
+            err = FileNotFoundError(("The parent directory '{}' of the ini " +
                                      "file was not found and could not be " + 
                                      "created.").format(os.path.dirname(file_path)))
+            log_error(logger, err)
+            raise err
 
         super().__init__()
+        self._logger = logger
     
     def loadConfiguration(self) -> None:
         """Load the configuration from the persistant data."""
 
+        log_debug(self._logger, "Loading configuration from ini file '{}'".format(
+                               self.file_path))
         config = configparser.ConfigParser(interpolation=None)
         config.read(self.file_path)
 
@@ -141,5 +158,7 @@ class IniConfiguration(AbstractConfiguration):
                     # save the value, adding new line for better looks
                     config[group][key] = str(val) + "\n"
         
+        log_debug(self._logger, "Saving ini configuration to file '{}'".format(
+                               self.file_path))
         with open(self.file_path, 'w+') as configfile:
             config.write(configfile)

@@ -11,6 +11,7 @@ only for creating the help file. It can be ignored completely
 """
 
 import os
+import logging
 import datetime
 
 __path_time = "{:%Y-%m-%d_%H-%M-%S}".format(datetime.datetime.now())
@@ -74,6 +75,28 @@ __config_docs__("DEFAULT_USER_DIRECTORY",
 Default: os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
 """)
 DEFAULT_USER_DIRECTORY = os.path.join(os.path.expanduser("~"), PROGRAM_NAME.lower())
+
+__config_docs__("PROGRAM_LOG_FILE",
+"""The path to the log file to log all program events. This is for debugging
+only.
+Default: os.path.join(DEFAULT_USER_DIRECTORY, "{:%Y-%m-%d_%H-%M-%S}.log.csv".format(datetime.datetime.now()))
+""")
+PROGRAM_LOG_FILE = os.path.join(DEFAULT_USER_DIRECTORY, "{:%Y-%m-%d_%H-%M-%S}.log.csv".format(datetime.datetime.now()))
+
+__config_docs__("ENABLED_PROGRAM_LOG_LEVELS",
+"""The log levels defined in the `logging` module to log. Note that DEBUG logs 
+go in a csv log file. All other logs go in the same csv file and into the
+current output.
+
+This value should only be changed for debugging!
+
+For debugging use the tuple `(logging.CRITICAL, logging.ERROR, logging.WARNING, 
+logging.INFO, logging.DEBUG, logging.NOTSET)`. For normal use use the default
+
+Default: (logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO)
+""")
+ENABLED_PROGRAM_LOG_LEVELS = (logging.CRITICAL, logging.ERROR, logging.WARNING, 
+                              logging.INFO, logging.DEBUG, logging.NOTSET)
 
 __config_docs__("DEFAULT_SAVE_DIRECTORY",
 """The path to save the images to if the user does not change it
