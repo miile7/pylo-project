@@ -71,6 +71,9 @@ class DMConfiguration(AbstractConfiguration):
                                 "tag '{}'").format(DM_CONFIGURATION_PERSISTENT_TAG_NAME))
 
         if DM is not None:
+            # remove old data for overwriting
+            DM.GetPersistentTagGroup().DeleteTagWithLabel(DM_CONFIGURATION_PERSISTENT_TAG_NAME)
+
             for group in self.getGroups():
                 for key in self.getKeys(group):
                     if self.valueExists(group, key):
