@@ -8,7 +8,7 @@
  * @return
  *      Whether the `text` is a valid number expression or not
  */
-number is_numeric(string text){
+number pylolib_is_numeric(string text){
     if(text == ""){
         return 0;
     }
@@ -41,7 +41,7 @@ number is_numeric(string text){
  * @return 
  *      The trimmed string
  */
-String trim(String str, String charlist){
+String pylolib_trim(String str, String charlist){
 	// position of the first non-remove character
 	number spos = 0;
 	// position of the last non-remove character
@@ -93,8 +93,8 @@ String trim(String str, String charlist){
 
 	return str.mid(spos, epos - spos + 1);
 }
-String trim(String str){
-	return trim(str, " \n\r\t");
+String pylolib_trim(String str){
+	return pylolib_trim(str, " \n\r\t");
 }
 
 /**
@@ -112,8 +112,8 @@ String trim(String str){
  * @return
  *      The parsed number or 0 if it was not parsable
  */
-number base2dec(string num, number base, number &parsable){
-    num = num.trim();
+number pylolib_base2dec(string num, number base, number &parsable){
+    num = num.pylolib_trim();
 
     parsable = 1;
     number dec = 0;
@@ -183,8 +183,8 @@ number base2dec(string num, number base, number &parsable){
  * @return 
  *      The parsed number or 0 if it was not parsable
  */
-number hex2dec(string hex, number &parsable){
-    hex = hex.trim();
+number pylolib_hex2dec(string hex, number &parsable){
+    hex = hex.pylolib_trim();
 
     if(hex == "" || hex == "0x" || hex == "0X"){
         parsable = 0;
@@ -210,7 +210,7 @@ number hex2dec(string hex, number &parsable){
         hex = negative + hex;
     }
 
-    return base2dec(hex, 16, parsable)
+    return pylolib_base2dec(hex, 16, parsable)
 }
 
 /**
@@ -224,7 +224,7 @@ number hex2dec(string hex, number &parsable){
  * @return 
  *      The choice container
  */
-TagGroup DLGRemoveChoiceItemEntry(TagGroup container, number index){
+TagGroup pylolib_DLGRemoveChoiceItemEntry(TagGroup container, number index){
     TagGroup items;
     container.TagGroupGetTagAsTagGroup("Items", items);
     items.TagGroupDeleteTagWithIndex(index);
@@ -244,7 +244,7 @@ TagGroup DLGRemoveChoiceItemEntry(TagGroup container, number index){
  * @return 
  *      The choice container
  */
-TagGroup DLGRemoveChoiceItemEntry(TagGroup container, string label){
+TagGroup pylolib_DLGRemoveChoiceItemEntry(TagGroup container, string label){
     TagGroup items;
     container.TagGroupGetTagAsTagGroup("Items", items);
 
