@@ -67,7 +67,7 @@ class ProgressDialog : UIFrame{
 	/**
 	 * Sets the progress to be finished.
 	 */
-	void _done(object self, number state){
+	void _DMViewProgressDialogDone(object self, number state){
 		if(!GetPersistentTagGroup().TagGroupDoesTagExist(success_tagname)){
 			GetPersistentTagGroup().TagGroupCreateNewLabeledTag(success_tagname);
 		}
@@ -85,9 +85,9 @@ class ProgressDialog : UIFrame{
 	/**
 	 * Close the dialog
 	 */
-	void _close(object self, number state){
+	void _DMViewProgressDialogClose(object self, number state){
 		closed = 1;
-		self._done(state)
+		self._DMViewProgressDialogDone(state)
 
 		self.close();
 	}
@@ -97,8 +97,8 @@ class ProgressDialog : UIFrame{
 	 *
 	 * This sets the success in the persistent tags to 0 and closes the dialog.
 	 */
-	void cancel(object self){
-		self._close(0);
+	void DMViewProgressDialogCancel(object self){
+		self._DMViewProgressDialogClose(0);
 	}
 
 	/**
@@ -106,8 +106,8 @@ class ProgressDialog : UIFrame{
 	 *
 	 * This closes the dialog
 	 */
-	void confirm(object self){
-		self._close(1);
+	void DMViewProgressDialogConfirm(object self){
+		self._DMViewProgressDialogClose(1);
 	}
 	
 	/**
@@ -116,7 +116,7 @@ class ProgressDialog : UIFrame{
 	 * When the progress is equal to the `DMViewProgressDialog::progress_max` it executes the 
 	 * `DMViewProgressDialog::done()` function
 	 */
-	void updateDialog(object self){
+	void DMViewProgressDialogUpdateDialog(object self){
 		number progress;
 		string text;
 		number kill;
@@ -128,7 +128,7 @@ class ProgressDialog : UIFrame{
 		if(GetPersistentTagGroup().TagGroupDoesTagExist(kill_tagname)){
 			if(GetPersistentTagGroup().TagGroupGetTagAsBoolean(kill_tagname, kill)){
 				if(kill){
-					self._close(-1);
+					self._DMViewProgressDialogClose(-1);
 					return;
 				}
 			}
@@ -140,7 +140,7 @@ class ProgressDialog : UIFrame{
 				}
 				else if(progress >= progress_max){
 					progress = progress_max;
-					self._done(1);
+					self._DMViewProgressDialogDone(1);
 				}
 				
 				// check if the dialog is initialized already, if not the progress_bar does not 
@@ -237,20 +237,20 @@ class ProgressDialog : UIFrame{
 		TagGroup button_wrapper = DLGCreateGroup();
 		button_wrapper.DLGTableLayout(2, 1, 0);
 
-		TagGroup ok_button = DLGCreatePushButton("Ok", "confirm");
+		TagGroup ok_button = DLGCreatePushButton("Ok", "DMViewProgressDialogConfirm");
 		ok_button.DLGAnchor("East");
 		ok_button.DLGEnabled(0);
 		ok_button.DLGIdentifier("ok_button");
 		button_wrapper.DLGAddElement(ok_button);
 
-		TagGroup cancel_button = DLGCreatePushButton("Cancel", "cancel");
+		TagGroup cancel_button = DLGCreatePushButton("Cancel", "DMViewProgressDialogCancel");
 		cancel_button.DLGAnchor("East");
 		cancel_button.DLGIdentifier("cancel_button");
 		button_wrapper.DLGAddElement(cancel_button);
 
 		dialog_items.DLGAddElement(button_wrapper);
         
-        update_task = AddMainThreadPeriodicTask(self, "updateDialog", 0.1);
+        update_task = AddMainThreadPeriodicTask(self, "DMViewProgressDialogUpdateDialog", 0.1);
         
         self.super.init(dialog);
         return self;
