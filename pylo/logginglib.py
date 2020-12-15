@@ -52,6 +52,45 @@ class CsvFormatter(logging.Formatter):
 
 def record_factory(name, level, fn, lno, msg, args, exc_info, func=None, 
                    extra=None, sinfo=None) -> logging.LogRecord:
+    """Create a record for the given parameters.
+
+    This replaces the file name `fn`, the line number `lno` and the functions 
+    name `func` to the ones six entries above in the current stack. This way 
+    this function removes the `log_debug` calls.
+
+    Parameters
+    ----------
+    name : str
+        The name of the logger used to log the event represented by this 
+        `LogRecord`
+    level : int
+        The numeric level of the logging event (one of `logging.DEBUG`, 
+        `logging.INFO` etc.)
+    pathname : str
+        This is ignored
+    lineno : str
+        This is ignored
+    msg : str
+        The event description message, possibly a format string with 
+        placeholders for variable data.
+    args : any
+        Variable data to merge into the msg argument to obtain the event 
+        description.
+    exc_info : str
+        An exception tuple with the current exception information, or None 
+        if no exception information is available.
+    func : str
+        This is ignored
+    sinfo : str
+        A text string representing stack information from the base of the stack 
+        in the current thread, up to the logging call.
+    
+    Returns
+    -------
+    LoggingRecord
+        The logging record
+    """
+
     frames = traceback.extract_stack(limit=6)
     frame = frames[0]
     return logging.LogRecord(name, level, frame.filename, frame.lineno,
