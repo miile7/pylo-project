@@ -156,7 +156,7 @@ __config_docs__("DEFAULT_RELAXATION_TIME",
 lorentz mode and before starting the measurement.
 Default: 10
 """)
-DEFAULT_RELAXATION_TIME = 0
+DEFAULT_RELAXATION_TIME = 10
 
 __config_docs__("DM_CONFIGURATION_PERSISTENT_TAG_NAME",
 """The tag name in the persistent tags to use to save all the settings in.
