@@ -34,6 +34,8 @@ from pylo import StopProgram
 from pylo import MicroscopeInterface
 from pylo import MeasurementVariable
 
+from pylo.config import MAX_LOOP_COUNT
+
 # illumination modes = PyJEM Probe Mmodes
 ILLUMINATION_MODE_TEM = "TEM"
 ILLUMINATION_MODE_CsTEM = "CsTEM"
@@ -82,6 +84,7 @@ class DMMicroscope(MicroscopeInterface):
 
         # set all measurement variables sequential, not parallel
         self.supports_parallel_measurement_variable_setting = False
+        self._tolerances = {}
 
         # the factor to multiply the focus with to show it to the user, 
         # the user entered values will be divided by this factor and then 
@@ -98,7 +101,24 @@ class DMMicroscope(MicroscopeInterface):
             focus_calibration_factor = None
         
         logginglib.log_debug(self._logger, "Focus calibration is '{}'".format(
-                               focus_calibration_factor))
+                             focus_calibration_factor))
+        
+        # load the tolerance for the objective mini lens
+        try:
+            objective_mini_lens_tolerance = pylolib.parse_value(Datatype.hex_int, 
+                self.controller.configuration.getValue(
+                    self.config_group_name, 
+                    "abs-wait-tolerance-objective-mini-lens"))
+        except KeyError:
+            objective_mini_lens_tolerance = None
+
+        if (isinstance(objective_mini_lens_tolerance, int) and 
+            objective_mini_lens_tolerance != 0):
+            self._tolerances["om-current"] = objective_mini_lens_tolerance
+        
+        logginglib.log_debug(self._logger, ("Objective mini lens waiting " +  
+                             "tolerance is '{}'").format(
+                             objective_mini_lens_tolerance))
 
         self.registerMeasurementVariable(
             MeasurementVariable(
@@ -229,6 +249,38 @@ class DMMicroscope(MicroscopeInterface):
         
         logginglib.log_debug(self._logger, "User selected '{}' holder".format(
                                self.installed_probe_holder))
+    
+        # load the tolerance for the x tilt
+        try:
+            x_tilt_tolerance = pylolib.parse_value(float, 
+                self.controller.configuration.getValue(
+                    self.config_group_name, 
+                    "abs-wait-tolerance-x-tilt"))
+        except KeyError:
+            x_tilt_tolerance = None
+
+        if (isinstance(x_tilt_tolerance, (int, float)) and 
+            not math.isclose(x_tilt_tolerance, 0)):
+            self._tolerances["x-tilt"] = x_tilt_tolerance
+        
+        logginglib.log_debug(self._logger, ("x tilt tolerance is '{}'").format(
+                             x_tilt_tolerance))
+    
+        # load the tolerance for the y tilt
+        try:
+            y_tilt_tolerance = pylolib.parse_value(float, 
+                self.controller.configuration.getValue(
+                    self.config_group_name, 
+                    "abs-wait-tolerance-y-tilt"))
+        except KeyError:
+            y_tilt_tolerance = None
+
+        if (isinstance(y_tilt_tolerance, (int, float)) and 
+            not math.isclose(y_tilt_tolerance, 0)):
+            self._tolerances["y-tilt"] = y_tilt_tolerance
+        
+        logginglib.log_debug(self._logger, ("y tilt tolerance is '{}'").format(
+                             y_tilt_tolerance))
 
         self.holder_confirmed = True
         if self.installed_probe_holder == "Tilt holder":
@@ -481,6 +533,9 @@ class DMMicroscope(MicroscopeInterface):
         """
         # self.dm_microscope.SetStageBeta(value)
         self.dm_microscope.SetStageAlpha(value)
+
+        # block until the value is reached
+        self._waitForVariableValue("x-tilt", self._getXTilt, value)
     
     def _getXTilt(self) -> float:
         """Get the x tilt in degrees.
@@ -508,6 +563,9 @@ class DMMicroscope(MicroscopeInterface):
         self._confirmHolder()
         self.dm_microscope.SetStageBeta(value)
         # self.dm_microscope.SetStageAlpha(value)
+
+        # block until the value is reached
+        self._waitForVariableValue("y-tilt", self._getYTilt, value)
     
     def _getYTilt(self) -> float:
         """Get the y tilt in degrees.
@@ -548,6 +606,10 @@ class DMMicroscope(MicroscopeInterface):
         
         self.dm_microscope.SetFocus(value)
         # self.dm_microscope.SetCalibratedFocus(value)
+
+        # block until the value is reached
+        self._waitForVariableValue("om-current", 
+                                   self._getObjectiveMiniLensCurrent, value)
     
     def _getObjectiveMiniLensCurrent(self) -> int:
         """Get the objective mini lens current.
@@ -577,6 +639,69 @@ class DMMicroscope(MicroscopeInterface):
         
         return int(self.dm_microscope.GetFocus())
         # return self.dm_microscope.GetCalibratedFocus()
+    
+    def _waitForVariableValue(self, id_: str, getter: typing.Callable, 
+                              value: typing.Any, 
+                              sleep_time: typing.Optional[typing.Union[float, int]]=0.1) -> None:
+        """Wait for the variable with the `id_` to reach the `value`.
+
+        If there is no entry for the `id_` in the `DMMicroscope._tolerances`, 
+        the function will return immediately. Otherwise the thread is blocked 
+        until the `getter` returns a value close to the desired `value`. If not
+        the function will raise a RuntimeError after 
+        `pylo.config.MAX_LOOP_COUNT * sleep_time` seconds.
+
+        Raises
+        ------
+        RuntimeError
+            When the `value` is not reached after a specified amount of time
+        
+        Parameters
+        ----------
+        id_ : str
+            The id of the measurement variable, needs to have an int or float
+            value with the same key in the `DMMicroscope._tolerances`
+        getter : callable
+            The getter callback to get the actual value from the microscope
+        sleep_time : float or int, optional
+            The number of seconds to wait between asking the microscope again
+            what the actual value is, default: 0.1
+        """
+        if (id_ in self._tolerances and 
+            isinstance(self._tolerances[id_], (int, float))):
+
+            logginglib.log_debug(self._logger, ("Waiting until '{}' '{}' is " + 
+                                 "reached").format(id_, value))
+
+            v = None
+            security_counter = 0
+            while security_counter < MAX_LOOP_COUNT:
+                v = getter()
+                if math.isclose(v, value, abs_tol=self._tolerances[id_]):
+                    break
+                
+                security_counter += 1
+                time.sleep(0.1)
+            
+            if security_counter + 1 == MAX_LOOP_COUNT:
+                err = RuntimeError(("The microscope was told to set the " + 
+                                    "'{}' to '{}' but after '{}' times " + 
+                                    "trying plus waiting the value is '{}' " + 
+                                    "which is not in the tolerance of '{}'. " + 
+                                    "Either the microscope takes extremely " + 
+                                    "long to reach the value, there is a " + 
+                                    "problem with the communication or the " + 
+                                    "waiting count '{}' is very low.").format(
+                                    id_, value, security_counter, v, 
+                                    self._tolerances[id_], MAX_LOOP_COUNT))
+                logginglib.log_error(self._logger, err)
+                raise err
+            else:
+                logginglib.log_debug(self._logger, ("Reached value '{}' for " + 
+                                     "'{}' after '{}' runs (='{}' " + 
+                                     "seconds)").format(v, id_, 
+                                     security_counter, 
+                                     sleep_time * security_counter))
 
     def resetToSafeState(self) -> None:
         """Set the microscope into its safe state.
@@ -683,4 +808,56 @@ class DMMicroscope(MicroscopeInterface):
                 "calibration factor is given."), 
             restart_required=True,
             default_value=config_defaults["magnetic-field-unit"]
+        )
+
+        # add the option for the x tilt tolerance
+        if not "abs-wait-tolerance-x-tilt" in config_defaults:
+            config_defaults["abs-wait-tolerance-x-tilt"] = 1
+        configuration.addConfigurationOption(
+            config_group_name, 
+            "abs-wait-tolerance-x-tilt", 
+            datatype=float, 
+            description=("When the microscope is told to set the x tilt, the " + 
+                         "program will wait until the real value at the " + 
+                         "microscope is the desired value +/- this tolerance." + 
+                         "Note that it must not be 0 sice the sensors are " + 
+                         "not that precise. The microscope will never return " + 
+                         "the same value as it is set to. The tolerance is " + 
+                         "given in degrees."), 
+            restart_required=False,
+            default_value=config_defaults["abs-wait-tolerance-x-tilt"]
+        )
+
+        # add the option for the y tilt tolerance
+        if not "abs-wait-tolerance-y-tilt" in config_defaults:
+            config_defaults["abs-wait-tolerance-y-tilt"] = 1
+        configuration.addConfigurationOption(
+            config_group_name, 
+            "abs-wait-tolerance-y-tilt", 
+            datatype=float, 
+            description=("When the microscope is told to set the y tilt, the " + 
+                         "program will wait until the real value at the " + 
+                         "microscope is the desired value +/- this tolerance." + 
+                         "Note that it must not be 0 sice the sensors are " + 
+                         "not that precise. The microscope will never return " + 
+                         "the same value as it is set to. The tolerance is " + 
+                         "given in degrees."), 
+            restart_required=False,
+            default_value=config_defaults["abs-wait-tolerance-y-tilt"]
+        )
+
+        # add the option for the mini lens tolerance
+        if not "abs-wait-tolerance-objective-mini-lens" in config_defaults:
+            config_defaults["abs-wait-tolerance-objective-mini-lens"] = 0x2
+        configuration.addConfigurationOption(
+            config_group_name, 
+            "abs-wait-tolerance-objective-mini-lens", 
+            datatype=Datatype.hex_int, 
+            description=("When the microscope is told to set the focus (= the " + 
+                         "objective mini lens current), the program will wait " + 
+                         "until the real value at the microscope is the " + 
+                         "desired value +/- this tolerance. The tolerance is " + 
+                         "given in hex value."), 
+            restart_required=False,
+            default_value=config_defaults["abs-wait-tolerance-objective-mini-lens"]
         )
