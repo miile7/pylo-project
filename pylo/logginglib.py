@@ -1,4 +1,5 @@
 import io
+import os
 import csv
 import typing
 import logging
@@ -239,8 +240,13 @@ def create_handlers() -> typing.Sequence[logging.Handler]:
         The handlers to add to the logger
     """
 
-    # create file handler which logs even debug messages
     from .config import PROGRAM_LOG_FILE
+
+    log_dir = os.path.dirname(PROGRAM_LOG_FILE)
+    if not os.path.exists(log_dir) or not os.path.isdir(log_dir):
+        os.makedirs(log_dir, mode=0o660, exist_ok=True)
+
+    # create file handler which logs even debug messages
     dfm = CsvFormatter()
     fh = logging.FileHandler(PROGRAM_LOG_FILE, mode="a+", encoding="utf-8")
     fh.setLevel(logging.DEBUG)
