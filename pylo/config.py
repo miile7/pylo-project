@@ -45,7 +45,7 @@ __config_docs__("MAX_LOOP_COUNT",
 infinite loops that are caused by any error.
 Default: 500
 """)
-MAX_LOOP_COUNT = 500
+MAX_LOOP_COUNT = 100
 
 __config_docs__("MEASUREMENT_START_TIME",
 """The maximum time in seconds that can pass between the program order to start 
