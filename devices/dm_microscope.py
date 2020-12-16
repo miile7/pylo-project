@@ -425,13 +425,15 @@ class DMMicroscope(MicroscopeInterface):
             raise ValueError(("The value {} is not allowed for the " + 
                               "objective lense current.").format(value))
         
+        value = float(value)
+        
         if ("value" in self._ol_currents and 
             math.isclose(self._ol_currents["value"], value)):
             # value is still the same from the last time
-            logginglib.log_debug(self._logger, ("Setting objectiv lens current to '{}' " + 
-                                    "but the current value is '{}', so the " + 
-                                    "function is now skipped").format(value,
-                                    self._ol_currents["value"]))
+            logginglib.log_debug(self._logger, ("Setting objectiv lens " + 
+                                 "current to '{}' but the current value is " + 
+                                 "'{}', so the function is now skipped").format(
+                                    value, self._ol_currents["value"]))
             
             return
         else:
@@ -445,9 +447,26 @@ class DMMicroscope(MicroscopeInterface):
         else:
             self._ol_currents["fine"] = value
         
+        var = self.getMeasurementVariableById("ol-current")
+        if var.has_calibration:
+            if var.calibrated_name is not None:
+                name = var.calibrated_name
+            else:
+                name = var.name
+            if var.calibrated_unit is not None:
+                unit = var.calibrated_unit
+            else:
+                unit = var.unit
+            
+            calibrated_text = " to reach a {} of {:.2f}{}".format(name, 
+                                var.convertToCalibrated(value), unit)
+        else:
+            calibrated_text = ""
+        
         # tell the operator to set the values manually
         template = "{lens} value to '0x{value:x}' (decimal: '{value}')"
-        text = "Please change the objectiv lens current manually. Set the "
+        text = ("Please change the objectiv lens current manually{}. Set " + 
+                "the ").format(calibrated_text)
         bullet_points = []
         if "coarse" in self._ol_currents:
             text += template.format(lens="coarse lens (OLc)",
@@ -750,6 +769,9 @@ class DMMicroscope(MicroscopeInterface):
             The default values to use, this is given automatically when loading
             this object as a device, default: {}
         """
+
+        logger = logging.getLogger("pylo.DMMicroscope")
+        logger.info(config_defaults)
         
         # add the option for the calibration factor for the focus
         if not "focus-calibration" in config_defaults:
