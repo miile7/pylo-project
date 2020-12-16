@@ -171,22 +171,19 @@ Default: 2
 """)
 DEFAULT_DM_SHOW_IMAGES_ROW_COUNT = 2
 
-__config_docs__("DEFAULT_DEVICE_INI_PATHS",
-"""The paths to the device.ini files, note that they may not exist.
-Default: 2
+__config_docs__("PROGRAM_DATA_DIRECTORIES",
+"""Paths where program data is expected.
 """)
-DEFAULT_DEVICE_INI_PATHS = [
-    os.path.join(os.path.expanduser("~"), "devices.ini"),
-    os.path.join(DEFAULT_USER_DIRECTORY, "devices.ini"),
-    os.path.realpath(os.path.join(os.getcwd(), "devices.ini"))
+PROGRAM_DATA_DIRECTORIES = [
+    os.path.expanduser("~"),
+    DEFAULT_USER_DIRECTORY,
+    os.getcwd()
 ]
 try:
-    # /pylo/devices.ini
-    DEFAULT_DEVICE_INI_PATHS.append(os.path.realpath(os.path.join(
-        os.path.dirname(__file__), "..", "devices.ini")))
-    # /devices.ini
-    DEFAULT_DEVICE_INI_PATHS.append(os.path.realpath(os.path.join(
-        os.path.dirname(__file__), "..", "..", "devices.ini")))
+    # /pylo/
+    PROGRAM_DATA_DIRECTORIES.append(os.path.dirname(__file__))
+    # /
+    PROGRAM_DATA_DIRECTORIES.append(os.path.dirname(os.path.dirname(__file__)))
 except NameError:
     # __file__ does not exist
     pass

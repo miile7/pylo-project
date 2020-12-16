@@ -1,3 +1,6 @@
+import os
+import copy
+import glob
 import math
 import time
 import typing
@@ -224,20 +227,65 @@ class DMMicroscope(MicroscopeInterface):
             self._setObjectiveLensCurrent
         )
         self._ol_currents = {}
+
+        # try to find idx files
+        from pylo.config import PROGRAM_DATA_DIRECTORIES
+        idx_dirs = copy.deepcopy(PROGRAM_DATA_DIRECTORIES)
+        try:
+            idx_dirs.append(os.path.dirname(__file__))
+        except NameError:
+            # __file__ does not exist
+            pass
         
-        # tilt limits depend on holder
-        self.registerMeasurementVariable(
-            MeasurementVariable("x-tilt", "X Tilt", -15, 15, "deg"),
-            self._getXTilt,
-            self._setXTilt
-        )
+        if logginglib.do_log(self._logger, logging.INFO):
+            self._logger.info("Searching *.idx files containing holder " + 
+                              "definitions in directories:")
+        
+        idx_files = []
+        for idx_dir in idx_dirs:
+            if logginglib.do_log(self._logger, logging.INFO):
+                self._logger.info("  {}".format(idx_dir))
+            
+            p = os.path.join(idx_dir, "*.idx")
+            logginglib.log_debug(self._logger, "Searching files '{}'".format(p))
+            idx_files += glob.glob(p)
+
+            p = os.path.join(idx_dir, "*", "*.idx")
+            logginglib.log_debug(self._logger, "Searching files '{}'".format(p))
+            idx_files += glob.glob(p)
+        
+        logginglib.log_debug(self._logger, ("Found '{}' idx files: " + 
+                             "'{}'").format(len(idx_files), idx_files))
+        
+        self.holders = {}
+        for idx_file in idx_files:
+            try:
+                idx_file = IDXReader(idx_file)
+            except ValueError as e:
+                logginglib.log_error(self._logger, e)
+             
+            if idx_file.isValidHolderFile():
+                logginglib.log_debug(self._logger, ("Found holder definition " + 
+                                     "in file '{}' with holder '{}' '{}', " + 
+                                     "'{}' <= x-tilt <= '{}' and '{}' " + 
+                                     "<= y-tilt <= '{}'").format(
+                                     idx_file.idx_path, idx_file.holder_number, 
+                                     idx_file.holder_name, idx_file.min_x_tilt,
+                                     idx_file.max_x_tilt, idx_file.min_y_tilt,
+                                     idx_file.max_y_tilt))
+                label = "{} ({})".format(idx_file.holder_name, 
+                                         idx_file.holder_number)
+                self.holders[label] = idx_file
+            else:
+                logginglib.log_debug(self._logger, ("Holder '{}' is " + 
+                                     "invalid: '{}'.").format(idx_file,
+                                     idx_file.getErrorMsgs()))
         
         logginglib.log_debug(self._logger, "Asking the user for the holder")
 
-        self.holders = ("Default holder", "Tilt holder") 
-        self.installed_probe_holder, *_ = self.controller.view.askFor({
-            "name": "Installed probe holder",
-            "datatype": Datatype.options(self.holders),
+        installed_holder_label, *_ = self.controller.view.askFor({
+            "name": "Installed holder",
+            "datatype": Datatype.options(list(self.holders.keys())),
             "description": ("Please select the holder that is currently " + 
                             "installed and used for the measurement. If you " +
                             "want to use a different holder, change it now. " + 
@@ -246,9 +294,19 @@ class DMMicroscope(MicroscopeInterface):
                             "initialize the microscope wrong which may " + 
                             "cause damage.")
         })
+        self.installed_holder = self.holders[installed_holder_label]
         
-        logginglib.log_debug(self._logger, "User selected '{}' holder".format(
-                               self.installed_probe_holder))
+        logginglib.log_debug(self._logger, "User selected '{}' holder '{}'".format(
+                             installed_holder_label, self.installed_holder))
+        
+        # tilt limits depend on holder
+        self.registerMeasurementVariable(
+            MeasurementVariable("x-tilt", "X Tilt", 
+                                self.installed_holder.min_x_tilt, 
+                                self.installed_holder.max_x_tilt, "deg"),
+            self._getXTilt,
+            self._setXTilt
+        )
     
         # load the tolerance for the x tilt
         try:
@@ -283,15 +341,15 @@ class DMMicroscope(MicroscopeInterface):
                              y_tilt_tolerance))
 
         self.holder_confirmed = True
-        if self.installed_probe_holder == "Tilt holder":
+        if (self.installed_holder.min_y_tilt < 1 and 
+            self.installed_holder.max_y_tilt > 1):
             self.registerMeasurementVariable(
-                MeasurementVariable("y-tilt", "Y Tilt", -15, 15, "deg"),
+                MeasurementVariable("y-tilt", "Y Tilt", 
+                                    self.installed_holder.min_y_tilt, 
+                                    self.installed_holder.max_y_tilt, "deg"),
                 self._getYTilt,
                 self._setYTilt
             )
-            x_tilt = self.getMeasurementVariableById("x-tilt")
-            x_tilt.min_value = -25
-            x_tilt.max_value = 25
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
@@ -317,16 +375,16 @@ class DMMicroscope(MicroscopeInterface):
 
         if not self.holder_confirmed:
             logginglib.log_debug(self._logger, "Asking user to confirm '{}' holder".format(
-                                   self.installed_probe_holder))
+                                   self.installed_holder))
             
             button = self.controller.view.askForDecision(
                 ("Please confirm, that the probe holder '{}' really is " + 
-                 "installed at the microscope.").format(self.installed_probe_holder),
+                 "installed at the microscope.").format(self.installed_holder),
                 ("Yes, it is installed", "Cancel"))
             
             if button == 0:
                 logginglib.log_debug(self._logger, "'{}' holder is confirmed".format(
-                                       self.installed_probe_holder))
+                                       self.installed_holder))
                                     
                 self.holder_confirmed = True
             else:
@@ -769,9 +827,6 @@ class DMMicroscope(MicroscopeInterface):
             The default values to use, this is given automatically when loading
             this object as a device, default: {}
         """
-
-        logger = logging.getLogger("pylo.DMMicroscope")
-        logger.info(config_defaults)
         
         # add the option for the calibration factor for the focus
         if not "focus-calibration" in config_defaults:
@@ -883,3 +938,261 @@ class DMMicroscope(MicroscopeInterface):
             restart_required=False,
             default_value=config_defaults["abs-wait-tolerance-objective-mini-lens"]
         )
+
+class IDXReader:
+    """A reader to read out JEOL idx files that contain holder data.
+
+    Attributes
+    ----------
+    holder_number : str
+        The id number of the holder, read only
+    holder_name : str
+        The name of the holder, read only
+    min_x_tilt : float
+        The minimum x tilt in degrees, read only
+    max_x_tilt : float
+        The maximum x tilt in degrees, read only
+    min_y_tilt : float
+        The minimum y tilt in degrees, read only
+    max_y_tilt : float
+        The maximum y tilt in degrees, read only
+    """
+    # data in the lines, key is the attribute name of the IDXReader instance,
+    # the first value in the value tuple is the (zero-based) line number, 
+    # the second is the datatype (as type or pylo.Datatype), the third 
+    # (optional) value is a callback that is performed on each parsing, first 
+    # and only parameter is the line data in the given datatype
+    line_data = {
+        "holder_number": (0, str),
+        "holder_name": (1, str),
+        "min_x_tilt": (11, float, lambda x: x / 100),
+        "max_x_tilt": (14, float, lambda x: x / 100),
+        "min_y_tilt": (17, float, lambda x: x / 100),
+        "max_y_tilt": (20, float, lambda x: x / 100)
+    }
+    
+    def __init__(self, idx_path: typing.Union[pylolib.path_like]) -> None:
+        """Create the idx reader for the give `idx_path`.
+
+        Parameters
+        ----------
+        idx_path : path_like
+            The path to the idx file (with the extension)
+        """
+        if not os.path.exists(idx_path) or not os.path.isfile(idx_path):
+            raise FileExistsError("The file '{}' does not exist".format(idx_path))
+            
+        self.idx_path = idx_path
+        self._idx_cache = {}
+    
+    def isValidHolderFile(self) -> bool:
+        """Return whether the file can be read as a holder file.
+
+        Returns
+        -------
+        bool
+            True if the file has the structure of a holder file, false if not.
+        """
+        return self.getErrorCode() == 0
+    
+    def getErrorCode(self) -> int:
+        """Get the error code.
+
+        The returned value is a bit mask of the following:
+
+        - 0b000001: if the holder name is invalid
+        - 0b000010: if the holder number is invalid
+        - 0b000100: if the min x tilt is invalid
+        - 0b001000: if the max x tilt is invalid
+        - 0b001000: if the min y tilt is invalid
+        - 0b010000: if the max y tilt is invalid
+        - 0b100000: if a ValueError is raised during checking
+
+        Returns
+        -------
+        int
+            The bitmask of the errors or 0 if there is no error
+        """
+        errors, error_msgs = self._getErrors()
+        return errors
+    
+    def getErrorMsgs(self) -> typing.List[str]:
+        """Get the errors as a list of readable messages.
+
+        Returns
+        -------
+        list of str
+            A list of all error messages
+        """
+        errors, error_msgs = self._getErrors()
+        return error_msgs
+    
+    def _getErrors(self) -> typing.Tuple[int, typing.List[str]]:
+        """Get the errors that make this file not being a valid holder file.
+
+        Returns
+        -------
+        int, list of str
+            The errors as an integer and as a list of messages
+        """
+
+        errors = 0
+        error_msgs = []
+
+        try:
+            if not isinstance(self.holder_name, str) or self.holder_name == "":
+                errors |= 0b000001
+                error_msgs.append("The holder name is not a str or empty")
+            
+            if (not isinstance(self.holder_number, str) or self.holder_number == ""):
+                errors |= 0b000010
+                error_msgs.append("The holder number is not a str or empty")
+            
+            if (not isinstance(self.min_x_tilt, (int, float)) or 
+                self.min_x_tilt < -180):
+                errors |= 0b000100
+                error_msgs.append("The min x tilt neither is an int nor a " + 
+                                  "float or less than -180")
+            
+            if (not isinstance(self.max_x_tilt, (int, float)) or 
+                self.min_x_tilt > 180):
+                errors |= 0b001000
+                error_msgs.append("The max x tilt neither is an int nor a " + 
+                                  "float or greater than 180")
+            
+            if (not isinstance(self.min_y_tilt, (int, float)) or 
+                self.min_y_tilt < -180):
+                errors |= 0b010000
+                error_msgs.append("The min y tilt neither is an int nor a " + 
+                                  "float or less than -180")
+            
+            if (not isinstance(self.max_y_tilt, (int, float)) or 
+                self.min_y_tilt > 180):
+                errors |= 0b100000
+                error_msgs.append("The max y tilt neither is an int nor a " + 
+                                  "float or greater than 180")
+        except ValueError as e:
+            errors |= 0b1000000
+            error_msgs.append("{}: {}".format(e.__class__.__name__, str(e)))
+        
+        return errors, error_msgs
+    
+    def _get_line_data(self, line: int) -> typing.Any:
+        """Get the data of the line with the number `line` and return it.
+
+        Parameters
+        ----------
+        line : int
+            The zero-based line number
+        
+        Returns
+        -------
+        any
+            The line data
+        """
+        if line in self._idx_cache:
+            return self._idx_cache[line]
+
+        cache_lines = [d[0] for d in IDXReader.line_data.values()]
+
+        with open(self.idx_path) as f:
+            for i, l in enumerate(f):
+                if i in cache_lines:
+                    self._idx_cache[i] = l
+                
+                if i == line:
+                    return l
+        
+        raise ValueError("The line '{}' is never reached.".format(line))
+    
+    def __getattribute__(self, name: str) -> typing.Any:
+        """Get the attribute with the given `name`.
+
+        This function emulates getting the lines defined by the 
+        `IDXReader.line_data` as attributes directly.
+
+        Raises
+        ------
+        AttributeError
+            When the `name` attribute does not exist
+
+        Parameters
+        ----------
+        name : str
+            The attribute to get
+        
+        Returns
+        -------
+        any
+            The attribute value
+        """
+        if name in IDXReader.line_data:
+            # get the (cached) line data
+            data = self._get_line_data(IDXReader.line_data[name][0])
+            data = data.strip()
+
+            # parse to the datatype
+            if (len(IDXReader.line_data[name]) > 1 and 
+                isinstance(IDXReader.line_data[name][1], (type, Datatype))):
+                data = IDXReader.line_data[name][1](data)
+
+            # perform a callback
+            if (len(IDXReader.line_data[name]) > 2 and 
+                callable(IDXReader.line_data[name][2])):
+                data = IDXReader.line_data[name][2](data)
+            
+            return data
+        else:
+            return super().__getattribute__(name)
+    
+    def __setattr__(self, name: str, value: typing.Any) -> None:
+        """Set the attribute.
+
+        This function prevens writing the names defined in the 
+        `IDXReader.line_data`.
+
+        Parameters
+        ----------
+        name : str
+            The attribute to set
+        value : any
+            The value
+        """
+        if name in IDXReader.line_data:
+            raise AttributeError("The attribute '{}' is not settable.".format(name))
+        else:
+            super().__setattr__(name, value)
+    
+    def __delattr__(self, name: str) -> None:
+        """Delete the attribute.
+
+        This function prevens deleting the names defined in the 
+        `IDXReader.line_data`.
+
+        Parameters
+        ----------
+        name : str
+            The attribute to set
+        """
+        if name in IDXReader.line_data:
+            raise AttributeError("The attribute '{}' is not deletable.".format(name))
+        else:
+            super().__delattr__(name)
+            
+    
+    def __dir__(self) -> list:
+        """Get the names of all attributes
+        
+        Returns
+        -------
+        list
+            The  name of all defined attribtues
+        """
+        return super().__dir__() + list(IDXReader.line_data.keys())
+
+    def __repr__(self) -> str:
+        """Get the representation of this file"""
+
+        return "IDXReader('{}'/'{}', file: '{}')".format(self.holder_name, 
+                                                         self.holder_number,
+                                                         self.idx_path)   

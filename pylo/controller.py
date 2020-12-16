@@ -39,6 +39,7 @@ class TooManyRepetitionsError(RuntimeError):
     pass
 
 CONFIG_SETUP_GROUP = "setup"
+CONFIG_DEVICE_GROUP = "devices"
 
 class Controller:
     """This is the controller for the pylo program.
@@ -317,7 +318,7 @@ class Controller:
         the not defined one will be loaded
         
         For loading it uses the 'microscope' and 'camera' settings in the 
-        `CONFIG_SETUP_GROUP` configuration group. Those define the device name
+        `CONFIG_DEVICE_GROUP` configuration group. Those define the device name
         which can be found via the `loader` object in the `__init__.py`. The 
         loading of the class, if needed, will completely be handled by this 
         object.
@@ -367,11 +368,11 @@ class Controller:
             args = []
             load_kinds = []
             if not isinstance(self.camera, CameraInterface):
-                args.append((CONFIG_SETUP_GROUP, "camera"))
+                args.append((CONFIG_DEVICE_GROUP, "camera"))
                 load_kinds.append("camera")
             
             if not isinstance(self.microscope, MicroscopeInterface):
-                args.append((CONFIG_SETUP_GROUP, "microscope"))
+                args.append((CONFIG_DEVICE_GROUP, "microscope"))
                 load_kinds.append("microscope")
             
             log_debug(self._logger, "Trying to load {} for the {}th time".format(
@@ -428,7 +429,7 @@ class Controller:
                         log_debug(self._logger, "Removing configuration value " + 
                                             "for camera to allow reloading a " + 
                                             "new one.")
-                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                        self.configuration.removeValue(CONFIG_DEVICE_GROUP,
                                                        "camera")
                 elif kind == "microscope":
                     if device is not None:
@@ -438,7 +439,7 @@ class Controller:
                         log_debug(self._logger, "Removing configuration value " + 
                                             "for microscope to allow reloading a " + 
                                             "new one.")
-                        self.configuration.removeValue(CONFIG_SETUP_GROUP,
+                        self.configuration.removeValue(CONFIG_DEVICE_GROUP,
                                                        "microscope")
 
         # show an error that the max loop count is reached and stop the
@@ -661,10 +662,10 @@ class Controller:
                 restart_required_changes = self._configurationChangesNeedRestart(state_id)
                 if len(restart_required_changes) > 0:
                     # reset microscope and camera if they changed
-                    if ((CONFIG_SETUP_GROUP, "microscope") in 
+                    if ((CONFIG_DEVICE_GROUP, "microscope") in 
                         restart_required_changes):
                         self.microscope = None
-                    if ((CONFIG_SETUP_GROUP, "camera") in 
+                    if ((CONFIG_DEVICE_GROUP, "camera") in 
                         restart_required_changes):
                         self.camera = None
 
@@ -998,7 +999,7 @@ class Controller:
         from . import loader
         # import as late as possible to allow changes by extensions        
         from .config import PROGRAM_NAME
-        from .config import DEFAULT_DEVICE_INI_PATHS
+        from .config import PROGRAM_DATA_DIRECTORIES
 
         descr = ("The {kind} to use for the measurement. All microscopes " + 
                  "and cameras defined in one or more `devices.ini` files. " + 
@@ -1007,12 +1008,12 @@ class Controller:
                  "`pylo.loader`). The `devices.ini` files can be in one of " + 
                  "the following directories: \n" +  
                  "\n".join(map(lambda x: "- '{}'".format(x), 
-                               DEFAULT_DEVICE_INI_PATHS)) + 
+                               PROGRAM_DATA_DIRECTORIES)) + 
                  "\n")
         
         # add the option for the microscope module
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, 
+            CONFIG_DEVICE_GROUP, 
             "microscope", 
             datatype=Datatype.options(loader.getInstalledDeviceNames("microscope")), 
             description=descr.format(kind="microscope"),
@@ -1020,7 +1021,7 @@ class Controller:
         )
         # add the option for the camera module
         configuration.addConfigurationOption(
-            CONFIG_SETUP_GROUP, 
+            CONFIG_DEVICE_GROUP, 
             "camera", 
             datatype=Datatype.options(loader.getInstalledDeviceNames("camera")),
             description=descr.format(kind="camera"),
