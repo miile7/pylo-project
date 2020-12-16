@@ -254,7 +254,7 @@ def create_handlers() -> typing.Sequence[logging.Handler]:
 
     # exclude from loggings
     fh.addFilter(InvertedFilter("pylo.Datatype"))
-    fh.addFilter(InvertedFilter("pylo.OptionsDatatype"))
+    fh.addFilter(InvertedFilter("pylo.OptionDatatype"))
 
     # create console handler with a higher log level
     ifm = logging.Formatter('%(message)s (#%(lineno)d@%(name)s)')
