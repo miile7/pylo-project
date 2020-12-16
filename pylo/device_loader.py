@@ -31,8 +31,8 @@ class DeviceLoader:
     
     ```ini
     [Device Name]
-    ; The kind, can either be "camera" or "microscope" (others are loaded too
-    ; and can be used by plugins ect.)
+    ; The kind, can either be "camera" or "microscope" (others are loaded 
+    ; too and can be used by plugins ect.)
     kind=microscope 
     ; The path of the python file, can be absolute or relative to this
     ; file location by using "./", use "~" for current user directory, 
@@ -41,8 +41,15 @@ class DeviceLoader:
     file=./path/to/device.py
     ; The name of the class to initialize, has to be defined in the file
     class=DeviceClassName
+    ; Optional keys:
+    ; ~~~~~~~~~~~~~
     ; Whether this device is disabled or not, default is false
     disabled=No
+    ; Default keys of other devices to inherit from, use a pipe character 
+    ; ("|") as separator of multiple ones, spaces are not removed (spaces 
+    ; matter!), overwriting is from left to right, own `config-default`s 
+    ; overwrite inherited values
+    inherit-config-defaults-from=Other Device Name|Yet another device name
     ; Default settings for this device, they are available in the 
     ; created object (if the object extends the `pylo.Device` class) in
     ; the `object.config_defaults` dict, note that they are strings 
@@ -124,6 +131,97 @@ class DeviceLoader:
         log_debug(self._logger, ("Registering device from object " + 
                                 "'{}'").format(device_definition))
     
+    def _resolveConfigDefaultsInheritance(self, device_definition: dict,
+                                          devices: typing.Sequence[dict],
+                                          prevent_list: typing.Optional[list]=[]) -> typing.Tuple[dict, typing.Sequence[dict]]:
+        """Resolve the inheritance of `config_defaults`.
+
+        If the `device_definition` contains a list at the key 
+        "inherit-config-defaults-from", all `devices` will be travelled through
+        and the `config_defaults` of the devices with the corresponding names 
+        are copied to the current `device_definition`s `config_defaults`.
+
+        If the parent also has an inheritance given, this inheritance will be 
+        resolved. Note that circular dependencies will result in unexpected 
+        behaviour where it gets resolved to a specific "random" point but not 
+        further.
+
+        Inheritance goes from 0 to the end in the inheritance list. The own 
+        `config_defaults` will always overwrite all parent values.
+
+        Parameters
+        ----------
+        device_definition : dict
+            The device definition as a dict
+        devices : list of dict
+            All the devices that exist (in the same ini) and are used to 
+            resolve the inheritance
+        prevent_list : list of str, optional
+            The names to prevent inheriting for, this is used for preventing
+            circular dependencies by adding the current name to the list, this
+            should be left empty when using this function, default: set()
+        
+        Returns
+        -------
+        dict, list of dict
+            The `device_definition` with the updated `config_defaults` and the 
+            `devices` list with resolved inheritance if the inheritance is used
+            by this `device_definition`
+        """
+
+        if ("inherit-config-defaults-from" in device_definition and 
+            isinstance(device_definition["inherit-config-defaults-from"], list)):
+            # save current defaults
+            if (not "config_defaults" in device_definition or 
+                not isinstance(device_definition["config_defaults"], dict)):
+                config_defaults = None
+            else:
+                config_defaults = copy.deepcopy(device_definition["config_defaults"])
+            
+            # set to an empty list to prevent overwriting
+            device_definition["config_defaults"] = {}
+            
+            # go through the inheritance list
+            for parent_name in device_definition["inherit-config-defaults-from"]:
+                if parent_name not in prevent_list:
+                    # prevent self inheritance and circular inheritance
+                    prevent_list.append(parent_name)
+                    parent_device = None
+
+                    # go through devices and find parent
+                    for i, device in enumerate(devices):
+                        if "name" in device and device["name"] == parent_name:
+                            if "inherit-config-defaults-from" in device:
+                                # resolve the inheritance of the parent
+                                parent_device, devices = self._resolveConfigDefaultsInheritance(
+                                    device, devices, prevent_list)
+                                # if the inheritance is resolved, the 
+                                # "inherit-config-defaults-from" is removed so 
+                                # update the devices to save travelling through
+                                # the same devices over and over again
+                                devices[i] = parent_device
+                            else:
+                                parent_device = device
+                            
+                            break
+                    
+                    if (isinstance(parent_device, dict) and 
+                        "config_defaults" in parent_device and 
+                        isinstance(parent_device["config_defaults"], dict)):
+                        # add the parent config defaults
+                        device_definition["config_defaults"].update(
+                            parent_device["config_defaults"])
+
+            # overwrite all settings with the original ones to prevent parents 
+            # overwriting the child settings
+            if isinstance(config_defaults, dict):
+                device_definition["config_defaults"].update(config_defaults)
+
+            # save that the inheritance is done
+            del device_definition["inherit-config-defaults-from"]
+
+        return device_definition, devices
+    
     def _getDeviceDefinitionsFromInis(self) -> typing.List[dict]:
         """Get the devices dicts from the ini files.
 
@@ -135,7 +233,8 @@ class DeviceLoader:
 
         devices = []
         required_keys = {"kind": str, "file": str, "class": str}
-        optional_keys = {"description": str, "disabled": bool}
+        optional_keys = {"description": str, "disabled": bool, 
+                         "inherit-config-defaults-from": str}
 
         for ini_file in self.device_ini_files:
             with open(ini_file, "r") as f:
@@ -158,6 +257,10 @@ class DeviceLoader:
                             key = key.replace("config-default.", "")
                             dev["config_defaults"][key] = value
                             continue
+                            
+                        if key == "inherit-config-defaults-from":
+                            value = list(map(lambda x: x.strip(), 
+                                             value.split("|")))
                         
                         if t == str:
                             dev[key] = value
@@ -173,7 +276,14 @@ class DeviceLoader:
                     if (len(set(required_keys.keys()) - set(dev.keys())) == 0 and 
                         ("disabled" not in dev or not dev["disabled"])):
                         devices.append(dev)
-        
+
+        # resolve inheritance
+        for i, device in enumerate(devices):
+            if "inherit-config-defaults-from" in device:
+                device, devices = self._resolveConfigDefaultsInheritance(
+                                    device, devices, prevent_list=[])
+                devices[i] = device
+
         return devices
     
     def getInstalledDeviceNames(self, kind: typing.Optional[device_kinds]=None) -> typing.List[str]:

@@ -533,7 +533,13 @@ class AbstractView:
                     start = {}
             
             if v.unique_id in start and parse:
-                start[v.unique_id] = parse_value(v.format, start[v.unique_id])
+                if (v.has_calibration and 
+                    isinstance(v.calibrated_format, (type, Datatype))):
+                    start[v.unique_id] = parse_value(v.calibrated_format, 
+                                                     start[v.unique_id])
+                else:
+                    start[v.unique_id] = parse_value(v.format, 
+                                                     start[v.unique_id])
 
             if (not v.unique_id in start or 
                 not isinstance(start[v.unique_id], (int, float))):
@@ -671,7 +677,11 @@ class AbstractView:
 
         for k, d in keys.items():
             if k in series and parse:
-                series[k] = parse_value(var.format, series[k])
+                if (var.has_calibration and 
+                    isinstance(var.calibrated_format, (type, Datatype))):
+                    series[k] = parse_value(var.calibrated_format, series[k])
+                else:
+                    series[k] = parse_value(var.format, series[k])
             
             if not k in series or not isinstance(series[k], (int, float)):
                 if not add_defaults:

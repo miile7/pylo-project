@@ -333,6 +333,8 @@ class Measurement:
                 self.relaxation_time > 0):
                 log_debug(self._logger, ("Waiting relaxation time of '{}' " + 
                                         "seconds").format(self.relaxation_time))
+                self.controller.view.print(("Waiting relaxation time of {} " + 
+                                            "seconds").format(self.relaxation_time))
                 start_time = time.time()
 
                 while time.time() - start_time < self.relaxation_time:
@@ -344,6 +346,7 @@ class Measurement:
                         return
                 
                 log_debug(self._logger, "Continuing with measurement")
+                self.controller.view.print("Done with waiting, continuing...")
 
             if not self.running:
                 log_debug(self._logger, ("Stopping measurement because running " + 
