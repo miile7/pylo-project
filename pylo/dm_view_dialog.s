@@ -1447,7 +1447,7 @@ class DMViewDialog : UIFrame{
 
         // the number of variables to show in one row
         number max_cols = 1;
-        number max_rows = 4;
+        number max_rows = 6;
 
         TagGroup tabs = DLGCreateTabList();
         tabs.DLGExpand("X");
@@ -1457,6 +1457,7 @@ class DMViewDialog : UIFrame{
         number row_counter = 0;
         number page_counter = 0;
         TagGroup tab = DLGCreateTab("Page " + (page_counter + 1))
+        String prev_group = "";
 
         for(number i = 0; i < configuration.TagGroupCountTags(); i++){
             String group = configuration.TagGroupGetTagLabel(i);
@@ -1465,7 +1466,7 @@ class DMViewDialog : UIFrame{
 
             number remaining_rows = max_rows - row_counter
             number group_rows = ceil(group_values.TagGroupCountTags() / max_cols);
-            if(page_counter > 0 && remaining_rows < group_rows && group_rows < max_rows && (remaining_rows < 3 || group_rows - remaining_rows < 3)){
+            if((page_counter > 0 && remaining_rows < group_rows && group_rows < max_rows && (remaining_rows < 3 || group_rows - remaining_rows < 3)) || (page_counter > 0 && group == "devices") || prev_group == "devices"){
                 // required rows (group_rows) do not all fit in the current tab, create a new tab
                 // if
                 // 1. The group can fit on one page
@@ -1530,6 +1531,7 @@ class DMViewDialog : UIFrame{
                 }
             }
 
+            prev_group = group;
             if(row_counter > 0){
                 tab.DLGAddElement(group_box);
             }
