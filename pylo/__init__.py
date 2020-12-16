@@ -112,8 +112,9 @@ def get_loader(*args, **kwargs) -> DeviceLoader:
     return loader
 
 loader = get_loader()
-from .config import DEFAULT_DEVICE_INI_PATHS
-for p in DEFAULT_DEVICE_INI_PATHS:
+from .config import PROGRAM_DATA_DIRECTORIES
+for d in PROGRAM_DATA_DIRECTORIES:
+    p = os.path.join(d, "devices.ini")
     if (os.path.exists(p) and os.path.isfile(p) and 
         not p in loader.device_ini_files):
         logginglib.log_debug(logger, "Adding ini file '{}' to loader".format(p))
