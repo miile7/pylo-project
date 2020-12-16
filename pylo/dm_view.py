@@ -843,11 +843,14 @@ class DMView(AbstractView):
         if isinstance(measurement_variables, dict):
             var_keys = ("unique_id", "name", "unit", "min_value", "max_value",
                         "start", "end", "step")
+            cal_keys = ("name", "unit")
             num_keys = ("start", "step", "end", "min_value", "max_value")
             for var in measurement_variables.values():
                 m_var = {}
 
                 for name in var_keys:
+                    val = None
+                    
                     if name == "start":
                         if var.min_value == None:
                             val = 0
@@ -867,7 +870,27 @@ class DMView(AbstractView):
                                 abs(var.min_value - var.max_value) / 10
                             )
                     else:
-                        val = getattr(var, name)
+                        if var.has_calibration and name in cal_keys:
+                            n = "calibrated_{}".format(name)
+                            if hasattr(var, n) and getattr(var, n) != None:
+                                val = getattr(var, n)
+                        
+                        if val is None:
+                            val = getattr(var, name)
+
+                    if name in num_keys and val != "":
+                        if var.has_calibration:
+                            val = var.ensureCalibratedValue(float(val))
+
+                            if (var.calibrated_format is not None and
+                                isinstance(var.calibrated_format, Datatype)):
+                                m_var["formatted_{}".format(name)] = (
+                                    var.calibrated_format.format(val))
+
+                        elif (var.format is not None and 
+                              isinstance(var.format, Datatype)):
+                            m_var["formatted_{}".format(name)] = (
+                                var.format.format(val))
                     
                     if val == None:
                         val = ""
@@ -875,19 +898,17 @@ class DMView(AbstractView):
                         val = str(val)
                     
                     m_var[name] = val
-
-                    if name in num_keys and val != "":
-                        if (var.format != None and var.format != str and 
-                            hasattr(var.format, "format") and 
-                            callable(var.format.format)):
-                            m_var["formatted_{}".format(name)] = (
-                                var.format.format(val)
-                            )
                 
-                if isinstance(var.format, OptionDatatype):
+                if var.has_calibration:
+                    if isinstance(var.calibrated_format, OptionDatatype):
+                        m_var["format"] = "options"
+                        m_var["options"] = var.calibrated_format.options
+                    elif var.has_calibration and var.calibrated_format is not None:
+                        m_var["format"] = get_datatype_name(var.calibrated_format)
+                elif isinstance(var.format, OptionDatatype):
                     m_var["format"] = "options"
                     m_var["options"] = var.format.options
-                elif var.format != None:
+                elif var.format is not None:
                     m_var["format"] = get_datatype_name(var.format)
                 
                 m_vars.append(m_var)
