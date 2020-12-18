@@ -27,6 +27,7 @@ from .stop_program import StopProgram
 from .abstract_view import AbstractView
 from .camera_interface import CameraInterface
 from .exception_thread import ExceptionThread
+from .vulnerable_machine import VulnerableMachine
 from .microscope_interface import MicroscopeInterface
 from .abstract_configuration import AbstractConfiguration
 
@@ -889,16 +890,26 @@ class Controller:
         """Set the microscope and the camera to be in emergency state."""
 
         try:
-            log_debug(self._logger, "Setting microscope to emergency state")
-            self.microscope.resetToEmergencyState()
+            if isinstance(self.microscope, VulnerableMachine):
+                log_debug(self._logger, "Setting microscope to emergency state")
+                self.microscope.resetToEmergencyState()
+            else:
+                log_debug(self._logger, ("Skipping setting microscope to " + 
+                          "emergency mode, microscope '{}' is not a " + 
+                          "VulnerableMachine").format(self.microscope))
         except BlockedFunctionError:
             # emergency event is called, microscope goes in emergency state by 
             # itself
             pass
 
         try:
-            log_debug(self._logger, "Setting camera to emergency state")
-            self.camera.resetToEmergencyState()
+            if isinstance(self.camera, VulnerableMachine):
+                log_debug(self._logger, "Setting camera to emergency state")
+                self.camera.resetToEmergencyState()
+            else:
+                log_debug(self._logger, ("Skipping setting camera to " + 
+                          "emergency mode, camera '{}' is not a " + 
+                          "VulnerableMachine").format(self.camera))
         except BlockedFunctionError:
             # emergency event is called, camera goes in emergency state by 
             # itself
