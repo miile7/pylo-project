@@ -11,8 +11,7 @@ import math
 
 import pylo
 
-pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
-controller = pylo.Controller()
+controller = pylo.Controller(pylo.AbstractView(), pylo.AbstractConfiguration())
 
 ###############################################################################
 ###                                                                         ###

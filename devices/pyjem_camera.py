@@ -112,15 +112,24 @@ class PyJEMCamera(CameraInterface):
             this object as a device, default: {}
         """
 
+        if "detector-name" in config_defaults:
+            detector_name = config_defaults["detector-name"]
+        else:
+            detector_name = None
         configuration.addConfigurationOption(
             config_group_name, 
             "detector-name",
             datatype=Datatype.options(get_attached_detector()),
             ask_if_not_present=True,
             description=("The detector to use to acquire the image."), 
-            restart_required=True
+            restart_required=True,
+            default_value=detector_name
         )
         
+        if "image-size" in config_defaults:
+            image_size = config_defaults["image-size"]
+        else:
+            image_size = None
         configuration.addConfigurationOption(
             config_group_name, 
             "image-size",
@@ -128,5 +137,6 @@ class PyJEMCamera(CameraInterface):
             ask_if_not_present=True,
             description=("The size (width has to be equal to height) of the " + 
                          "image the detector makes in px."), 
-            restart_required=True
+            restart_required=True,
+            default_value=image_size
         )

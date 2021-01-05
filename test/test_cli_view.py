@@ -154,10 +154,7 @@ def cliview():
 
 @pytest.fixture()
 def controller():
-    pylo.config.VIEW = DummyView()
-    pylo.config.CONFIGURATION = pylo.AbstractConfiguration()
-
-    controller = pylo.Controller()
+    controller = pylo.Controller(DummyView(), pylo.AbstractConfiguration())
     controller.microscope = DummyMicroscope()
 
     return controller

@@ -123,20 +123,6 @@ Default: os.path.join(DEFAULT_USER_DIRECTORY, "configuration.ini")
 """)
 DEFAULT_INI_PATH = os.path.join(DEFAULT_USER_DIRECTORY, "configuration.ini")
 
-from .abstract_configuration import AbstractConfiguration
-__config_docs__("CONFIGURATION",
-"""The configuration object to use
-Default: DMConfiguration (Needs Digital Micrograph extension)
-""")
-CONFIGURATION = AbstractConfiguration()
-
-from .cli_view import CLIView
-__config_docs__("VIEW",
-"""The view object to use
-Default: DMView (Needs Digital Micrograph extension)
-""")
-VIEW = CLIView()
-
 __config_docs__("DEFAULT_MICROSCOPE_TO_SAFE_STATE_AFTER_MEASUREMENT",
 """Whether to set the microscope to the safe state after the measurement has 
 finished or not.

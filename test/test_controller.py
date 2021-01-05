@@ -265,10 +265,10 @@ configuration_test_setup = [
 
 @pytest.fixture()
 def controller():
-    pylo.config.CONFIGURATION = DummyConfiguration()
-    pylo.config.CONFIGURATION.reset()
-    pylo.config.VIEW = DummyView()
-    controller = pylo.Controller()
+    configuration = DummyConfiguration()
+    configuration.reset()
+    
+    controller = pylo.Controller(DummyView(), configuration)
 
     yield controller
 
