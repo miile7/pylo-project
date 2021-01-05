@@ -374,23 +374,25 @@ class DMMicroscope(MicroscopeInterface):
         """
 
         if not self.holder_confirmed:
-            logginglib.log_debug(self._logger, "Asking user to confirm '{}' holder".format(
-                                   self.installed_holder))
-            
+            logginglib.log_debug(self._logger, ("Asking user to confirm '{}' " + 
+                                 "holder").format(self.installed_holder))
+                                   
             button = self.controller.view.askForDecision(
-                ("Please confirm, that the probe holder '{}' really is " + 
-                 "installed at the microscope.").format(self.installed_holder),
+                ("Please confirm, that the probe holder '{}' ({}) really is " + 
+                 "installed at the microscope.").format(
+                 self.installed_holder.holder_name, 
+                 self.installed_holder.holder_number),
                 ("Yes, it is installed", "Cancel"))
             
             if button == 0:
                 logginglib.log_debug(self._logger, "'{}' holder is confirmed".format(
-                                       self.installed_holder))
+                                     self.installed_holder))
                                     
                 self.holder_confirmed = True
             else:
                 err = StopProgram()
-                logginglib.log_debug(self._logger, "Holder rejected, stopping program", 
-                                       exc_info=err)
+                logginglib.log_debug(self._logger, "Holder rejected, " + 
+                                     "stopping program", exc_info=err)
                 raise err
     
     def setInLorentzMode(self, lorentz_mode : bool) -> None:
