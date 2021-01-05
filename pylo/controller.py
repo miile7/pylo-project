@@ -62,18 +62,18 @@ class Controller:
         The measurement to do, this only exists while the program is executed
     """
 
-    def __init__(self, view: typing.Optional[AbstractView]=None,
-                 configuration: typing.Optional[AbstractConfiguration]=None) -> None:
+    def __init__(self, view: typing.Union[AbstractView, None],
+                 configuration: typing.Union[AbstractConfiguration, None]) -> None:
         """Create the controller object.
 
         Parameters
         ----------
-        view : AbstractView, optional
-            The view object to use, if not given the `config.VIEW` will be used
-            instead
-        configuration : AbstractConfiguration, optional
-            The configuration object to use, if not given the 
-            `config.CONFIGURATION` will be used instead
+        view : AbstractView
+            The view object to use, note that using None will cause errors and
+            should only be used for testing
+        configuration : AbstractConfiguration
+            The configuration object to use, note that using None will cause 
+            errors and should only be used for testing
 
         Fired Events
         ------------
@@ -82,20 +82,9 @@ class Controller:
         """
 
         before_start()
-
-        if not isinstance(view, AbstractView):
-            # import as late as possible to allow changes by extensions
-            from .config import VIEW
-            self.view = VIEW
-        else:
-            self.view = view
         
-        if not isinstance(configuration, AbstractConfiguration):
-            # import as late as possible to allow changes by extensions
-            from .config import CONFIGURATION
-            self.configuration = CONFIGURATION
-        else:
-            self.configuration = configuration
+        self.view = view
+        self.configuration = configuration
 
         Controller.defineConfigurationOptions(self.configuration)
         Measurement.defineConfigurationOptions(self.configuration)

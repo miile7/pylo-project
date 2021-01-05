@@ -6,18 +6,13 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import matplotlib.pyplot as plt
 
 import pylo
-import pylo.config
-import pylo.cameras
 
-pylo.config.CONFIGURATION = pylo.IniConfiguration()
-pylo.config.VIEW = pylo.CLIView()
+path = os.path.join(__file__, "..", "devices", "pyjem_camera.py")
+pylo.loader.addDeviceFromFile("camera", "PyJEM Camera", path, "PyJEMCamera", 
+                              {"detector-name": "camera", "image-size": 1024})
 
-controller = pylo.setup()
-
-pylo.cameras.PyJEMCamera.defineConfigurationOptions(controller.configuration)
-controller.configuration.setValue("pyjem-camera", "detector-name", "camera")
-controller.configuration.setValue("pyjem-camera", "image-size", 1024)
-camera = pylo.cameras.PyJEMCamera(controller)
+controller = pylo.setup(pylo.CLIView(), pylo.IniConfiguration())
+camera = pylo.loader.getDevice("PyJEM Camera", controller)
 
 # record pyjem example image
 image = camera.recordImage()

@@ -121,8 +121,7 @@ for d in PROGRAM_DATA_DIRECTORIES:
         loader.device_ini_files.append(p)
 
 # controller = None
-def get_controller(view: typing.Optional[AbstractView]=None,
-                   configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
+def get_controller(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
     """Get the current instance of the controller.
 
     The `view` and the `configuration` are ignored if the controller exists 
@@ -132,12 +131,9 @@ def get_controller(view: typing.Optional[AbstractView]=None,
     ---------
     view : AbstractView
         The view to use for handling user inputs and displaying the measurement
-        status, if not given the `config.VIEW` will be used instead, default:
-        None
+        status
     configuration : AbstractConfiguration
-        The configuration that defines how values are saved persistently, if 
-        not given the `config.CONFIGURATION` will be used instead, 
-        default: None
+        The configuration that defines how values are saved persistently
 
     Returns
     -------
@@ -152,8 +148,7 @@ def get_controller(view: typing.Optional[AbstractView]=None,
     
     return controller
 
-def setup(view: typing.Optional[AbstractView]=None,
-          configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
+def setup(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
     """Create the setup for the measurement.
 
     The `view` and the `configuration` are ignored if the controller exists 
@@ -163,12 +158,9 @@ def setup(view: typing.Optional[AbstractView]=None,
     ---------
     view : AbstractView
         The view to use for handling user inputs and displaying the measurement
-        status, if not given the `config.VIEW` will be used instead, default:
-        None
+        status
     configuration : AbstractConfiguration
-        The configuration that defines how values are saved persistently, if 
-        not given the `config.CONFIGURATION` will be used instead, 
-        default: None
+        The configuration that defines how values are saved persistently
     
     Returns
     -------
@@ -178,8 +170,7 @@ def setup(view: typing.Optional[AbstractView]=None,
     
     return get_controller(view, configuration)
 
-def start(view: typing.Optional[AbstractView]=None,
-          configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
+def start(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
     """Start the measurement.
 
     The measurement is started in another thread, so it will run in the 
@@ -190,12 +181,9 @@ def start(view: typing.Optional[AbstractView]=None,
     ---------
     view : AbstractView
         The view to use for handling user inputs and displaying the measurement
-        status, if not given the `config.VIEW` will be used instead, default:
-        None
+        status
     configuration : AbstractConfiguration
-        The configuration that defines how values are saved persistently, if 
-        not given the `config.CONFIGURATION` will be used instead, 
-        default: None
+        The configuration that defines how values are saved persistently
     
     Returns
     -------
@@ -208,8 +196,7 @@ def start(view: typing.Optional[AbstractView]=None,
 
     return controller
 
-def execute(view: typing.Optional[AbstractView]=None,
-            configuration: typing.Optional[AbstractConfiguration]=None) -> Controller:
+def execute(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
     """Start the measurement and wait until it has finished.
 
     To execute the measurement in another thread without waiting for it to 
@@ -219,12 +206,9 @@ def execute(view: typing.Optional[AbstractView]=None,
     ---------
     view : AbstractView
         The view to use for handling user inputs and displaying the measurement
-        status, if not given the `config.VIEW` will be used instead, default:
-        None
+        status
     configuration : AbstractConfiguration
-        The configuration that defines how values are saved persistently, if 
-        not given the `config.CONFIGURATION` will be used instead, 
-        default: None
+        The configuration that defines how values are saved persistently
     
     Returns
     -------

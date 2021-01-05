@@ -47,10 +47,7 @@ class DummyView(pylo.AbstractView):
     
         return ret
 
-pylo.config.CONFIGURATION = DummyConfiguration()
-pylo.config.VIEW = DummyView()
-
-controller = pylo.Controller()
+controller = pylo.Controller(DummyView(), DummyConfiguration())
 
 ###############################################################################
 ###                                                                         ###
@@ -100,9 +97,6 @@ def print_configuration_options(configuration, groups_and_keys):
         mini_cli.prnt(("\b\b\b{i}. " + text + add_text + descr_text).format(i=i + 1, 
                        group=group, key=key, datatype=datatype, default=default, 
                        description=description), inset=tabs + " " * 3)
-
-pylo.config.CONFIGURATION = DummyConfiguration()
-pylo.config.VIEW = DummyView()
 
 if __name__ == "__main__":
     title = "Interactive test for microscope"
