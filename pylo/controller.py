@@ -848,8 +848,8 @@ class Controller:
                                          error), exc_info=error)
                 self.stopProgramLoop()
                 log_debug(self._logger, "Setting to emergency mode because an " + 
-                                    "error occurred while executing the " + 
-                                    "program.")
+                                        "error occurred while executing the " + 
+                                        "program.")
                 self._setEmergency()
                 self.view.showError(error, self._getFixForError(error))
             except StopProgram as e:

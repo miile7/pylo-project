@@ -23,6 +23,7 @@ from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
 
+from .logginglib import do_log
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger

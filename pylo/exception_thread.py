@@ -3,6 +3,7 @@ import threading
 
 from .logginglib import do_log
 from .logginglib import log_error
+from .logginglib import log_debug
 from .logginglib import get_logger
 from .stop_program import StopProgram
 
@@ -34,7 +35,10 @@ class ExceptionThread(threading.Thread):
         try:
             super(ExceptionThread, self).run(*args, **kwargs)
         except Exception as e:
-            log_error(self._logger, e)
+            if isinstance(e, StopProgram):
+                log_debug(self._logger, "Stopping program", exc_info=e)
+            else:
+                log_error(self._logger, e)
             self.exceptions.append(e)
         
         if (len(self.exceptions) == 1 and 
@@ -48,5 +52,5 @@ class ExceptionThread(threading.Thread):
         
         if do_log(self._logger, logging.INFO):
             self._logger.info(("Ending thread '{}' (#{}), currently {} " + 
-                            "active threads{}").format(self.name, self.ident, 
-                            threading.active_count() - 1, e))
+                               "active threads{}").format(self.name, self.ident, 
+                               threading.active_count() - 1, e))
