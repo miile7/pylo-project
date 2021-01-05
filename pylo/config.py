@@ -179,3 +179,13 @@ __config_docs__("CUSTOM_TAGS_GROUP_NAME",
 Default: "custom-tags"
 """)
 CUSTOM_TAGS_GROUP_NAME = "custom-tags"
+
+__config_docs__("KEEP_REMOVED_DIVICE_SETTINGS",
+"""When the camera or the microscope change, this defines whether the 
+corresponding configuration group is kept (True) or removed (False). If 
+multiple microscopes or cameras are used, this may be useful to prevent setting
+settings over and over again. On the other hand this may lead to unexpected 
+pre-sets and clutter up the configuration and image tags.
+Default: True
+""")
+KEEP_REMOVED_DIVICE_SETTINGS = True

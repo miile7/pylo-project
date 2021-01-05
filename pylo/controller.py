@@ -365,8 +365,8 @@ class Controller:
                 args.append((CONFIG_DEVICE_GROUP, "microscope"))
                 load_kinds.append("microscope")
             
-            log_debug(self._logger, "Trying to load {} for the {}th time".format(
-                                load_kinds, security_counter))
+            log_debug(self._logger, ("Trying to load {} for the {}th " + 
+                      "time").format(load_kinds, security_counter))
 
             names = list(self.getConfigurationValuesOrAsk(*args))
             
@@ -375,8 +375,12 @@ class Controller:
             for name, kind in zip(names, load_kinds):
                 device = None
                 try:
-                    log_debug(self._logger, "Loading device with name '{}'".format(name))
+                    log_debug(self._logger, ("Loading device with name " + 
+                              "'{}'").format(name))
+                    
+                    state_id = self.configuration.markState()
                     device = loader.getDevice(name, self)
+
                     if device is None:
                         msg = ("The device '{}' neither is defined one of " +
                                "the devices.ini nor is added in " + 
@@ -389,10 +393,10 @@ class Controller:
                                 "If the '{}' is not found in one of the " + 
                                 "devices.ini files, add it to one of them. " + 
                                 "\n").format(name, kind, name) + 
-                            "The following devices.ini are loaded at the " + 
-                            "moment:\n".format() + 
-                            "\n".join(map(lambda x: "- '{}'".format(x), 
-                                            loader.device_ini_files)))
+                                "The following devices.ini are loaded at " + 
+                                "the moment:\n".format() + 
+                                "\n".join(map(lambda x: "- '{}'".format(x), 
+                                                loader.device_ini_files)))
                         log_debug(self._logger, "Device is None", exc_info=True,
                                   logging_level=logging.ERROR)
                         self.view.showError(msg, fix)
@@ -413,22 +417,24 @@ class Controller:
                 
                 if kind == "camera":
                     if device is not None:
-                        log_debug(self._logger, "Setting camera to '{}'".format(device))
+                        log_debug(self._logger, ("Setting camera to " + 
+                                  "'{}'").format(device))
                         self.camera = device
                     else:
-                        log_debug(self._logger, "Removing configuration value " + 
-                                            "for camera to allow reloading a " + 
-                                            "new one.")
+                        log_debug(self._logger, "Removing configuration " + 
+                                  "value for camera to allow reloading a " + 
+                                  "new one.")
                         self.configuration.removeValue(CONFIG_DEVICE_GROUP,
                                                        "camera")
                 elif kind == "microscope":
                     if device is not None:
-                        log_debug(self._logger, "Setting microscope to '{}'".format(device))
+                        log_debug(self._logger, ("Setting microscope to " + 
+                                  "'{}'").format(device))
                         self.microscope = device
                     else:
-                        log_debug(self._logger, "Removing configuration value " + 
-                                            "for microscope to allow reloading a " + 
-                                            "new one.")
+                        log_debug(self._logger, "Removing configuration " + 
+                                  "value for microscope to allow reloading a " + 
+                                  "new one.")
                         self.configuration.removeValue(CONFIG_DEVICE_GROUP,
                                                        "microscope")
 
@@ -519,12 +525,12 @@ class Controller:
                                     ))
             
             log_debug(self._logger, ("Found config changes '{}', '{}' of them " + 
-                                    "force a restart").format(config_changes, 
-                                    restart_required))
+                                     "force a restart").format(config_changes, 
+                                     restart_required))
             return restart_required
         else:
             log_debug(self._logger, ("Found config changes '{}', but none of them " + 
-                                    "need a restart").format(config_changes))
+                                     "need a restart").format(config_changes))
             return []
 
     def startProgramLoop(self) -> None:
@@ -559,9 +565,10 @@ class Controller:
             else:
                 load_camera = False
             
-            log_debug(self._logger, "Microscope {} be loaded, camera {} be loaded".format(
-                                "must" if load_microscope else "does not need to",
-                                "must" if load_camera else "does not need to"))
+            log_debug(self._logger, ("Microscope {} be loaded, camera {} be " + 
+                      "loaded").format(
+                          "must" if load_microscope else "does not need to",
+                          "must" if load_camera else "does not need to"))
 
             if load_microscope or load_camera:
                 # the function will check itself if it has to load something,
@@ -654,15 +661,26 @@ class Controller:
                     # reset microscope and camera if they changed
                     if ((CONFIG_DEVICE_GROUP, "microscope") in 
                         restart_required_changes):
+                        from .config import KEEP_REMOVED_DIVICE_SETTINGS
+                        if not KEEP_REMOVED_DIVICE_SETTINGS:
+                            self.configuration.removeElement(
+                                self.microscope.config_group_name)
+                        
                         self.microscope = None
+                    
                     if ((CONFIG_DEVICE_GROUP, "camera") in 
                         restart_required_changes):
+                        from .config import KEEP_REMOVED_DIVICE_SETTINGS
+                        if not KEEP_REMOVED_DIVICE_SETTINGS:
+                            self.configuration.removeElement(
+                                self.camera.config_group_name)
+                        
                         self.camera = None
 
-                    log_debug(self._logger, "Restarting program loop because some " + 
-                                        "configuration values change that " + 
-                                        "force a restart, restart keys: {}".format(
-                                            restart_required_changes))
+                    log_debug(self._logger, ("Restarting program loop " + 
+                              "because some configuration values change that " + 
+                              "force a restart, restart keys: {}").format(
+                                  restart_required_changes))
                     self.restartProgramLoop()
                     return
 
