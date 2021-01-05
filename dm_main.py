@@ -1,4 +1,5 @@
 import DigitalMicrograph as DM
+pylo = None
 
 try:
 	DM.ClearResults()
@@ -169,9 +170,10 @@ try:
 			pylo.logginglib.log_error(logger, e)
 		raise e
 except Exception as e:
-	# dm-script error messages are very bad, use this for getting the error 
-	# text and the correct traceback
-	print("{}: ".format(e.__class__.__name__), e)
-	
-	import traceback
-	traceback.print_exc()
+	if pylo is None or not isinstance(e, pylo.StopProgram):
+		# dm-script error messages are very bad, use this for getting the error 
+		# text and the correct traceback
+		print("{}: ".format(e.__class__.__name__), e)
+		
+		import traceback
+		traceback.print_exc()
