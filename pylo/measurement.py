@@ -356,7 +356,7 @@ class Measurement:
             
             # trigger microscope ready event
             log_debug(self._logger, "Firing 'microscope_ready' event")
-            microscope_ready()
+            microscope_ready(self.controller)
             self.controller.view.print("Done.")
 
             for self._step_index, step in enumerate(self.steps):
@@ -375,7 +375,7 @@ class Measurement:
                 
                 # fire event before recording
                 log_debug(self._logger, "Firing 'before_record' event")
-                before_record()
+                before_record(self.controller)
 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 
@@ -485,7 +485,7 @@ class Measurement:
                 
                 # fire event after recording but before saving
                 log_debug(self._logger, "Firing 'after_record' event")
-                after_record()
+                after_record(self.controller)
 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 
@@ -574,7 +574,7 @@ class Measurement:
             self.finished = True
 
             log_debug(self._logger, "Firing 'measurement_ready' event")
-            measurement_ready()
+            measurement_ready(self.controller)
         except StopProgram as e:
             log_debug(self._logger, "Stopping program", exc_info=e)
             self.stop()
@@ -597,12 +597,12 @@ class Measurement:
                 
                 if len(thread.exceptions):
                     for error in thread.exceptions:
-                        log_error(error)
+                        log_error(self._logger, error)
                         raise error
         
         log_debug(self._logger, "Done with waiting")
     
-    def stop(self) -> None:
+    def stop(self, *args) -> None:
         """Stop the measurement. 
         
         Note that the current hardware action is still finished when it has 
@@ -625,7 +625,7 @@ class Measurement:
 
         # fire stop event
         log_debug(self._logger, "Firing 'after_stop' event")
-        after_stop()
+        after_stop(self.controller)
     
     def raiseThreadErrors(self, *additional_threads: "ExceptionThread") -> None:
         """Check all thread collections of this class plus the 

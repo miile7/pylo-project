@@ -4,25 +4,29 @@ from . import __Docs
 __event_docs__ = __Docs()
 
 __event_docs__("after_stop", 
-"""Fired when the measurement is stopped but not finished""")
+"""Fired when the measurement is stopped but not finished. The current 
+`controller` will be the first argument.""")
 after_stop = Event()
 
 __event_docs__("emergency", 
-"""Fired when all the attatched machines should go in the safe state""")
+"""Fired when all the attatched machines should go in the safe state. The 
+current `controller` will be the first argument.""")
 emergency = Event()
 
 __event_docs__("before_start", 
 """Fired before everything. This event is fired in the constructor of the
-controller which should be the first object that is created.""")
+controller which should be the first object that is created.. The current 
+`controller` will be the first argument.""")
 before_start = Event()
 
 __event_docs__("before_init", 
-"""Fired when the program is started but nothing is initialized yet.""")
+"""Fired when the program is started but nothing is initialized yet. The 
+current `controller` will be the first argument.""")
 before_init = Event()
 
 __event_docs__("init_ready", 
 """Fired when the view and the configuration are loaded but before everything 
-else.""")
+else. The current `controller` will be the first argument.""")
 init_ready = Event()
 
 __event_docs__("user_ready", 
@@ -31,27 +35,32 @@ start button. Note that this event may be fired multiple times when the user
 inputs an invalid measurement. Due to python philosophy (Ask for forgivness, 
 not for permission) the measurement is created with possibly wrong data which 
 then will raise an error. This will be shown to the user and he will be asked
-to repeat the measurement.""")
+to repeat the measurement. The current `controller` will be the first 
+argument.""")
 user_ready = Event()
 
 __event_docs__("series_ready", 
-"""Fired when the Measurement series is created.""")
+"""Fired when the Measurement series is created. The current `controller` will 
+be the first argument.""")
 series_ready = Event()
 
 __event_docs__("microscope_ready", 
 """Fired when the microscope is in lorentz mode the measurement is right about 
-starting""")
+starting. The current `controller` will be the first argument.""")
 microscope_ready = Event()
 
 __event_docs__("before_record", 
-"""Fired before setting the microscope to the the next measurement point""")
+"""Fired before setting the microscope to the the next measurement point. The 
+current `controller` will be the first argument.""")
 before_record = Event()
 
 __event_docs__("after_record", 
 """Fired after setting the microscope to measurement point and recording an 
-image but before saving the image to the directory""")
+image but before saving the image to the directory. The current `controller` 
+will be the first argument.""")
 after_record = Event()
 
 __event_docs__("measurement_ready", 
-"""Fired when the measurement has fully finished""")
+"""Fired when the measurement has fully finished. The current `controller` 
+will be the first argument.""")
 measurement_ready = Event()

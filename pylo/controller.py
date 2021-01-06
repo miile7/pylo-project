@@ -81,7 +81,7 @@ class Controller:
             Fired right after the function is called, nothing is set up
         """
 
-        before_start()
+        before_start(self)
         
         self.view = view
         self.configuration = configuration
@@ -543,6 +543,11 @@ class Controller:
             initialize
         init_ready
             Fired after the initializiation is done
+        user_ready
+            Fired after the user has confirmed all program dialogs
+        series_ready
+            Fired after all program run initialization is done right before 
+            starting the measurement
         """
         log_debug(self._logger, "Starting program loop")
 
@@ -553,7 +558,7 @@ class Controller:
             state_id = self.configuration.markState()
 
             log_debug(self._logger, "Firing 'before_init' event")
-            before_init()
+            before_init(self)
             
             if not isinstance(self.microscope, MicroscopeInterface):
                 load_microscope = True
@@ -616,7 +621,7 @@ class Controller:
 
             # fire init_ready event
             log_debug(self._logger, "Firing 'init_read' event")
-            init_ready()
+            init_ready(self)
 
             # prevent infinite loop
             security_counter = 0
@@ -649,7 +654,7 @@ class Controller:
             
                 # fire user_ready event
                 log_debug(self._logger, "Firing 'user_ready' event")
-                user_ready()
+                user_ready(self)
 
                 # save the config again, the view may show options
                 self.configuration.saveConfiguration()
@@ -722,7 +727,7 @@ class Controller:
             
             # fire series_ready event
             log_debug(self._logger, "Firing 'series_ready' event")
-            series_ready()
+            series_ready(self)
 
             log_debug(self._logger, "Creating measurement thread")
             self._measurement_thread = ExceptionThread(

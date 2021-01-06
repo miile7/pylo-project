@@ -459,22 +459,22 @@ class PerformedMeasurement:
                 self.measurement.name_format.format(counter=i)
             )
     
-    def microscope_ready_handler(self):
+    def microscope_ready_handler(self, *args):
         self.microscope_ready_time.append(time.time())
     
-    def before_record_handler(self):
+    def before_record_handler(self, *args):
         self.before_record_time.append(time.time())
     
-    def after_record_handler(self):
+    def after_record_handler(self, *args):
         self.after_record_time.append(time.time())
     
-    def measurement_ready_handler(self):
+    def measurement_ready_handler(self, *args):
         self.measurement_ready_time.append(time.time())
     
-    def prepare_names_handler(self):
+    def prepare_names_handler(self, *args):
         self.formatted_names.append(self.measurement.formatName(self.name_test_format))
     
-    def every_step_visited_handler(self):
+    def every_step_visited_handler(self, *args):
         step = self.measurement.steps[self.measurement._step_index]
 
         try:
@@ -482,7 +482,7 @@ class PerformedMeasurement:
         except ValueError:
             pass
     
-    def check_if_microscope_in_lorentz_mode(self):
+    def check_if_microscope_in_lorentz_mode(self, *args):
         assert self.controller.microscope.is_in_lorentz_mode
     
 performed_measurement_obj = None
@@ -1037,7 +1037,7 @@ class TestMeasurement:
         # reset the sleep time to be random again
         setSleepTime("random")
     
-    def after_stop_handler(self):
+    def after_stop_handler(self, *args):
         """The event handler for testing the after_stop event."""
         self.after_stop_times.append(time.time())
     

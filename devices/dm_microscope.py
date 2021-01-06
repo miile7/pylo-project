@@ -363,7 +363,7 @@ class DMMicroscope(MicroscopeInterface):
         else:
             self.dm_microscope = None
     
-    def _confirmHolder(self) -> None:
+    def _confirmHolder(self, *args) -> None:
         """Show a confirm dialog with the view if the holder is not yet
         confirmed.
 

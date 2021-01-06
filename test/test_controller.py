@@ -410,19 +410,19 @@ class TestController:
             # check if the returned value is correct
             assert values[i] == l["value"]
             
-    def before_init_handler(self):
+    def before_init_handler(self, *args):
         """The event handler for the before_init event."""
         self.before_init_times.append(time.time())
     
-    def init_ready_handler(self):
+    def init_ready_handler(self, *args):
         """The event handler for the init_ready event."""
         self.init_ready_times.append(time.time())
     
-    def user_ready_handler(self):
+    def user_ready_handler(self, *args):
         """The event handler for the user_ready event."""
         self.user_ready_times.append(time.time())
     
-    def series_ready_handler(self):
+    def series_ready_handler(self, *args):
         """The event handler for the series_ready event."""
         self.series_ready_times.append(time.time())
     
@@ -491,7 +491,7 @@ class TestController:
         use_dummy_images = not save_files
 
         if callable(before_start):
-            before_start()
+            before_start(controller)
 
         self.start_time = time.time()
         controller.startProgramLoop()
@@ -643,19 +643,19 @@ class TestController:
         # shown exactly one time
         assert measurement_time <= self.series_ready_times[0]
 
-    def microscope_ready_handler(self):
+    def microscope_ready_handler(self, *args):
         """The handler for the microscope_ready event."""
         self.microscope_ready_times.append(time.time())
 
-    def before_record_handler(self):
+    def before_record_handler(self, *args):
         """The handler for the before_record event."""
         self.before_record_times.append(time.time())
 
-    def after_record_handler(self):
+    def after_record_handler(self, *args):
         """The handler for the after_record event."""
         self.after_record_times.append(time.time())
 
-    def measurement_ready_handler(self):
+    def measurement_ready_handler(self, *args):
         """The handler for the measurement_ready event."""
         self.measurement_ready_times.append(time.time())
     
@@ -878,7 +878,7 @@ class TestController:
         
         assert found
     
-    def raise_test_exception(self):
+    def raise_test_exception(self, *args):
         """Raise an exception"""
         raise Exception("TestController: Test exception")
     

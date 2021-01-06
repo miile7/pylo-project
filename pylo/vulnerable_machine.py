@@ -41,7 +41,7 @@ class VulnerableMachine:
         # whenever the emergency event is created
         emergency.append(self.resetToEmergencyState)
     
-    def resetToEmergencyState(self) -> None:
+    def resetToEmergencyState(self, *args) -> None:
         """Set the machine to be in emergency state.
 
         This will reset the machine to be in the safe state. In addition the 
