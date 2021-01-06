@@ -658,9 +658,12 @@ class Controller:
                 # settings
                 restart_required_changes = self._configurationChangesNeedRestart(state_id)
                 if len(restart_required_changes) > 0:
-                    # reset microscope and camera if they changed
+                    # reset microscope if the microscope was changed or if the 
+                    # microscope was auto-loaded to reload changed microscope 
+                    # properties (not auto-loading is maily for testing or for 
+                    # plugins, both should know what to do)
                     if ((CONFIG_DEVICE_GROUP, "microscope") in 
-                        restart_required_changes):
+                        restart_required_changes) or load_microscope:
                         from .config import KEEP_REMOVED_DIVICE_SETTINGS
                         if not KEEP_REMOVED_DIVICE_SETTINGS:
                             self.configuration.removeElement(
@@ -668,6 +671,10 @@ class Controller:
                         
                         self.microscope = None
                     
+                    # reset camera if the camera was changed or if the  camera 
+                    # was auto-loaded to reload changed camera properties 
+                    # (not auto-loading is maily for testing or for plugins, 
+                    # both should know what to do)
                     if ((CONFIG_DEVICE_GROUP, "camera") in 
                         restart_required_changes):
                         from .config import KEEP_REMOVED_DIVICE_SETTINGS
