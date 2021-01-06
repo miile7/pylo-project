@@ -95,20 +95,30 @@ def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
         else:
             try:
                 value = float(value)
+                error_context = None
+            except ValueError as e:
+                error_context = e
 
+            if isinstance(value, float):
                 # prevent issues with float rounding
                 if math.isclose(value, 1):
                     value = True
-                else:
+                elif math.isclose(value, 0):
                     value = False
-            except ValueError as e:
-                if not suppress_errors:
-                    raise ValueError(("Please use {} to indicate a true " + 
-                                    "boolean, use {} to represent false " + 
-                                    "(case insensitive)").format(
-                                        human_concat_list(true_vals + [1]),
-                                        human_concat_list(false_vals + [0]),
-                                    )) from e
+            
+            if not isinstance(value, bool) and not suppress_errors:
+                err = ValueError(("'{}' is not supported for a boolean. " + 
+                                  "Please use {} to indicate a true " + 
+                                  "boolean, use {} to represent false " + 
+                                  "(case insensitive)").format(value,
+                                    human_concat_list(true_vals + [1]),
+                                    human_concat_list(false_vals + [0]),
+                                ))
+                
+                if isinstance(error_context, Exception):
+                    raise err from error_context
+                else:
+                    raise err
     
     if isinstance(datatype, (type, Datatype)):
         try:

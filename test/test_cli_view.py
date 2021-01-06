@@ -1030,6 +1030,7 @@ class TestCLIView:
     def test_parse_invalid_value(self, cliview, input_definition, value):
         """Test if the _parseValue() function works."""
 
+        print(input_definition, value)
         with pytest.raises(ValueError):
             cliview._parseValue(input_definition, value)
     
@@ -1315,7 +1316,7 @@ class TestCLIView:
         
         writer.input_response = self.response_callback
         
-        results = cliview._showCustomTagsLoop(tags)
+        results = cliview._showCustomTags(tags)
 
         sys.stdout = sys.__stdout__
         sys.stdin = sys.__stdin__
