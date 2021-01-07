@@ -19,6 +19,15 @@ import re
 
 import pylo
 
+from pylotestlib import DummyView
+from pylotestlib import DummyConfiguration
+
+class DummyController(pylo.Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(DummyView(), DummyConfiguration())
+        self.microscope = DummyMicroscope(self)
+        self.camera = DummyCamera(self)
+
 sleep_time = "random"
 def setSleepTime(time="random"):
     global sleep_time
@@ -221,41 +230,6 @@ class DummyCamera(pylo.CameraInterface):
         self.currently_recording_image = False
 
         return pylo.Image(image_data, tags)
-
-class DummyConfiguration(pylo.AbstractConfiguration):
-    def __init__(self):
-        super().__init__()
-    
-    def loadConfiguration(self):
-        pass
-    
-    def saveConfiguration(self):
-        pass
-
-class DummyController(pylo.Controller):
-    def __init__(self):
-        self.microscope = DummyMicroscope(self)
-        self.camera = DummyCamera(self)
-        self.configuration = DummyConfiguration()
-        self.view = DummyView()
-
-class DummyView(pylo.AbstractView):
-    def askFor(self, *args, **kwargs):
-        print(args, kwargs)
-        assert False
-        return ["DEFAULT_ASK_FOR_ANSWER"] * len(args)
-    
-    def showError(self, error, how_to_fix):
-        if isinstance(error, Exception):
-            raise error
-        else:
-            raise Exception(error)
-    
-    def _updateRunning(self):
-        pass
-
-    def print(self, *inputs, sep=" ", end="\n", inset=""):
-        print(*inputs, sep=sep, end=end)
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -749,15 +723,15 @@ class TestMeasurement:
     @pytest.mark.usefixtures("performed_measurement")
     def test_log_created(self, performed_measurement):
         """Test if there is a log created."""
-        assert os.path.exists(performed_measurement.measurement._log_path)
-        assert os.path.isfile(performed_measurement.measurement._log_path)
+        assert os.path.exists(performed_measurement.measurement._measurement_log_path)
+        assert os.path.isfile(performed_measurement.measurement._measurement_log_path)
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
     def test_log_row_count_is_correct(self, performed_measurement):
         """Test if there is a log has the correct number of rows."""
         
-        with open(performed_measurement.measurement._log_path) as f:
+        with open(performed_measurement.measurement._measurement_log_path) as f:
             line_num = sum([1 if line != "" else 0 for line in f])
 
             # for each step one log before and one after, then plus one for the 
@@ -774,7 +748,7 @@ class TestMeasurement:
         #     print(row)
         # assert False
         
-        with open(performed_measurement.measurement._log_path) as f:
+        with open(performed_measurement.measurement._measurement_log_path) as f:
             reader = csv.reader(f)
             
             column_order = {}
