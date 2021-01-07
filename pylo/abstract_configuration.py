@@ -1380,7 +1380,8 @@ class AbstractConfiguration:
                 config_dict[group] = {}
             
             for key in self.getKeys(group):
-                config_dict[group][key] = self.getValue(group, key)
+                if self.valueExists(group, key):
+                    config_dict[group][key] = self.getValue(group, key)
         
         return config_dict
     
