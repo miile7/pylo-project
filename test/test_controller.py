@@ -14,10 +14,12 @@ import time
 import numpy as np
 
 import pylo
-import pylo.config
 
 # python <3.6 does not define a ModuleNotFoundError, use this fallback
 from pylo import FallbackModuleNotFoundError
+
+from pylotestlib import DummyView
+from pylotestlib import DummyViewShowsError
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -50,101 +52,6 @@ os.makedirs(controller_tmp_path, exist_ok=True)
 pylo.config.DEFAULT_SAVE_FILE_NAME = "{counter}-test-measurement.tif"
 pylo.config.DEFAULT_LOG_PATH = os.path.join(controller_tmp_path, "measurement.log")
 pylo.config.DEFAULT_INI_PATH = os.path.join(controller_tmp_path, "configuration.ini")
-
-class DummyViewShowsError(AssertionError):
-    pass
-
-class DummyView(pylo.AbstractView):
-    def __init__(self):
-        self.reset()
-        super().__init__()
-    
-    def clear(self):
-        pass
-
-    def reset(self):
-        self.shown_create_measurement_times = []
-        # contains the comparator at index 0 (one or more strings that have to
-        # be in the name it is asked for) or a callable, contains the repsonse
-        # or a callable at index 1
-        self.ask_for_response = []
-        self.error_log = []
-        self.inputs = []
-        self.measurement_to_create = (
-            # start conditions
-            {"measurement-var": 0},
-            # series definition
-            {"variable": "measurement-var", "start": 0, "end": 1, "step-width": 1}
-        )
-    
-    def _updateRunning(self):
-        pass
-    
-    def askFor(self, *inputs):
-        self.inputs = inputs
-
-        responses = []
-
-        for i, inp in enumerate(self.inputs):
-            if "name" in inp:
-                for name_contains, response in self.ask_for_response:
-                    is_correct_name = False
-
-                    if (isinstance(name_contains, str) and 
-                        name_contains in inp["name"]):
-                        is_correct_name = True
-                    elif isinstance(name_contains, (list, tuple)):
-                        is_correct_name = True
-                        for n in name_contains:
-                            if not n in inp["name"]:
-                                is_correct_name = False
-                                break
-                    elif callable(name_contains) and name_contains(inp):
-                        is_correct_name = True
-
-                    if is_correct_name:
-                        if callable(response):
-                            response = response(inp)
-                        
-                        responses.append(response)
-
-            if len(responses) < i + 1:
-                # no response found
-                responses.append("ASKED_FOR_DEFAULT_RESPONSE")
-        
-        return responses
-    
-    def showCreateMeasurement(self, *args, **kwargs):
-        self.shown_create_measurement_times.append(time.time())
-        
-        ret = self.measurement_to_create
-        if callable(ret):
-            ret = ret()
-
-        return ret
-    
-    def showError(self, error, how_to_fix=None):
-        self.error_log.append((error, how_to_fix))
-        if isinstance(error, Exception):
-            name = error.__class__.__name__
-        else:
-            name = "Error"
-
-        print("DummyView::showError() is called.")
-        print("\t{}: {}".format(name, error))
-        print("\tFix: {}".format(how_to_fix))
-        
-        # display errors, if they are inteded use pytest.raises()
-        if isinstance(error, Exception):
-            import traceback
-            traceback.print_exc()
-
-            raise DummyViewShowsError("{}".format(error)).with_traceback(error.__traceback__)
-        else:
-            raise DummyViewShowsError(error)
-    
-    def print(self, *inputs, sep=" ", end="\n", inset=""):
-        print(*inputs, sep=sep, end=end)
 
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
@@ -478,11 +385,15 @@ class TestController:
 
         if change_microscope:
             # define the microscope to use
-            controller.configuration.setValue("setup", "microscope", "DummyMicroscope")
+            controller.configuration.setValue(
+                pylo.controller.CONFIG_DEVICE_GROUP, "microscope", 
+                "DummyMicroscope")
 
         if change_camera:
             # define the camera to use
-            controller.configuration.setValue("setup", "camera", "DummyCamera")
+            controller.configuration.setValue(
+                pylo.controller.CONFIG_DEVICE_GROUP, "camera", 
+                "DummyCamera")
 
         if change_save_path:
             controller.configuration.setValue("measurement", "save-directory", save_path)
@@ -491,7 +402,7 @@ class TestController:
         use_dummy_images = not save_files
 
         if callable(before_start):
-            before_start(controller)
+            before_start()
 
         self.start_time = time.time()
         controller.startProgramLoop()
@@ -506,6 +417,10 @@ class TestController:
     @pytest.mark.usefixtures("controller")
     def test_measurement_save_paths_default(self, tmp_path, controller):
         """Test if the save directory and file name are correct."""
+        # prevent caring about camera or microscope
+        controller.camera = DummyCamera(controller)
+        controller.microscope = DummyMicroscope(controller)
+
         self.init_start_program_test(controller, tmp_path, save_files=False, 
                                      change_save_path=False)
 
@@ -518,6 +433,9 @@ class TestController:
     def test_measurement_save_paths_custom(self, tmp_path, controller):
         """Test if the save directory and file name can be modified correctly 
         by changing the settings."""
+        # prevent caring about camera or microscope
+        controller.camera = DummyCamera(controller)
+        controller.microscope = DummyMicroscope(controller)
 
         name_format = "{counter}-dummy-file.tif"
 
@@ -542,6 +460,9 @@ class TestController:
         """Test if all events are fired, test if the events are fired in the 
         correct order."""
 
+        # prevent caring about camera or microscope
+        controller.camera = DummyCamera(controller)
+        controller.microscope = DummyMicroscope(controller)
         self.init_start_program_test(controller, tmp_path)
 
         # check if all events are executed exactly one time
@@ -564,24 +485,33 @@ class TestController:
     @pytest.mark.usefixtures("controller")
     def test_microscope_from_configuration(self, tmp_path, controller):
         """Test if the microscope is asked from the configuration."""
-        self.init_start_program_test(controller, tmp_path)
+
+        try:
+            self.init_start_program_test(controller, tmp_path)
+        except Exception:
+            # exception is thrown sice no camera is found
+            pass
 
         # contains the request with group at index 0 and key at index 1
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if mircoscope is asked from the configuration
-        assert ("setup", "microscope") in requests
+        assert (pylo.controller.CONFIG_DEVICE_GROUP, "microscope") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_camera_from_configuration(self, tmp_path, controller):
         """Test if the camera is asked from the configuration."""
-        self.init_start_program_test(controller, tmp_path)
+        try:
+            self.init_start_program_test(controller, tmp_path)
+        except Exception:
+            # exception is thrown sice no microscope is found
+            pass
 
         # contains the request with group at index 0 and key at index 1
         requests = [r[:2] for r in controller.configuration.request_log]
 
         # check if camera is asked from the configuration
-        assert ("setup", "camera") in requests
+        assert (pylo.controller.CONFIG_DEVICE_GROUP, "camera") in requests
 
     @pytest.mark.usefixtures("controller")
     def test_microscope_and_camera_are_valid(self, tmp_path, controller):
@@ -594,10 +524,10 @@ class TestController:
         # assert isinstance(controller.microscope, DummyMicroscope)
         # assert isinstance(controller.camera, DummyCamera)
 
-        assert controller.microscope.__class__.__module__ == os.path.basename(__file__)
+        assert controller.microscope.__class__.__module__ in os.path.basename(__file__)
         assert controller.microscope.__class__.__name__ == "DummyMicroscope"
 
-        assert controller.camera.__class__.__module__ == os.path.basename(__file__)
+        assert controller.camera.__class__.__module__ in os.path.basename(__file__)
         assert controller.camera.__class__.__name__ == "DummyCamera"
     
     @pytest.mark.usefixtures("controller")
@@ -726,7 +656,13 @@ class TestController:
     def test_error_shown_microscope_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope", "NoFileDummyMicroscope")
+        # always set both values, otherwise the controller will ask for the 
+        # missing value which is not intendet in this test
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "microscope", 
+                                          "NoFileDummyMicroscope")
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "camera", "Dummy Camera")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -744,7 +680,13 @@ class TestController:
     def test_error_shown_microscope_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "microscope", "NoClassDummyMicroscope")
+        # always set both values, otherwise the controller will ask for the 
+        # missing value which is not intendet in this test
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "microscope", 
+                                          "NoClassDummyMicroscope")
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "camera", "Dummy Camera")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -762,7 +704,13 @@ class TestController:
     def test_error_shown_camera_module_wrong(self, tmp_path, controller):
         """Test if an error is shown when the microsocpe could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera", "NoFileDummyCamera")
+        # always set both values, otherwise the controller will ask for the 
+        # missing value which is not intendet in this test
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "camera", 
+                                          "NoFileDummyCamera")
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "microscope", "Dummy Microscope")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -780,7 +728,13 @@ class TestController:
     def test_error_shown_camera_class_wrong(self, tmp_path, controller):
         """Test if an error is shown when the camera could not be loaded."""
 
-        controller.configuration.setValue("setup", "camera", "NoClassDummyCamera")
+        # always set both values, otherwise the controller will ask for the 
+        # missing value which is not intendet in this test
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "camera", 
+                                          "NoClassDummyCamera")
+        controller.configuration.setValue(pylo.controller.CONFIG_DEVICE_GROUP, 
+                                          "microscope", "Dummy Microscope")
 
         with pytest.raises(DummyViewShowsError):
             # DummyView raises DummyViewShowsError when showError() is called
@@ -789,24 +743,6 @@ class TestController:
         found = False
         for e in controller.view.error_log:
             if "Could not create the device 'NoClassDummyCamera'" in str(e[0]):
-                found = True
-                break
-        
-        assert found
-    
-    @pytest.mark.usefixtures("controller")
-    def test_error_shown_create_measurement_wrong_return_type(self, tmp_path, controller):
-        """Test if an error is shown when the view returns a wrong type from 
-        the showCreateMeasurement() function."""
-        
-        controller.view.measurement_to_create = False
-        with pytest.raises(DummyViewShowsError):
-            # DummyView raises DummyViewShowsError when showError() is called
-            self.init_start_program_test(controller, tmp_path)
-
-        found = False
-        for e in controller.view.error_log:
-            if "The view returned an invalid measurement" in str(e[0]):
                 found = True
                 break
         
@@ -926,8 +862,8 @@ class TestController:
     
     @pytest.mark.usefixtures("controller")
     @pytest.mark.parametrize("group,key,for_camera", [
-        ("setup", "microscope", False),
-        ("setup", "camera", True),
+        (pylo.controller.CONFIG_DEVICE_GROUP, "microscope", False),
+        (pylo.controller.CONFIG_DEVICE_GROUP, "camera", True),
     ])
     def test_stop_program_exception_stops_in_ask_for_microscope_or_camera(self, tmp_path, controller, group, key, for_camera):
         """Test if the program is stopped if the view raises the StopProgram
@@ -1075,10 +1011,6 @@ class TestController:
 
         assert self.start_time < restart_time
         assert restart_time < end_time
-
-        print("TestController.test_restart_program_loop_works_program_while_working()")
-        from pprint import pprint
-        pprint(controller.configuration.request_log)
         
         # contains the request with group at index 0 and key at index 1
         requests = []
@@ -1104,8 +1036,8 @@ class TestController:
 
         # check if mircoscope and camera are created at least two times, there
         # can be more requests when restarting, ect.
-        assert requests.count(("setup", "microscope")) >= 2
-        assert requests.count(("setup", "camera")) >= 2
+        assert requests.count((pylo.controller.CONFIG_DEVICE_GROUP, "microscope")) >= 2
+        assert requests.count((pylo.controller.CONFIG_DEVICE_GROUP, "camera")) >= 2
 
         # all first events are triggered before the restart
         assert self.before_init_times[0] <= restart_time
@@ -1114,8 +1046,9 @@ class TestController:
         assert self.microscope_ready_times[0] <= restart_time
 
         # all first requests are made before the restart
-        assert min(request_times_dict["setup-microscope"]) <= restart_time
-        assert min(request_times_dict["setup-camera"]) <= restart_time
+        device_group = pylo.controller.CONFIG_DEVICE_GROUP
+        assert min(request_times_dict["{}-microscope".format(device_group)]) <= restart_time
+        assert min(request_times_dict["{}-camera".format(device_group)]) <= restart_time
 
         # all second events are triggered after the restart
         assert restart_time <= self.before_init_times[1]
