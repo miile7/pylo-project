@@ -75,7 +75,7 @@ class AbstractView:
         log_debug(self._logger, "Showing program dialogs")
         start, series = self.showCreateMeasurement(controller)
         configuration = self.showSettings(controller.configuration)
-        custom_tags = self.showCustomTags(controller)
+        custom_tags = self.showCustomTags(controller.configuration)
 
         return start, series, configuration, custom_tags
 
