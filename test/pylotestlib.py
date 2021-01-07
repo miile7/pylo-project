@@ -135,3 +135,13 @@ class DummyView(pylo.AbstractView):
             return dict()
         else:
             return tags
+
+class DummyConfiguration(pylo.AbstractConfiguration):
+    def __init__(self):
+        super().__init__()
+    
+    def loadConfiguration(self):
+        pass
+    
+    def saveConfiguration(self):
+        pass
