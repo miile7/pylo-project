@@ -424,15 +424,7 @@ class MeasurementSteps(collections.abc.Sequence):
             index contains the most inner series
         """
         
-        series = self.series
-        while series is not None:
-            yield series
-
-            if "on-each-point" in series:
-                series = series["on-each-point"]
-            else:
-                series = None
-                break
+        return MeasurementSteps.getSeriesNests(self.series)
     
     def _getNestedSeriesForLevel(self, level: int) -> dict:
         """Get the series of the given `level`.
@@ -699,3 +691,25 @@ class MeasurementSteps(collections.abc.Sequence):
             The length of this series without the "on-each-point" series
         """
         return math.floor((series["end"] - series["start"]) / series["step-width"]) + 1
+    
+    @staticmethod
+    def getSeriesNests(series: dict) -> typing.Generator[dict, None, None]:
+        """Get a generator containing the complete series.
+
+        Returns
+        -------
+        generator of dict
+            The base series and each "on-each-point" series in a list where the 
+            lowest index contains the most outer (base) series, the highest
+            index contains the most inner series
+        """
+        
+        s = series
+        while s is not None:
+            yield s
+
+            if "on-each-point" in s:
+                s = s["on-each-point"]
+            else:
+                s = None
+                break

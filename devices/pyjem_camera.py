@@ -62,7 +62,7 @@ class PyJEMCamera(CameraInterface):
             self.config_group_name, "image-size")
         self._detector = Detector(self._detector_name)
     
-    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None, **kwargs) -> "Image":
         """Get the image of the current camera.
 
         Parameters

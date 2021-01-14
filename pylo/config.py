@@ -189,3 +189,29 @@ pre-sets and clutter up the configuration and image tags.
 Default: True
 """)
 KEEP_REMOVED_DIVICE_SETTINGS = True
+
+__config_docs__("DM_IMAGE_ANNOTATION_COLOR",
+"""The foreground color to use for annotations in dm images as an rgb tuple.
+Default: (0, 255, 0)
+""")
+DM_IMAGE_ANNOTATION_COLOR = (0, 255, 0)
+
+__config_docs__("DM_IMAGE_ANNOTATION_PADDING_FRACTION",
+"""The padding to use for annotations as a fraction. For vertical paddings the
+`DM_IMAGE_ANNOTATION_PADDING_FRACTION` will be multiplied with the image height,
+for horizontal paddings with the image width
+Default: 1/50
+""")
+DM_IMAGE_ANNOTATION_PADDING_FRACTION = 1/50
+
+__config_docs__("DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION",
+"""The length of the scalebar as a fraction of the image width.
+Default: 1/5
+""")
+DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION = 1/5
+
+__config_docs__("DM_IMAGE_ANNOTATION_HEIGHT_FRACTION",
+"""The height of the annotations as a fraction of the image height
+Default: 1/20
+""")
+DM_IMAGE_ANNOTATION_HEIGHT_FRACTION = 1/20

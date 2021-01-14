@@ -52,6 +52,9 @@ class DMImage(Image):
         *bottom*, *right* containing the coordinate values
     shown_images_counter : int
         The number of images that are shown in the workspace
+    annotations : list of str
+        A list of annotations, if 'scalebar' is used, a scalebar is added, 
+        everything else will be added as text
     """
 
     shown_images_counter = 0
@@ -88,6 +91,7 @@ class DMImage(Image):
         self._logger = get_logger(self)
 
         self.show_image = False
+        self.annotations = []
         self.workspace_id = None
         try:
             self.workspace_rect = self._getWorkspaceRect()
@@ -141,7 +145,8 @@ class DMImage(Image):
             workspace_rect = (script["top"], script["left"], script["bottom"], 
                               script["right"])
         
-        log_debug(self._logger, "Found workspace rect to be '{}'".format(workspace_rect))
+        log_debug(self._logger, ("Found workspace rect to be " + 
+                                 "'{}'").format(workspace_rect))
         
         if not isinstance(workspace_rect, tuple):
             err = LookupError("Could not detect the workspace area in GMS.")
@@ -152,7 +157,7 @@ class DMImage(Image):
     
     @classmethod
     def fromDMPyImageObject(cls: typing.Any, image: DM.Py_Image, 
-                          additional_tags: typing.Optional[dict]={}) -> "DMImage":
+                            additional_tags: typing.Optional[dict]={}) -> "DMImage":
         """Create the `DMImage` from the given DigitalMicrograph image object.
 
         Parameters
@@ -198,6 +203,8 @@ class DMImage(Image):
             name, _ = os.path.splitext(os.path.basename(file_path))
             image_doc = self._getImageDocument(name)
 
+            self._addAnnotations(image_doc)
+
             log_debug(self._logger, ("Saving image by dm image document '{}' with " + 
                                     "the file type '{}' to the path '{}'").format(
                                     image_doc, file_type, file_path))
@@ -220,6 +227,58 @@ class DMImage(Image):
                                     file_type, file_path))
             super(DMImage, self)._executeSave(file_type, file_path)
     
+    def _addAnnotations(self, image_doc: DM.Py_ImageDocument) -> None:
+        """
+        """
+        if not isinstance(self.annotations, list) or len(self.annotations) == 0:
+            log_debug(self._logger, ("Skipping adding annotations, " + 
+                                     "annotations are not a list or empty"))
+        else:
+            log_debug(self._logger, ("Adding annotations"))
+            
+            from .config import DM_IMAGE_ANNOTATION_COLOR
+            from .config import DM_IMAGE_ANNOTATION_PADDING_FRACTION
+            from .config import DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION
+            from .config import DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+
+            for i in range(image_doc.CountImages()):
+                img = image_doc.GetImage(i)
+                image_width = img.GetDimensionSize(0)
+                image_height = img.GetDimensionSize(1)
+
+                t = (1 - DM_IMAGE_ANNOTATION_HEIGHT_FRACTION - 
+                        DM_IMAGE_ANNOTATION_PADDING_FRACTION) * image_height
+                l = DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_width
+                
+                for j in range(img.CountImageDisplays()):
+                    display = img.GetImageDisplayInImageDocument(image_doc, j)
+
+                    for annotation in self.annotations:
+                        if annotation == "scalebar":
+                            b = ((1 - DM_IMAGE_ANNOTATION_PADDING_FRACTION) * 
+                                 image_height)
+                            r = (l + DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION * 
+                                 image_width)
+                            annotation = display.AddNewComponent(31, t, l, b, r)
+                        else:
+                            # annotation = DM.NewTextAnnotation(l, t, annotation,
+                            #     DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_height)
+                            # display.
+                            annotation = display.AddNewComponent(13, l, t, 
+                                annotation, 
+                                DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_height)
+                        
+                        annotation.SetForegroundColor(
+                            DM_IMAGE_ANNOTATION_COLOR[0],
+                            DM_IMAGE_ANNOTATION_COLOR[1],
+                            DM_IMAGE_ANNOTATION_COLOR[2])
+                        
+                        bounding_rect = annotation.GetBoundingRect()
+                        # get right value of bounding rect
+                        l = (bounding_rect[3] + 
+                             DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_width)
+
+        
     def getDMPyImageObject(self, name: typing.Optional[str]=None) -> DM.Py_Image:
         """Get the DigitalMicrograph.Py_Image for the current image.
 
@@ -247,8 +306,8 @@ class DMImage(Image):
         else:
             img = self._py_image
         
-        log_debug(self._logger, "Created DigitalMicrograph.Py_Image object '{}'".format(
-                            img))
+        log_debug(self._logger, ("Created DigitalMicrograph.Py_Image object " + 
+                                 "'{}'").format(img))
         
         # save the tags
         if isinstance(self.tags, dict) and self.tags != {}:

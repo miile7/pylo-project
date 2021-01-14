@@ -42,7 +42,7 @@ class CameraInterface(Device, VulnerableMachine):
         self.tags = {}
         self.controller = controller
     
-    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None, **kwargs) -> "Image":
         """Get the image of the current camera.
 
         Parameters
