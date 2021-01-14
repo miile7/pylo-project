@@ -11,7 +11,11 @@ path_like : tuple
 import os
 import math
 import typing
+import logging
 import pathlib
+import datetime
+
+from collections import defaultdict
 
 from .datatype import Datatype
 from .datatype import OptionDatatype
@@ -139,6 +143,31 @@ def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
                 
     return value
 
+def human_value(var: "MeasurementVariable", val: typing.Any) -> typing.Any:
+    """Convert the given `val` of the `var` to the human output.
+
+    Parameters
+    ----------
+    var : MeasurementVariable
+        The measurement variable
+    val : any
+        The value
+    
+    Returns
+    -------
+    any
+        The formatted and calibrated value
+    """
+    if var.has_calibration:
+        val = var.ensureCalibratedValue(val)
+    
+    if var.has_calibration and isinstance(var.calibrated_format, Datatype):
+        val = format_value(var.calibrated_format, val)
+    elif isinstance(var.format, Datatype):
+        val = format_value(var.format, val)
+    
+    return val
+
 def get_datatype_name(datatype: typing.Union[type, Datatype, list, tuple]) -> str:
     """Get the datatype name to identify the datatype
 
@@ -255,3 +284,304 @@ def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'",
         return ""
     else:
         return surround * 2
+    
+def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
+                step: typing.Optional[dict]=None, 
+                start: typing.Optional[dict]=None,
+                series: typing.Optional[dict]=None,
+                tags: typing.Optional[dict]=None, 
+                counter: typing.Optional[int]=None, **kwargs) -> str:
+    """Format the given text.
+
+    The placeholders in the `text` are replaced with pythons format mini 
+    language. The following objects can be used in the `text`:
+
+    - 'varname': The variable names with the keys as measurement variable ids
+      and the values as the corresponding name, only present if the `controller`
+      is given
+    - 'varunit': The variable unit with the keys as measurement variable ids
+      and the values as the corresponding name, only present if the `controller`
+      is given
+    - 'step': The current step with the keys as measurement variable ids and 
+      the values as machine values (uncalibrated and unformatted values), only
+      present if the `step` is given
+    - 'humanstep': The current step with the keys as measurement variable ids 
+      and the values as human readable values (calibrated and formatted values), 
+      only present if the `controller` and the `step` are given
+    - 'start': The measurement start definition with the keys as measurement 
+      variable ids and the values as machine values (uncalibrated and 
+      unformatted values), only present if the `start` is given
+    - 'humanstart': The measurement start definition with the keys as 
+      measurement variable ids and the values as human readable values 
+      (calibrated and formatted values), only present if the `controller` and
+      the `start` are given
+    - 'series': The measurement series nest definitions as a list of series
+      nests (index 0 contains the most outer series dict with 'start', 'end' 
+      and 'step-width', index 1 the next inner series and so on) as machine 
+      values (uncalibrated and unformatted values), only present if the
+      `series` is given
+    - 'humanseries': The measurement series nest definitions as a list of series
+      nests (index 0 contains the most outer series dict with 'start', 'end' 
+      and 'step-width', index 1 the next inner series and so on) as human 
+      readable values (calibrated and formatted values), only present if the 
+      `controller` and the `series` are given
+    - 'tags': The tags depending on the context, only present if the `tags` are 
+      given
+    - 'counter': The image counter, only present if the `counter` is given
+    - 'time': The current time as a datetime object
+
+    Additionally to the python format values, text can be grouped by using 
+    '{?<...>}', '{_<...>}' and '{!<...>}' e.g. '{?the value is {step[value]}}'. 
+    If the value `step["value"]` does not exist, the whole group is omitted if 
+    '{?<...>}' is used, if '{_<...>}'  is used, only the value is omitted. If 
+    '{!<...>}' is used, the key error of the python `format` function is 
+    raised. The default group is using the underscore.
+
+    Curly brackets can be escaped with anoter curly bracket. Note that nested 
+    groups are currently not supported.
+    
+    Parameters
+    ----------
+    text : str
+        The text to format
+    
+    Returns
+    -------
+    str
+        The formatted name
+    """
+    from .controller import Controller
+    from .measurement_steps import MeasurementSteps
+
+    if isinstance(series, dict):
+        series_nests = list(MeasurementSteps.getSeriesNests(series))
+
+    format_kwargs = kwargs
+
+    if isinstance(step, dict):
+        format_kwargs["humanstep"] = {}
+        format_kwargs["step"] = step
+    
+    if isinstance(start, dict):
+        format_kwargs["humanstart"] = {}
+        format_kwargs["start"] = start
+    
+    if isinstance(series, dict):
+        format_kwargs["humanseries"] = []
+        format_kwargs["series"] = series_nests
+
+    if isinstance(controller, Controller):
+        format_kwargs["varname"] = {}
+        format_kwargs["varunit"] = {}
+
+        for var in controller.microscope.supported_measurement_variables:
+            if var.has_calibration and var.calibrated_name is not None:
+                format_kwargs["varname"][var.unique_id] = str(var.calibrated_name)
+            else:
+                format_kwargs["varname"][var.unique_id] = str(var.name)
+
+            if var.has_calibration and var.calibrated_unit is not None:
+                format_kwargs["varunit"][var.unique_id] = var.calibrated_unit
+            elif var.unit is not None:
+                format_kwargs["varunit"][var.unique_id] = var.unit
+            
+            if isinstance(step, dict) and var.unique_id in step:
+                format_kwargs["humanstep"][var.unique_id] = human_value(
+                    var, step[var.unique_id])
+            
+            if isinstance(start, dict) and var.unique_id in start:
+                format_kwargs["humanstart"][var.unique_id] = human_value(
+                    var, start[var.unique_id])
+        
+        for nest in series_nests:
+            if ("variable" in nest and "start" in nest and "end" in nest and 
+                "step-width" in nest):
+                try:
+                    var = controller.microscope.getMeasurementVariableById(
+                        nest["variable"])
+                    if var.has_calibration and var.calibrated_name is not None:
+                        name = str(var.calibrated_name)
+                    else:
+                        name = str(var.name)
+                    
+                    format_kwargs["humanseries"].append({
+                        "variable": name,
+                        "start": human_value(var, nest["start"]),
+                        "end": human_value(var, nest["end"]),
+                        "step-width": human_value(var, nest["step-width"]),
+                    })
+                except KeyError:
+                    pass 
+
+    if tags is not None:
+        format_kwargs["tags"] = tags
+
+    if counter is not None:
+        format_kwargs["counter"] = counter
+    
+    format_kwargs["time"] = datetime.datetime.now()
+
+    names = []
+    for txt in text:
+        groups = _split_expand_vars_groups(txt)
+
+        name = []
+        for modifier, t in groups:
+            if modifier == "_":
+                t = t.format_map(defaultdict(str, **format_kwargs))
+            else:
+                try:
+                    t = t.format(**format_kwargs)
+                except KeyError as e:
+                    if modifier == "?":
+                        continue
+                    else:
+                        raise e
+            name.append(t)
+        
+        names.append("".join(name))
+        
+    return names
+
+def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
+    """Split the given `text` into groups.
+
+    A group is started with '{?' and ended with '}' while all other opening and
+    closing brackets inbetween are ignored.
+
+    Parameters
+    ----------
+    text : str
+        The text to split
+    
+    Returns
+    -------
+    list of str
+        The groups, with the modifier at index 0 and the text at index 1, if no 
+        groups are defined the complete `text` will be in index 0 of the 
+        returned list
+    """
+
+    groups = []
+    bc = 0 # bracket count
+    ig = False # in group or not
+    lo = 0 # last start of group
+    ebp = [] # escaped brackets positions
+    mod = "_" # the mofifier to save
+    lmod = "_" # the lastly used modifier
+    for i, c in enumerate(text):
+        if i in ebp:
+            continue
+
+        if c == "{" or c == "}":
+            if i + 1 == len(text) or text[i + 1] != c:
+                # current character is an semantic bracket
+                if c == "{":
+                    bc += 1
+                elif c == "}":
+                    bc -= 1
+            else:
+                # current character is an escaped bracket character, tell that 
+                # this and the next brackets are escaping characters
+                ebp.append(i)
+                ebp.append(i + 1)
+                continue
+        
+        end_i = i
+        save_group = False
+        if (not ig and c in ("?", "_", "!") and i > 0 and text[i - 1] == "{" and 
+            i - 1 not in ebp):
+            # curret character is a '?' followed by an unescaped bracket
+            ig = bc
+            save_group = True
+            # remove the first curly bracket from saving it to the group
+            end_i = i - 1
+            lmod = mod
+            mod = c
+        elif ig != False and c == "}" and ig == bc + 1:
+            ig = False
+            save_group = True
+            # group is closed, reset the modifier to the last modifier and the 
+            # last modifier to the current modifier
+            mod, lmod = lmod, mod
+        
+        if save_group:
+            t = text[lo:end_i]
+            if t != "":
+                # add the the text from the last group opening as a group
+                groups.append((lmod, t))
+                
+            # set the start of the coming group to the character after the 
+            # current character
+            lo = i + 1
+    
+    # add remaining text to the groups
+    if lo < len(text):
+        groups.append((mod, text[lo:]))
+    
+    return groups
+
+def get_expand_vars_text(controller_given: typing.Optional[bool]=True,
+                         step_given: typing.Optional[bool]=True,
+                         start_given: typing.Optional[bool]=True,
+                         series_given: typing.Optional[bool]=True,
+                         tags_given: typing.Optional[bool]=True,
+                         counter_given: typing.Optional[bool]=True) -> str:
+    """Get the expand vars help.
+
+    Parameters
+    ----------
+    controller_given, step_given, start_given, series_given, tags_given, 
+    counter_given: bool
+        Whether the corresponding parameter was/will be given for the 
+        `expand_vars()` call this help is generated for
+
+    Returns
+    -------
+    str
+        The help text
+    """
+
+    placeholder_texts = []
+    if step_given:
+        placeholder_texts.append("Use {step[<variable-id>]} to access the " + 
+                                 "current measurement step as uncalibrated " + 
+                                 "and unformatted values.")
+    if step_given and controller_given:
+        placeholder_texts.append("Use {humanstep[<variable-id>]} to access " +
+                                 "the current measurement step as human " + 
+                                 "readable, formatted and calibrated values.")
+    if start_given:
+        placeholder_texts.append("Use {start[<variable-id>]} to access the " + 
+                                 "current measurement series start definition " +
+                                 "as uncalibrated and unformatted values.")
+    if start_given and controller_given:
+        placeholder_texts.append("Use {humanstart[<variable-id>]} to access " +
+                                 "the current measurement step definition as" +
+                                 "human readable, formatted and calibrated " + 
+                                 "values.")
+    if step_given:
+        placeholder_texts.append("Use {step[<i>][start|step-width|end]} to " + 
+                                 "access the current measurement series " + 
+                                 "definition as uncalibrated and unformatted " + 
+                                 "values where <i>=0 is the most outer and " + 
+                                 "<i>=-1 the most inner series definition.")
+    if step_given and controller_given:
+        placeholder_texts.append("Use {humanstep[<i>][start|step-width|end]} " + 
+                                 "to access the current measurement series " + 
+                                 "definition as calibrated and formatted " + 
+                                 "values where <i>=0 is the most outer and " + 
+                                 "<i>=-1 the most inner series definition.")
+    if controller_given:
+        placeholder_texts.append("Use {varname[<variable-id>]} to access " +
+                                 "the name of the given <variable-id>, use " + 
+                                 "{varunit[<variable-id>]} to use the unit.")
+    if tags_given:
+        placeholder_texts.append("Use {tags[<tagname>]} to access the tags.")
+    
+    placeholder_texts.append("Use {time:%Y-%m-%d, %H:%M:%S} to access the " + 
+                             "time. The time can be formatted with a format " + 
+                             "expression after the colon. Use python date " + 
+                             "format for formatting.")
+
+    return "Some placeholders can be used. " + (" ".join(placeholder_texts))
