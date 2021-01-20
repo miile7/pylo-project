@@ -853,23 +853,30 @@ class DMView(AbstractView):
                     val = None
                     
                     if name == "start":
-                        if var.min_value == None:
-                            val = 0
-                        else:
+                        if var.default_start_value is not None:
+                            val = var.default_start_value
+                        elif var.min_value is not None:
                             val = var.min_value
+                        else:
+                            val = 0
                     elif name == "end":
-                        if var.max_value == None:
-                            val = 100
-                        else:
+                        if var.default_end_value is not None:
+                            val = var.default_end_value
+                        elif var.max_value is not None:
                             val = var.max_value
-                    elif name == "step":
-                        if (var.min_value == None or var.max_value == None or 
-                            var.min_value == var.max_value):
-                            val = 1
                         else:
+                            val = 100
+                    elif name == "step":
+                        if var.default_step_width_value is not None:
+                            val = var.default_step_width_value
+                        elif (var.min_value is not None and 
+                              var.max_value is not None and 
+                              var.min_value != var.max_value):
                             val = "{:.4}".format(
                                 abs(var.min_value - var.max_value) / 10
                             )
+                        else:
+                            val = 1
                     else:
                         if var.has_calibration and name in cal_keys:
                             n = "calibrated_{}".format(name)

@@ -323,7 +323,8 @@ class AbstractConfiguration:
     
     def getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True,
-                 datatype: typing.Optional[typing.Union[type, Datatype]]=None) -> Savable:
+                 datatype: typing.Optional[typing.Union[type, Datatype]]=None,
+                 **kwargs) -> Savable:
         """Get the value for the given group and key.
 
         Raises
@@ -346,17 +347,26 @@ class AbstractConfiguration:
             for this value will be used, if there is no datatype set, the value
             will be returned in the type it is saved as
         
+        Keyword Arguments
+        -----------------
+        default_value : any
+            The default value to use if the group and key do not exist, if not
+            given the internal default value will be used, if there is no
+            internal default value the KeyError is raised, the `default_value`
+            will be parsed with the `datatype`, if this fails the 
+            `default_value` is returned as it is
+        
         Returns
         -------
         any
             The value
         """
-        return self._getValue(group, key, fallback_default, datatype)
+        return self._getValue(group, key, fallback_default, datatype, **kwargs)
     
     def _getValue(self, group: str, key: str, 
                  fallback_default: typing.Optional[bool]=True,
                  datatype: typing.Optional[typing.Union[type, Datatype]]=None,
-                 configuration: typing.Optional[dict]=None) -> Savable:
+                 configuration: typing.Optional[dict]=None, **kwargs) -> Savable:
         """Get the value for the given group and key for the given 
         `configuration`.
 
@@ -383,6 +393,15 @@ class AbstractConfiguration:
             for this value will be used, if there is no datatype set, the value
             will be returned in the type it is saved as
         
+        Keyword Arguments
+        -----------------
+        default_value : any
+            The default value to use if the group and key do not exist, if not
+            given the internal default value will be used, if there is no
+            internal default value the KeyError is raised, the `default_value`
+            will be parsed with the `datatype`, if this fails the 
+            `default_value` is returned as it is
+        
         Returns
         -------
         any
@@ -395,6 +414,9 @@ class AbstractConfiguration:
             return self._parseValue(group, key, 
                                     configuration[group][key]["value"][-1],
                                     datatype, configuration)
+        elif fallback_default and "default_value" in kwargs:
+            return self._parseValue(None, None, kwargs["default_value"], 
+                                    datatype)
         elif fallback_default and self._defaultExists(group, key, configuration):
             return self._parseValue(None, None, 
                                     configuration[group][key]["default_value"],

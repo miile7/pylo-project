@@ -92,12 +92,9 @@ class DMMicroscope(MicroscopeInterface):
         # the factor to multiply the focus with to show it to the user, 
         # the user entered values will be divided by this factor and then 
         # passed to the PyJEM functions
-        try:
-            focus_calibration_factor = pylolib.parse_value(float, 
-                self.controller.configuration.getValue(
-                    self.config_group_name, "focus-calibration"))
-        except KeyError:
-            focus_calibration_factor = None
+        focus_calibration_factor = self.controller.configuration.getValue(
+            self.config_group_name, "focus-calibration", datatype=float,
+            default_value=None)
 
         if (not isinstance(focus_calibration_factor, (int, float)) or 
             math.isclose(focus_calibration_factor, 0)):
@@ -107,13 +104,9 @@ class DMMicroscope(MicroscopeInterface):
                              focus_calibration_factor))
         
         # load the tolerance for the objective mini lens
-        try:
-            objective_mini_lens_tolerance = pylolib.parse_value(Datatype.hex_int, 
-                self.controller.configuration.getValue(
-                    self.config_group_name, 
-                    "abs-wait-tolerance-objective-mini-lens"))
-        except KeyError:
-            objective_mini_lens_tolerance = None
+        objective_mini_lens_tolerance = self.controller.configuration.getValue(
+            self.config_group_name, "abs-wait-tolerance-objective-mini-lens", 
+            datatype=Datatype.hex_int, default_value=None)
 
         if (isinstance(objective_mini_lens_tolerance, int) and 
             objective_mini_lens_tolerance != 0):
@@ -123,7 +116,7 @@ class DMMicroscope(MicroscopeInterface):
                              "tolerance is '{}'").format(
                              objective_mini_lens_tolerance))
 
-        self.registerMeasurementVariable(
+        variable = self.registerMeasurementVariable(
             MeasurementVariable(
                 "om-current", 
                 "Objective mini lens current", 
@@ -139,6 +132,15 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveMiniLensCurrent,
             self._setObjectiveMiniLensCurrent
         )
+        variable.default_start_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-om-current-start-value", 
+            datatype=Datatype.hex_int, default_value=0)
+        variable.default_end_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-om-current-end-value", 
+            datatype=Datatype.hex_int, default_value=0x200)
+        variable.default_step_width_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-om-current-step-width-value", 
+            datatype=Datatype.hex_int, default_value=0x1000)
         
         logginglib.log_debug(self._logger, "Asking the user to set the focus to 0")
         
@@ -157,13 +159,10 @@ class DMMicroscope(MicroscopeInterface):
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
-        try:
-            self.objective_lense_coarse_fine_stepwidth = pylolib.parse_value(
-                Datatype.int, self.controller.configuration.getValue(
-                    self.config_group_name, 
-                    "objective-lense-coarse-fine-stepwidth"))
-        except KeyError:
-            self.objective_lense_coarse_fine_stepwidth = None
+        self.objective_lense_coarse_fine_stepwidth = self.controller.configuration.getValue(
+            self.config_group_name, 
+            "objective-lense-coarse-fine-stepwidth", datatype=Datatype.int,
+            fallback_default=None)
         
         if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
             math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
@@ -175,13 +174,10 @@ class DMMicroscope(MicroscopeInterface):
 
         # the factor to multiply the lense current with to get the magnetic
         # field
-        try:
-            magnetic_field_calibration_factor = pylolib.parse_value(float, 
-                self.controller.configuration.getValue(
-                    self.config_group_name, 
-                    "objective-lense-magnetic-field-calibration"))
-        except KeyError:
-            magnetic_field_calibration_factor = None
+        magnetic_field_calibration_factor = self.controller.configuration.getValue(
+            self.config_group_name, 
+            "objective-lense-magnetic-field-calibration", datatype=float,
+            default_value=None)
         
         if (not isinstance(magnetic_field_calibration_factor, (int, float)) or 
             math.isclose(magnetic_field_calibration_factor, 0)):
@@ -193,11 +189,9 @@ class DMMicroscope(MicroscopeInterface):
         if magnetic_field_calibration_factor is not None:
             # the units of the magnetic field that results when multiplying with 
             # the magnetic_field_calibration_factor
-            try:
-                magnetic_field_unit = (self.controller.configuration.getValue(
-                        self.config_group_name, "magnetic-field-unit"))
-            except KeyError:
-                magnetic_field_unit = None
+            magnetic_field_unit = (self.controller.configuration.getValue(
+                self.config_group_name, "magnetic-field-unit", 
+                default_value=None))
         else:
             magnetic_field_unit = None
         
@@ -210,7 +204,7 @@ class DMMicroscope(MicroscopeInterface):
         else:
             max_ol_current = 0xFFFF
         
-        self.registerMeasurementVariable(
+        variable = self.registerMeasurementVariable(
             MeasurementVariable(
                 "ol-current", 
                 "Objective Lense Current", 
@@ -226,6 +220,15 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveLensCurrent,
             self._setObjectiveLensCurrent
         )
+        variable.default_start_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-ol-current-start-value", 
+            datatype=Datatype.hex_int, default_value=0)
+        variable.default_end_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-ol-current-end-value", 
+            datatype=Datatype.hex_int, default_value=0x200)
+        variable.default_step_width_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-ol-current-step-width-value", 
+            datatype=Datatype.hex_int, default_value=0x1000)
         self._ol_currents = {}
 
         # try to find idx files
@@ -300,22 +303,27 @@ class DMMicroscope(MicroscopeInterface):
                              installed_holder_label, self.installed_holder))
         
         # tilt limits depend on holder
-        self.registerMeasurementVariable(
+        variable = self.registerMeasurementVariable(
             MeasurementVariable("x-tilt", "X Tilt", 
                                 self.installed_holder.min_x_tilt, 
                                 self.installed_holder.max_x_tilt, "deg"),
             self._getXTilt,
             self._setXTilt
         )
-    
+        variable.default_start_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-x-tilt-start-value", 
+            datatype=float, default_value=0)
+        variable.default_end_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-x-tilt-end-value", 
+            datatype=float, default_value=10)
+        variable.default_step_width_value = self.controller.configuration.getValue(
+            self.config_group_name, "default-x-tilt-step-width-value", 
+            datatype=float, default_value=5)
+
         # load the tolerance for the x tilt
-        try:
-            x_tilt_tolerance = pylolib.parse_value(float, 
-                self.controller.configuration.getValue(
-                    self.config_group_name, 
-                    "abs-wait-tolerance-x-tilt"))
-        except KeyError:
-            x_tilt_tolerance = None
+        x_tilt_tolerance = self.controller.configuration.getValue(
+            self.config_group_name, "abs-wait-tolerance-x-tilt", datatype=float,
+            default_value=None)
 
         if (isinstance(x_tilt_tolerance, (int, float)) and 
             not math.isclose(x_tilt_tolerance, 0)):
@@ -325,13 +333,9 @@ class DMMicroscope(MicroscopeInterface):
                              x_tilt_tolerance))
     
         # load the tolerance for the y tilt
-        try:
-            y_tilt_tolerance = pylolib.parse_value(float, 
-                self.controller.configuration.getValue(
-                    self.config_group_name, 
-                    "abs-wait-tolerance-y-tilt"))
-        except KeyError:
-            y_tilt_tolerance = None
+        y_tilt_tolerance = self.controller.configuration.getValue(
+            self.config_group_name, "abs-wait-tolerance-y-tilt", datatype=float,
+            default_value=None)
 
         if (isinstance(y_tilt_tolerance, (int, float)) and 
             not math.isclose(y_tilt_tolerance, 0)):
@@ -343,13 +347,22 @@ class DMMicroscope(MicroscopeInterface):
         self.holder_confirmed = True
         if (self.installed_holder.min_y_tilt < 1 and 
             self.installed_holder.max_y_tilt > 1):
-            self.registerMeasurementVariable(
+            variable = self.registerMeasurementVariable(
                 MeasurementVariable("y-tilt", "Y Tilt", 
                                     self.installed_holder.min_y_tilt, 
                                     self.installed_holder.max_y_tilt, "deg"),
                 self._getYTilt,
                 self._setYTilt
             )
+            variable.default_start_value = self.controller.configuration.getValue(
+                self.config_group_name, "default-y-tilt-start-value", 
+                datatype=float, default_value=0)
+            variable.default_end_value = self.controller.configuration.getValue(
+                self.config_group_name, "default-y-tilt-end-value", 
+                datatype=float, default_value=10)
+            variable.default_step_width_value = self.controller.configuration.getValue(
+                self.config_group_name, "default-y-tilt-step-width-value", 
+                datatype=float, default_value=5)
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
@@ -940,6 +953,127 @@ class DMMicroscope(MicroscopeInterface):
             restart_required=False,
             default_value=config_defaults["abs-wait-tolerance-objective-mini-lens"]
         )
+        
+        # the default start value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-start-value"]
+                           if "default-om-current-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-end-value"]
+                           if "default-om-current-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-step-width-value"]
+                           if "default-om-current-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-start-value"]
+                           if "default-ol-current-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-end-value"]
+                           if "default-ol-current-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-step-width-value"]
+                           if "default-ol-current-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-start-value"]
+                           if "default-x-tilt-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-end-value"]
+                           if "default-x-tilt-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-step-width-value"]
+                           if "default-x-tilt-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-start-value"]
+                           if "default-y-tilt-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-end-value"]
+                           if "default-y-tilt-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-step-width-value"]
+                           if "default-y-tilt-step-width-value" in config_defaults
+                           else None))
+
 
 class IDXReader:
     """A reader to read out JEOL idx files that contain holder data.

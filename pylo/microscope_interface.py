@@ -67,7 +67,7 @@ class MicroscopeInterface(Device, VulnerableMachine):
     
     def registerMeasurementVariable(self, variable: "MeasurementVariable", 
                                     getter: typing.Callable[["MicroscopeInterface"], typing.Union[int, float, str]], 
-                                    setter: typing.Callable[["MicroscopeInterface", typing.Union[int, float, str]], None]) -> None:
+                                    setter: typing.Callable[["MicroscopeInterface", typing.Union[int, float, str]], None]) -> "MeasurementVariable":
         """Register a `MeasurementVariable` so this microscope knows that it 
         can change this parameter.
 
@@ -119,6 +119,11 @@ class MicroscopeInterface(Device, VulnerableMachine):
             `MeasurementVariable` from the microscope, the first parameter is 
             the instance of the microscope, the second is the the value to 
             apply
+        
+        Returns
+        -------
+        MeasurementVariable
+            The `variable`
         """
 
         log_debug(self._logger, "Registering measurement variable '{}'".format(
@@ -128,6 +133,8 @@ class MicroscopeInterface(Device, VulnerableMachine):
         self._measurement_variable_getter_setter_map[variable.unique_id] = (
             getter, setter
         )
+
+        return variable
 
     def setInLorentzMode(self, lorentz_mode: bool) -> None:
         """Set whether the microscope should now be in lorentz mode or not.

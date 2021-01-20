@@ -549,6 +549,9 @@ class AbstractView:
                                             "'{}') is missing").format(v.name, 
                                             v.unique_id))
                     return None, errors
+                elif v.default_start_value is not None:
+                    start[v.unique_id] = min(max(v.min_value, v.default_start_value), 
+                                             v.max_value)
                 else:
                     start[v.unique_id] = min(max(0, v.min_value), v.max_value)
             else:
@@ -668,12 +671,29 @@ class AbstractView:
             msg = ("The measurement variable '{}' does not " + 
                    "exist.").format(series["variable"])
             raise KeyError(msg) from e
-
-        keys = {
-            "start": var.min_value,
-            "end": var.max_value,
-            "step-width": (var.max_value - var.min_value) / 10
-        }
+        
+        keys = {}
+        if var.default_start_value is not None:
+            keys["start"] = var.default_start_value 
+        elif var.min_value is not None:
+            keys["start"] = var.min_value
+        else:
+            keys["start"] = 0
+        
+        if var.default_end_value is not None:
+            keys["end"] = var.default_end_value 
+        elif var.max_value is not None:
+            keys["end"] = var.max_value
+        else:
+            keys["end"] = 10
+        
+        if var.default_step_width_value is not None:
+            keys["step-width"] = var.default_step_width_value 
+        elif (isinstance(var.max_value, (int, float)) and 
+              isinstance(var.min_value, (int, float))):
+            keys["step-width"] = round((var.max_value - var.max_value) / 10, 2)
+        else:
+            keys["step-width"] = 1
 
         for k, d in keys.items():
             if k in series and parse:
