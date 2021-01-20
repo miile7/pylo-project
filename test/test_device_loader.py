@@ -64,7 +64,7 @@ class TestDeviceLoader:
             f.write(dummy_device_ini.format(class_name=class_name, name=name,
                                             file_path=device_py_path))
         loader = pylo.DeviceLoader()
-        loader.device_ini_files.append(device_ini_path)
+        loader.device_ini_files.add(device_ini_path)
         
         self.check_loaded_device(loader, name, class_name, "dummy-device-1")
     
@@ -84,7 +84,7 @@ class TestDeviceLoader:
                                             file_path="./dummy_device_2.py"))
         
         loader = pylo.DeviceLoader()
-        loader.device_ini_files.append(device_ini_path)
+        loader.device_ini_files.add(device_ini_path)
         
         self.check_loaded_device(loader, name, class_name, "dummy-device-2")
     

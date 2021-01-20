@@ -160,16 +160,16 @@ DEFAULT_DM_SHOW_IMAGES_ROW_COUNT = 2
 __config_docs__("PROGRAM_DATA_DIRECTORIES",
 """Paths where program data is expected.
 """)
-PROGRAM_DATA_DIRECTORIES = [
+PROGRAM_DATA_DIRECTORIES = {
     os.path.expanduser("~"),
     DEFAULT_USER_DIRECTORY,
     os.getcwd()
-]
+}
 try:
     # /pylo/
-    PROGRAM_DATA_DIRECTORIES.append(os.path.dirname(__file__))
+    PROGRAM_DATA_DIRECTORIES.add(os.path.dirname(__file__))
     # /
-    PROGRAM_DATA_DIRECTORIES.append(os.path.dirname(os.path.dirname(__file__)))
+    PROGRAM_DATA_DIRECTORIES.add(os.path.dirname(os.path.dirname(__file__)))
 except NameError:
     # __file__ does not exist
     pass

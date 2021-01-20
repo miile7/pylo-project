@@ -93,6 +93,16 @@ class DMViewDialog : UIFrame{
     TagGroup custom_tag_inputs;
 
     /**
+     * A `TagList` containing all the info buttons.
+     */
+    TagGroup info_buttons;
+
+    /**
+     * A `TagList` containing the description texts for each info button.
+     */
+    TagGroup description_texts;
+
+    /**
      * The panels for the series settings and the configuration settings.
      */
     TagGroup panel_list;
@@ -1251,6 +1261,35 @@ class DMViewDialog : UIFrame{
     }
 
     /**
+     * An info button is pressed, show the corresponding info text in a new dialog.
+     */
+    void DMViewDialogInfoButtonClicked(object self){
+        for(number i = 0; i < info_buttons.TagGroupCountTags(); i++){
+            TagGroup button;
+            if(info_buttons.TagGroupGetIndexedTagAsTagGroup(i, button)){
+                if(button.DLGGetValue() == 1){
+                    // reset button state
+                    button.DLGBevelButtonOn(0);
+                    
+                    // show the description
+                    String description;
+                    description_texts.TagGroupGetIndexedTagAsString(i, description);
+
+                    if(description != ""){
+                        OkDialog(description);
+                    }
+                    else{
+                        OkDialog("Did not find the info text.");
+                    }
+
+                    // do not continue searching, found pressed button already
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
     * Create an input line for a dialog. The line contains the label, the input and the description.
     *
     * @param value_definition
@@ -1266,6 +1305,7 @@ class DMViewDialog : UIFrame{
         number cw1 = 20; // label column
         number cw2 = 40; // value column
         number cw3 = 60; // description column
+        number iw = 5; // info icon width, will be subtracted from cw3
 
         string description;
         string type;
@@ -1280,7 +1320,7 @@ class DMViewDialog : UIFrame{
         }
 
         if(restart_required){
-            name += "*"
+            name = "*" + name;
         }
 
         TagGroup value_wrapper = DLGCreateGroup();
@@ -1335,10 +1375,10 @@ class DMViewDialog : UIFrame{
             number s = 24;
             string icon_path = __file__.PathExtractDirectory(0).PathConcatenate("icons");
             if(type == "dirpath"){
-                icon_path = icon_path.PathConcatenate("directory-icon-" + s + ".tiff")
+                icon_path = icon_path.PathConcatenate("directory-alt-icon-" + s + ".tiff")
             }
             else{
-                icon_path = icon_path.PathConcatenate("file-icon-" + s + ".tiff")
+                icon_path = icon_path.PathConcatenate("file-alt-icon-" + s + ".tiff")
             }
             rgbimage button_img := OpenImage(icon_path);
 
@@ -1392,13 +1432,41 @@ class DMViewDialog : UIFrame{
             line.DLGAddElement(input);
         }
 
-        if(restart_required){
-            description += " (Changing restarts program)"
+        if(description.len() <= 97){
+            if(restart_required){
+                description += " (Changing restarts program)"
+            }
+            TagGroup description_label = DLGCreateLabel(description, cw3);
+            description_label.DLGHeight(ceil(description.len() / 55));
+            description_label.DLGAnchor("East");
+            line.DLGAddElement(description_label);
         }
-        TagGroup description_label = DLGCreateLabel(description, cw3);
-        description_label.DLGHeight(ceil(description.len() / 55));
-        description_label.DLGAnchor("East");
-        line.DLGAddElement(description_label);
+        else{
+            TagGroup description_wrapper = DLGCreateGroup();
+            description_wrapper.DLGTableLayout(2, 1, 0);
+            
+            String short_description = description.left(97) + "..."
+            if(restart_required){
+                short_description += " (Changing restarts program)";
+                description += "\n\nChanging this value restarts the program automatically.";
+            }
+            TagGroup description_label = DLGCreateLabel(short_description, cw3 - iw);
+            description_label.DLGHeight(ceil(short_description.len() / 55));
+            description_label.DLGAnchor("East");
+            description_wrapper.DLGAddElement(description_label);
+
+            string icon_path = __file__.PathExtractDirectory(0).PathConcatenate("icons").PathConcatenate("info-alt-icon-24.tiff");
+            rgbimage button_img := OpenImage(icon_path);
+
+            number index = description_texts.TagGroupCountTags();
+            TagGroup info_button = DLGCreateDualStateBevelButton("info-button-" + index, button_img, button_img, "DMViewDialogInfoButtonClicked");
+            info_buttons.TagGroupInsertTagAsTagGroup(index, info_button);
+            description_wrapper.DLGAddElement(info_button);
+
+            description_texts.TagGroupInsertTagAsString(index, description);
+
+            line.DLGAddElement(description_wrapper);
+        }
 
         value_wrapper.DLGAddElement(line);
 
@@ -1808,6 +1876,8 @@ class DMViewDialog : UIFrame{
         display_mode = startup;
         ask_vals_message = msg;
         custom_tag_values = custom_tag_vals;
+        info_buttons = NewTagList();
+        description_texts = NewTagList();
 		self.super.init(self._DMViewDialogCreateContent(title));
         
 		return self;

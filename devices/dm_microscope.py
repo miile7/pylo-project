@@ -233,7 +233,7 @@ class DMMicroscope(MicroscopeInterface):
 
         # try to find idx files
         from pylo.config import PROGRAM_DATA_DIRECTORIES
-        idx_dirs = copy.deepcopy(PROGRAM_DATA_DIRECTORIES)
+        idx_dirs = list(copy.deepcopy(PROGRAM_DATA_DIRECTORIES))
         try:
             idx_dirs.append(os.path.dirname(__file__))
         except NameError:

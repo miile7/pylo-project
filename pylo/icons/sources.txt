@@ -1,2 +1,7 @@
 directory-icon  https://www.iconfinder.com/icons/298771/directory_file_icon
 file-icon   https://www.iconfinder.com/icons/298777/file_text_icon
+info-icon   https://www.iconfinder.com/icons/298799/info_icon
+
+Convert for GMS: Save as .tiff without compression and without transparency. Background color of 
+buttons is #c3c7ca / (76.5, 78, 79.2). Background color of the dialog is #4b4c4e / (29.4, 29.8, 30.6)
+(preferred). Foreground main color is #0065a5 / (0, 39.6, 64.7).

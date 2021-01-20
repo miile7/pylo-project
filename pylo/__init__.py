@@ -118,7 +118,7 @@ for d in PROGRAM_DATA_DIRECTORIES:
     if (os.path.exists(p) and os.path.isfile(p) and 
         not p in loader.device_ini_files):
         logginglib.log_debug(logger, "Adding ini file '{}' to loader".format(p))
-        loader.device_ini_files.append(p)
+        loader.device_ini_files.add(p)
 
 # controller = None
 def get_controller(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
