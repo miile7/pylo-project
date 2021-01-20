@@ -63,7 +63,7 @@ class DeviceLoader:
 
     def __init__(self, *ini_file: typing.Union[path_like]) -> None:
         """Create a new device loader."""
-        self.device_ini_files = list(ini_file)
+        self.device_ini_files = set(ini_file)
         self._device_class_files = []
         self._device_objects = []
         self._logger = get_logger(self)

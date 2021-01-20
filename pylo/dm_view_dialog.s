@@ -1447,7 +1447,8 @@ class DMViewDialog : UIFrame{
             
             String short_description = description.left(97) + "..."
             if(restart_required){
-                short_description += " (Changing restarts program)"
+                short_description += " (Changing restarts program)";
+                description += "\n\nChanging this value restarts the program automatically.";
             }
             TagGroup description_label = DLGCreateLabel(short_description, cw3 - iw);
             description_label.DLGHeight(ceil(short_description.len() / 55));

@@ -122,11 +122,11 @@ try:
 			tn = dir_path_tag_name.format(dirname=name)
 			s, dir_path = DM.GetPersistentTagGroup().GetTagAsString(tn)
 			if s and os.path.exists(dir_path):
-				pylo.config.PROGRAM_DATA_DIRECTORIES.append(dir_path)
+				pylo.config.PROGRAM_DATA_DIRECTORIES.add(dir_path)
 				ini_path = os.path.realpath(os.path.join(dir_path, "devices.ini"))
 				if os.path.exists(ini_path) and os.path.isfile(ini_path):
 					# add the values to the ini loader
-					pylo.loader.device_ini_files.append(ini_path)
+					pylo.loader.device_ini_files.add(ini_path)
 			DM.GetPersistentTagGroup().DeleteTagWithLabel(tn)
 		
 		if pylo.logginglib.do_log(logger, logging.INFO):
