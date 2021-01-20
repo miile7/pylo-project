@@ -116,7 +116,7 @@ class DMMicroscope(MicroscopeInterface):
                              "tolerance is '{}'").format(
                              objective_mini_lens_tolerance))
 
-        self.registerMeasurementVariable(
+        variable = self.registerMeasurementVariable(
             MeasurementVariable(
                 "om-current", 
                 "Objective mini lens current", 
@@ -132,6 +132,15 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveMiniLensCurrent,
             self._setObjectiveMiniLensCurrent
         )
+        variable.default_start_value = self.controller.getValue(
+            self.config_group_name, "default-om-current-start-value", 
+            datatype=Datatype.hex_int, default_value=0)
+        variable.default_end_value = self.controller.getValue(
+            self.config_group_name, "default-om-current-end-value", 
+            datatype=Datatype.hex_int, default_value=0x200)
+        variable.default_step_width_value = self.controller.getValue(
+            self.config_group_name, "default-om-current-step-width-value", 
+            datatype=Datatype.hex_int, default_value=0x1000)
         
         logginglib.log_debug(self._logger, "Asking the user to set the focus to 0")
         
@@ -195,7 +204,7 @@ class DMMicroscope(MicroscopeInterface):
         else:
             max_ol_current = 0xFFFF
         
-        self.registerMeasurementVariable(
+        variable = self.registerMeasurementVariable(
             MeasurementVariable(
                 "ol-current", 
                 "Objective Lense Current", 
@@ -211,6 +220,15 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveLensCurrent,
             self._setObjectiveLensCurrent
         )
+        variable.default_start_value = self.controller.getValue(
+            self.config_group_name, "default-ol-current-start-value", 
+            datatype=Datatype.hex_int, default_value=0)
+        variable.default_end_value = self.controller.getValue(
+            self.config_group_name, "default-ol-current-end-value", 
+            datatype=Datatype.hex_int, default_value=0x200)
+        variable.default_step_width_value = self.controller.getValue(
+            self.config_group_name, "default-ol-current-step-width-value", 
+            datatype=Datatype.hex_int, default_value=0x1000)
         self._ol_currents = {}
 
         # try to find idx files
@@ -292,9 +310,15 @@ class DMMicroscope(MicroscopeInterface):
             self._getXTilt,
             self._setXTilt
         )
-        variable.default_start_value = 0
-        variable.default_end_value = 10
-        # variable.default_step_width_value = 
+        variable.default_start_value = self.controller.getValue(
+            self.config_group_name, "default-x-tilt-start-value", 
+            datatype=float, default_value=0)
+        variable.default_end_value = self.controller.getValue(
+            self.config_group_name, "default-x-tilt-end-value", 
+            datatype=float, default_value=10)
+        variable.default_step_width_value = self.controller.getValue(
+            self.config_group_name, "default-x-tilt-step-width-value", 
+            datatype=float, default_value=5)
 
         # load the tolerance for the x tilt
         x_tilt_tolerance = self.controller.configuration.getValue(
@@ -323,13 +347,22 @@ class DMMicroscope(MicroscopeInterface):
         self.holder_confirmed = True
         if (self.installed_holder.min_y_tilt < 1 and 
             self.installed_holder.max_y_tilt > 1):
-            self.registerMeasurementVariable(
+            variable = self.registerMeasurementVariable(
                 MeasurementVariable("y-tilt", "Y Tilt", 
                                     self.installed_holder.min_y_tilt, 
                                     self.installed_holder.max_y_tilt, "deg"),
                 self._getYTilt,
                 self._setYTilt
             )
+            variable.default_start_value = self.controller.getValue(
+                self.config_group_name, "default-y-tilt-start-value", 
+                datatype=float, default_value=0)
+            variable.default_end_value = self.controller.getValue(
+                self.config_group_name, "default-y-tilt-end-value", 
+                datatype=float, default_value=10)
+            variable.default_step_width_value = self.controller.getValue(
+                self.config_group_name, "default-y-tilt-step-width-value", 
+                datatype=float, default_value=5)
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
@@ -920,6 +953,127 @@ class DMMicroscope(MicroscopeInterface):
             restart_required=False,
             default_value=config_defaults["abs-wait-tolerance-objective-mini-lens"]
         )
+        
+        # the default start value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-start-value"]
+                           if "default-om-current-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-end-value"]
+                           if "default-om-current-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for the om-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-om-current-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-om-current-step-width-value"]
+                           if "default-om-current-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-start-value"]
+                           if "default-ol-current-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-end-value"]
+                           if "default-ol-current-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for the ol-current
+        configuration.addConfigurationOption(
+            config_group_name, "default-ol-current-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-ol-current-step-width-value"]
+                           if "default-ol-current-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-start-value"]
+                           if "default-x-tilt-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-end-value"]
+                           if "default-x-tilt-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for ult-x-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-x-tilt-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-x-tilt-step-width-value"]
+                           if "default-x-tilt-step-width-value" in config_defaults
+                           else None))
+        
+        # the default start value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-start-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the start value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-start-value"]
+                           if "default-y-tilt-start-value" in config_defaults
+                           else None))
+        
+        # the default end value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-end-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the end value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-end-value"]
+                           if "default-y-tilt-end-value" in config_defaults
+                           else None))
+        
+        # the default step value for ult-y-tilt
+        configuration.addConfigurationOption(
+            config_group_name, "default-y-tilt-step-width-value", 
+            datatype=Datatype.hex_int, 
+            description=("The default value for the step value when " + 
+                         "creating a new series."), restart_required=False, 
+            default_value=(config_defaults["default-y-tilt-step-width-value"]
+                           if "default-y-tilt-step-width-value" in config_defaults
+                           else None))
+
 
 class IDXReader:
     """A reader to read out JEOL idx files that contain holder data.
