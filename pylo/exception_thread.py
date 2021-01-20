@@ -27,14 +27,25 @@ class ExceptionThread(threading.Thread):
     
     def run(self, *args, **kwargs):
         """Run the thread."""
+        
         if do_log(self._logger, logging.INFO):
             self._logger.info(("Starting thread '{}' (#{}), currently {} " + 
                             "active threads").format(self.name, self.ident, 
                             threading.active_count() - 1))
         
+        log_debug(self._logger, ("Starting thread '{}' with args '{}' and " + 
+                                 "kwargs '{}'").format(self.name, args, kwargs))
+        
         try:
             super(ExceptionThread, self).run(*args, **kwargs)
         except Exception as e:
+            if (isinstance(e, TypeError) and hasattr(self, "_target") and 
+                not callable(self._target)):
+                err = TypeError("A type error was raised and the 'target' is " + 
+                                "not callable. Probably that is the cause.")
+                log_error(self._logger, err)
+                raise err from e
+                
             if isinstance(e, StopProgram):
                 log_debug(self._logger, "Stopping program", exc_info=e)
             else:

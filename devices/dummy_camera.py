@@ -26,7 +26,7 @@ class DummyCamera(CameraInterface):
         self.imagesize = (32, 32)
         self.tags = {"Camera": "Dummy Camera"}
     
-    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "Image":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None, **kwargs) -> "Image":
         """Get the image of the current camera.
 
         Parameters

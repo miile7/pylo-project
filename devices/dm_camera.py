@@ -13,6 +13,7 @@ from pylo import DMImage
 from pylo import logginglib
 from pylo import CameraInterface
 from pylo import ExecutionOutsideEnvironmentError
+from pylo import pylolib
 
 try:
     import DigitalMicrograph as DM
@@ -115,7 +116,8 @@ class DMCamera(CameraInterface):
                         "bottom": self.ccd_area[2], "left": self.ccd_area[3]}
         }
 
-    def recordImage(self, additional_tags: typing.Optional[dict]=None) -> "DMImage":
+    def recordImage(self, additional_tags: typing.Optional[dict]=None,
+                    **annotation_kwargs) -> "DMImage":
         """Get the image of the current camera.
 
         Parameters
@@ -123,6 +125,10 @@ class DMCamera(CameraInterface):
         additional_tags : dict, optional
             Additonal tags to add to the image, note that they will be 
             overwritten by other tags if there are set tags in this method
+        annotation_kwargs : dict, optional
+            The annotation kwargs, those are used for the 
+            `pylolib.expand_vars()` function, note that the 'tags' and the 
+            'controller' will be overwritten, default: None
 
         Returns
         -------
@@ -142,19 +148,21 @@ class DMCamera(CameraInterface):
         
         tags["camera"] = copy.deepcopy(self.tags)
 
-        logginglib.log_debug(self._logger, ("Acquiring image with exposure time '{}', " + 
-                                "binning '{}', process level '{}' and ccd " + 
-                                "area '{}'").format(self.exposure_time, 
-                                (self.binning_x, self.binning_y), 
-                                self.process_level, self.ccd_area))
+        logginglib.log_debug(self._logger, ("Acquiring image with exposure " + 
+                                            "time '{}', binning '{}', process " + 
+                                            "level '{}' and ccd area " + 
+                                            "'{}'").format(self.exposure_time, 
+                                            (self.binning_x, self.binning_y), 
+                                            self.process_level, self.ccd_area))
         
         image = self.camera.AcquireImage(
             self.exposure_time, self.binning_x, self.binning_y, 
             self.process_level, self.ccd_area[0], self.ccd_area[3],
             self.ccd_area[2], self.ccd_area[1])
         
-        logginglib.log_debug(self._logger, "Getting image tags, converting from " + 
-                               "DigitalMicrograph.Py_TagGroup to dict")
+        logginglib.log_debug(self._logger, "Getting image tags, converting " + 
+                                           "from DigitalMicrograph.Py_TagGroup "+ 
+                                           "to dict")
         
         # save the image tags
         tags.update(execdmscript.convert_from_taggroup(image.GetTagGroup()))
@@ -166,11 +174,34 @@ class DMCamera(CameraInterface):
             self._ensureWorkspace()
 
         logginglib.log_debug(self._logger, ("Creating image object for " + 
-                                "DigitalMicrograph.Py_Image object"))
+                                            "DigitalMicrograph.Py_Image " + 
+                                            "object"))
+        
+        annotations = self.controller.configuration.getValue(
+            self.config_group_name, "image-annotations")
+        
+        if isinstance(annotations, str):
+            logginglib.log_debug(self._logger, "Adding annotations '{}'".format(
+                                                annotations))
+            if not isinstance(annotation_kwargs, dict):
+                annotation_kwargs = {}
+            
+            annotation_kwargs["tags"] = tags
+            annotation_kwargs["controller"] = self.controller
+
+            annotations = list(filter(lambda a: a != "", 
+                               pylolib.expand_vars(*annotations.split("|"), 
+                                    **annotation_kwargs)))
+            logginglib.log_debug(self._logger, ("Processing annotations to " + 
+                                                "'{}'").format(annotations))
+        else:
+            logginglib.log_debug(self._logger, "No annotations found, no " + 
+                                               "annotations are added")
         
         image = DMImage.fromDMPyImageObject(image, tags)
         image.show_image = self.show_images
         image.workspace_id = self._workspace_id
+        image.annotations = annotations
 
         logginglib.log_debug(self._logger, "Image is now '{}'".format(image))
 
@@ -268,9 +299,10 @@ class DMCamera(CameraInterface):
             "wsid": int
         }
 
-        logginglib.log_debug(self._logger, ("Creating new workspace by executing " + 
-                                "dmscript '{}' with readvars '{}'").format(
-                                dmscript, readvars))
+        logginglib.log_debug(self._logger, ("Creating new workspace by " + 
+                                            "executing dmscript '{}' with " + 
+                                            "readvars '{}'").format(dmscript, 
+                                                                    readvars))
 
         with execdmscript.exec_dmscript(dmscript, readvars=readvars) as script:
             self._workspace_id = script["wsid"]
@@ -379,4 +411,18 @@ class DMCamera(CameraInterface):
             datatype=int, 
             default_value=config_defaults["ccd-readout-area-left"], 
             description="The left coordinate of the CCD readout area"
+        )
+
+        configuration.addConfigurationOption(
+            config_group_name, "image-annotations", 
+            datatype=str, 
+            default_value=("scalebar|{?H={humanstep[om-current]} }|" + 
+                           "{?F={humanstep[focus]} }|" + 
+                           "{?xt={humanstep[x-tilt]} }|" + 
+                           "{?yt={humanstep[y-tilt]} }"), 
+            description=("The annotations to show in the image, use the pipe " + 
+                         "('|') to separate multiple annotations. Use " + 
+                         "'scalebar' to add a scalebar. Anything else will " + 
+                         "be added as text to the image. " + 
+                         pylolib.get_expand_vars_text())
         )

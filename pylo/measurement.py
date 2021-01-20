@@ -25,6 +25,8 @@ from .logginglib import log_error
 from .datatype import Datatype
 from .logginglib import get_logger
 from .log_thread import LogThread
+from .pylolib import expand_vars
+from .pylolib import get_expand_vars_text
 from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
 from .measurement_steps import MeasurementSteps
@@ -78,10 +80,42 @@ class Measurement:
     """
 
     def __init__(self, controller: "Controller", 
-                 steps: typing.Union[MeasurementSteps, typing.Sequence[dict]]) -> None:
+                 steps: typing.Union[MeasurementSteps, typing.Sequence[dict]],
+                 start: typing.Optional[dict]=None,
+                 series: typing.Optional[dict]=None) -> None:
+        """Create a measurememt object.
+
+        Parameters
+        ----------
+        controller : Controller
+            The controller
+        steps : MeasurementSteps or dict
+            The steps to perform
+        start, series : dict
+            The start and the series definition, they are only used for 
+            offering name formatting and image details, if the `steps` is a
+            `MeasurementSteps` object the internal `series` and `start` are 
+            used and those parameters are ignored even if they are given,
+            default: None
+        """
+
         self.controller = controller
         self.tags = {}
         self.steps = steps
+
+        if isinstance(steps, MeasurementSteps):
+            self.series_start = self.steps.start
+            self.series_definition = self.steps.series
+        else:
+            if isinstance(start, dict):
+                self.series_start = start
+            else:
+                self.series_start = None
+            
+            if isinstance(series, dict):
+                self.series_definition = series
+            else:
+                self.series_definition = None
 
         self._logger = get_logger(self)
 
@@ -183,78 +217,20 @@ class Measurement:
         # the index in the steps that is currently being measured
         self._step_index = -1
     
-    def formatName(self, name_format: typing.Optional[str]=None, 
-                   tags: typing.Optional[dict]=None,
-                   variables: typing.Optional[dict]=None,
-                   imgtags: typing.Optional[dict]=None,
-                   time: typing.Optional[datetime.datetime]=None,
-                   counter: typing.Optional[int]=None) -> str:
-        """Format the given name_format.
-
-        The following placeholders are supported:
-        - {tags[tags_index]}: Any value of the measurement tags can be 
-          accessed by using `tags` with the index. For recursive structures 
-          use the next index also surrounded by brackets like accesssing dicts.
-        - {variables[measurement_variable_id]}: The values of each measurement 
-          variable can be accessed by using the `variables` keyword together 
-          with the `measurement_variable_id` which is the `MeasurementVariable`
-          id of the value to get, the value will be printed without units
-        - {imgtags[image_tag_index]}: The tags of the recorded image can be 
-          accessed by using `imgtags`
-        - {time:%Y-%m-%d %H:%M:%S}: The measurement recording time can be 
-          accessed using the `time` keyword followed by any valid `strftime()` 
-          format
-        - {counter}: The current index of the measurement step
-    
-        Parameters
-        ----------
-        name_format : str, optional
-            The name format to use, default: `Measurement.name_format`
-        tags : dict, optional
-            The measurement tags to use for replacing in the `name_format`,
-            default: `Measurement.tags`
-        variables : dict, optional
-            The values of the `MeasurementVariables` for replacing in the 
-            `name_format`, the key is the id and the value is the value in the 
-            units of the `MeasurementVariable`, default: current values
-        imgtags : dict, optional
-            The image tags to use for replacing in the `name_format`,
-            default: `Measurement.current_image.tags`
-        time : datetime, optional
-            The datetime to use for replacing in the `name_format`,
-            default: `datetime.datetime.now()`
-        counter : int, optional
-            The counter to use for replacing in the `name_format`,
-            default: `Measurement._step_index`
+    def formatName(self) -> str:
+        """Return the name for the current measurement step
         
         Returns
         -------
         str
-            The formatted name
+            The formatted file name for the current measurement step
         """
-        if not isinstance(name_format, str):
-            name_format = self.name_format
-        if not isinstance(tags, dict):
-            tags = self.tags
-        if not isinstance(variables, dict):
-            if 0 <= self._step_index <= len(self.steps):
-                variables = self.steps[self._step_index]
-            else:
-                variables = {}
-        if not isinstance(imgtags, dict):
-            if isinstance(self.current_image, Image):
-                imgtags = self.current_image.tags
-            else:
-                imgtags = {}
-        if not isinstance(time, datetime.datetime):
-            time = datetime.datetime.now()
-        if not isinstance(counter, int):
-            counter = self._step_index
         
-        name = name_format.format_map(defaultdict(str, tags=tags, 
-            variables=variables, var=variables, imgtags=imgtags, time=time,
-            date=time, datetime=time, counter=counter, number=counter, 
-            num=counter))
+        name, *_ = expand_vars(self.name_format, controller=self.controller, 
+                               step=self.steps[self._step_index], 
+                               start=self.series_start, 
+                               series=self.series_definition, 
+                               tags=self.tags, counter=self._step_index)
         log_debug(self._logger, "Formatting name to '{}'".format(name))
         return name
     
@@ -462,8 +438,10 @@ class Measurement:
                 self.controller.view.print("Recording image...", inset="  ")
                 # record measurement, add the real values to the image
                 self.current_image = self.controller.camera.recordImage(
-                    self.createTagsDict(variable_values)
-                )
+                    self.createTagsDict(variable_values), step=step, 
+                    series=self.series_definition, start=self.series_start, 
+                    counter=self._step_index)
+                
                 name = self.formatName()
                 
                 if not self.running:
@@ -665,8 +643,8 @@ class Measurement:
 
         from .config import PROGRAM_NAME
 
-        beautified_step = {}
-        for var_id, val in step.items():
+        beautified_step = []
+        for var_id in step.keys():
             var = self.controller.microscope.getMeasurementVariableById(var_id)
 
             if var.has_calibration and var.calibrated_name is not None:
@@ -679,18 +657,19 @@ class Measurement:
             elif var.unit is not None:
                 name += " (in {})".format(var.unit)
             
-            if var.has_calibration:
-                val = var.ensureCalibratedValue(val)
-            
-            if var.has_calibration and isinstance(var.calibrated_format, Datatype):
-                val = var.calibrated_format.format(val)
-            elif isinstance(var.format, Datatype):
-                val = var.format.format(val)
-
-            beautified_step[name] = val
+            beautified_step.append("{{varname[{id}]}}{{? (in varunit[{id}])}}".format(
+                                   id=var.unique_id))
+            beautified_step.append("{{humanstep[{}]}}".format(var.unique_id))
+        
+        beautified_step = expand_vars(*beautified_step, 
+                                      controller=self.controller, step=step,
+                                      start=self.series_start, 
+                                      series=self.series_definition,
+                                      tags=self.tags, counter=self._step_index)
+        beautified_step = dict(zip(beautified_step[0::2], beautified_step[1::2]))
 
         tags = {
-            "Measurement Step": {
+            "Measurement Values": {
                 "Human readable": beautified_step,
                 "Machine values": copy.deepcopy(step)
             },
@@ -951,17 +930,8 @@ class Measurement:
             datatype=str, 
             default_value=DEFAULT_SAVE_FILE_NAME, 
             ask_if_not_present=True,
-            description="The name format to use to save the recorded images. " + 
-            "Some placeholders can be used. Use {counter} to get the current " + 
-            "measurement number, use {tags[your_value]} to get use the " + 
-            "`your_value` of the measurement tags. Use " + 
-            "{variables[your_variable]} to get the value of the measurement " + 
-            "variable `your_variable`. To use the `your_img_value` of the " + 
-            "image tags, use {imgtags[your_value]}. For times set the format " + 
-            "according to the python `strftime()` format, started with a " + 
-            "colon (:), like {time:%Y-%m-%d_%H-%M-%S} for year, month, day and " + 
-            "hour minute and second. Make sure to inculde the file extension " + 
-            "but use supported extensions only."
+            description=("The name format to use to save the recorded " + 
+                         "images. " + get_expand_vars_text())
         )
         
         # add the save path for the log
