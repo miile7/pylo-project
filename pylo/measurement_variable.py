@@ -66,6 +66,12 @@ class MeasurementVariable:
         The name of the calibrated system if there is one, None for no name
     calibration_format : type, Datatype or None
         A Datatype or type to format the input and output
+    default_start : float or None
+        The default start value when a new series is created
+    default_step_width : float or None
+        The default step width value when a new series is created
+    default_end : float or None
+        The default end value when a new series is created
     """
 
     def __init__(self, unique_id: str, name: str, 
@@ -145,6 +151,16 @@ class MeasurementVariable:
         self.min_value = min_value
         self.max_value = max_value
         self.unit = unit
+        self.default_start_value = self.min_value
+        self.default_end_value = self.max_value
+        if (isinstance(self.default_start_value, (int, float)) and 
+            isinstance(self.default_end_value, (int, float))):
+            self.default_step_width_value = round((self.default_end_value - 
+                                                   self.default_start_value) / 5, 
+                                                   2)
+        else:
+            self.default_step_width_value = None
+        
         self.format = format
 
         if (callable(calibration) and 
