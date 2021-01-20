@@ -132,13 +132,13 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveMiniLensCurrent,
             self._setObjectiveMiniLensCurrent
         )
-        variable.default_start_value = self.controller.getValue(
+        variable.default_start_value = self.controller.configuration.getValue(
             self.config_group_name, "default-om-current-start-value", 
             datatype=Datatype.hex_int, default_value=0)
-        variable.default_end_value = self.controller.getValue(
+        variable.default_end_value = self.controller.configuration.getValue(
             self.config_group_name, "default-om-current-end-value", 
             datatype=Datatype.hex_int, default_value=0x200)
-        variable.default_step_width_value = self.controller.getValue(
+        variable.default_step_width_value = self.controller.configuration.getValue(
             self.config_group_name, "default-om-current-step-width-value", 
             datatype=Datatype.hex_int, default_value=0x1000)
         
@@ -220,13 +220,13 @@ class DMMicroscope(MicroscopeInterface):
             self._getObjectiveLensCurrent,
             self._setObjectiveLensCurrent
         )
-        variable.default_start_value = self.controller.getValue(
+        variable.default_start_value = self.controller.configuration.getValue(
             self.config_group_name, "default-ol-current-start-value", 
             datatype=Datatype.hex_int, default_value=0)
-        variable.default_end_value = self.controller.getValue(
+        variable.default_end_value = self.controller.configuration.getValue(
             self.config_group_name, "default-ol-current-end-value", 
             datatype=Datatype.hex_int, default_value=0x200)
-        variable.default_step_width_value = self.controller.getValue(
+        variable.default_step_width_value = self.controller.configuration.getValue(
             self.config_group_name, "default-ol-current-step-width-value", 
             datatype=Datatype.hex_int, default_value=0x1000)
         self._ol_currents = {}
@@ -310,13 +310,13 @@ class DMMicroscope(MicroscopeInterface):
             self._getXTilt,
             self._setXTilt
         )
-        variable.default_start_value = self.controller.getValue(
+        variable.default_start_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-start-value", 
             datatype=float, default_value=0)
-        variable.default_end_value = self.controller.getValue(
+        variable.default_end_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-end-value", 
             datatype=float, default_value=10)
-        variable.default_step_width_value = self.controller.getValue(
+        variable.default_step_width_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-step-width-value", 
             datatype=float, default_value=5)
 
@@ -354,13 +354,13 @@ class DMMicroscope(MicroscopeInterface):
                 self._getYTilt,
                 self._setYTilt
             )
-            variable.default_start_value = self.controller.getValue(
+            variable.default_start_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-start-value", 
                 datatype=float, default_value=0)
-            variable.default_end_value = self.controller.getValue(
+            variable.default_end_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-end-value", 
                 datatype=float, default_value=10)
-            variable.default_step_width_value = self.controller.getValue(
+            variable.default_step_width_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-step-width-value", 
                 datatype=float, default_value=5)
             # extra ask for the user if the tilt holder really is installed, 
