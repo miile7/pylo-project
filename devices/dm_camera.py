@@ -174,21 +174,29 @@ class DMCamera(CameraInterface):
             self._ensureWorkspace()
 
         logginglib.log_debug(self._logger, ("Creating image object for " + 
-                                "DigitalMicrograph.Py_Image object"))
+                                            "DigitalMicrograph.Py_Image " + 
+                                            "object"))
         
         annotations = self.controller.configuration.getValue(
             self.config_group_name, "image-annotations")
         
         if isinstance(annotations, str):
+            logginglib.log_debug(self._logger, "Adding annotations '{}'".format(
+                                                annotations))
             if not isinstance(annotation_kwargs, dict):
                 annotation_kwargs = {}
             
             annotation_kwargs["tags"] = tags
             annotation_kwargs["controller"] = self.controller
 
-            annotations = filter(lambda a: a != "", 
-                                pylolib.expand_vars(*annotations.split("|"), 
-                                    **annotation_kwargs))
+            annotations = list(filter(lambda a: a != "", 
+                               pylolib.expand_vars(*annotations.split("|"), 
+                                    **annotation_kwargs)))
+            logginglib.log_debug(self._logger, ("Processing annotations to " + 
+                                                "'{}'").format(annotations))
+        else:
+            logginglib.log_debug(self._logger, "No annotations found, no " + 
+                                               "annotations are added")
         
         image = DMImage.fromDMPyImageObject(image, tags)
         image.show_image = self.show_images

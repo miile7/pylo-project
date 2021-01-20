@@ -36,6 +36,7 @@ from .image import Image
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
+from .logginglib import do_log
 
 class DMImage(Image):
     """An image that adds more export options and showing images.
@@ -203,11 +204,16 @@ class DMImage(Image):
             name, _ = os.path.splitext(os.path.basename(file_path))
             image_doc = self._getImageDocument(name)
 
-            self._addAnnotations(image_doc)
+            from .config import DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS
+            if not DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS:
+                # annotations do not work yet, check out DMImage._addAnnotations()
+                # for details
+                image_doc = self._addAnnotations(image_doc)
 
-            log_debug(self._logger, ("Saving image by dm image document '{}' with " + 
-                                    "the file type '{}' to the path '{}'").format(
-                                    image_doc, file_type, file_path))
+            log_debug(self._logger, ("Saving image by dm image document " + 
+                                     "'{}' with the file type '{}' to the " + 
+                                     "path '{}'").format(image_doc, file_type, 
+                                        file_path))
             
             # mentioned formats are 'Gatan Format', 'Gatan 3 Format, 
             # 'GIF Format', 'BMP Format', 'JPEG/JFIF Format', 
@@ -227,57 +233,164 @@ class DMImage(Image):
                                     file_type, file_path))
             super(DMImage, self)._executeSave(file_type, file_path)
     
-    def _addAnnotations(self, image_doc: DM.Py_ImageDocument) -> None:
+    def _addAnnotations(self, image_doc: DM.Py_ImageDocument) -> DM.Py_ImageDocument:
+        """Add the annotations defined by `DMImage.annotations` to the image.
+
+        The annotations will be added to the first `ImageDisplay` of the image
+        document. If there is no image in the image document, nothing will 
+        happen. If there is no display, the display will be created 
+        automatically.
+
+        The `DMImage.annotations` can be a list of annotations. All annotations
+        will be added to the bottom from left to right. The color and the
+        dimensions can be set by the corresponding constants in the `config.py`
+
+        Note that if too many annotations are given, they will simply overflow 
+        and run out of the image. Also the alignment and the spacing is not 
+        done perfectly.
+
+        See also
+        --------
+        config.DM_IMAGE_ANNOTATION_COLOR
+        config.DM_IMAGE_ANNOTATION_PADDING_FRACTION
+        config.DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION
+        config.DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+
+        Raises
+        ------
+        NotImplementedError
+            Annotations do not work yet at all. There is an internal problem 
+            with loosing references to the image display of the image document.
+            Every time modifying the display, a copy of this display object is 
+            created so the image documents display does remain untouched. This 
+            way it is not possible to add annotations.
+            Check out the comments of 
+            https://stackoverflow.com/a/65790891/5934316 where this is stated.
+            Additionally some email contact with GMS (=DigitalMicrograph module)
+            developers confirmed that this does not work at all
+
+        Parameters
+        ----------
+        image_doc : DM.Py_ImageDocument
+            The image document
+
+        Returns
+        -------
+        DM.Py_ImageDocument
+            The image document with the first display containing the 
+            annotations
         """
-        """
+        raise NotImplementedError(
+            "Adding annotations is implemented but does currently not work " + 
+            "due to reference problems inside the DigitalMicrograph module. " + 
+            "Check out the function comments for more details. \n\n" + 
+            "If you are not a developer and you see this error just ignore it. " + 
+            "The requested feature does not work and there is nothing you " + 
+            "can do to make it work."
+        )
+
         if not isinstance(self.annotations, list) or len(self.annotations) == 0:
-            log_debug(self._logger, ("Skipping adding annotations, " + 
-                                     "annotations are not a list or empty"))
+            log_debug(self._logger, ("Skipping adding annotations '{}', " + 
+                                     "annotations are not a list or empty").format(
+                                         self.annotations))
         else:
-            log_debug(self._logger, ("Adding annotations"))
+            log_debug(self._logger, ("Adding annotations to '{}' images " + 
+                                     "in document").format(image_doc.CountImages()))
             
             from .config import DM_IMAGE_ANNOTATION_COLOR
             from .config import DM_IMAGE_ANNOTATION_PADDING_FRACTION
             from .config import DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION
             from .config import DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
 
-            for i in range(image_doc.CountImages()):
-                img = image_doc.GetImage(i)
-                image_width = img.GetDimensionSize(0)
-                image_height = img.GetDimensionSize(1)
+            display_type = 20
+
+            if not isinstance(image_doc.GetRootComponent(), DM.Py_Component):
+                log_debug(self._logger, ("Cannot add annotations, the root " + 
+                                         "component '{}' of the image display " + 
+                                         "is not a Py_Component but a " + 
+                                         "component of type '{}'").format(
+                                             image_doc.GetRootComponent(),
+                                             image_doc.GetRootComponent().GetType()))
+            elif image_doc.GetRootComponent().CountChildrenOfType(display_type) == 0:
+                log_debug(self._logger, ("Cannot add annotations, the root " + 
+                                         "component of the image display " + 
+                                         "does not contain a child of type " + 
+                                         "'{}' (= image display)").format(
+                                             display_type))
+            elif image_doc.CountImages() == 0:
+                log_debug(self._logger, ("Cannot add annotations, the image " + 
+                                         "document does not contain any " + 
+                                         "images"))
+            else:
+                # dm-script does not return the original image here but a 
+                # copy so any modifications applied to the `img` are ignored
+                img_clone = image_doc.GetImage(0)
+                log_debug(self._logger, ("Adding annotations to image ('{}') " + 
+                                         "to display '{}'").format(
+                                             img_clone.GetName(), 
+                                             image_doc.GetRootComponent().GetNthChildOfType(display_type, 0)))
+
+                image_width = img_clone.GetDimensionSize(0)
+                image_height = img_clone.GetDimensionSize(1)
 
                 t = (1 - DM_IMAGE_ANNOTATION_HEIGHT_FRACTION - 
                         DM_IMAGE_ANNOTATION_PADDING_FRACTION) * image_height
                 l = DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_width
-                
-                for j in range(img.CountImageDisplays()):
-                    display = img.GetImageDisplayInImageDocument(image_doc, j)
 
-                    for annotation in self.annotations:
-                        if annotation == "scalebar":
-                            b = ((1 - DM_IMAGE_ANNOTATION_PADDING_FRACTION) * 
-                                 image_height)
-                            r = (l + DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION * 
-                                 image_width)
-                            annotation = display.AddNewComponent(31, t, l, b, r)
-                        else:
-                            # annotation = DM.NewTextAnnotation(l, t, annotation,
-                            #     DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_height)
-                            # display.
-                            annotation = display.AddNewComponent(13, l, t, 
-                                annotation, 
-                                DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_height)
-                        
-                        annotation.SetForegroundColor(
-                            DM_IMAGE_ANNOTATION_COLOR[0],
-                            DM_IMAGE_ANNOTATION_COLOR[1],
-                            DM_IMAGE_ANNOTATION_COLOR[2])
-                        
-                        bounding_rect = annotation.GetBoundingRect()
-                        # get right value of bounding rect
-                        l = (bounding_rect[3] + 
-                             DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_width)
+                for annotation in self.annotations:
+                    log_debug(self._logger, ("Trying to add annotation " + 
+                                             "'{}'").format(annotation))
+                    if annotation == "scalebar":
+                        b = ((1 - DM_IMAGE_ANNOTATION_PADDING_FRACTION) * 
+                                image_height)
+                        r = (l + DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION * 
+                                image_width)
+                        # do not save the root component, otherwise a copy is 
+                        # created
+                        annotation = image_doc.GetRootComponent().GetNthChildOfType(display_type, 0).AddNewComponent(31, t, l, b, r)
+                    else:
+                        continue
+                        # annotation = DM.NewTextAnnotation(l, t, annotation,
+                        #     DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_height)
+                        # do not save the root component, otherwise a copy is 
+                        # created
+                        # image_doc.GetRootComponent().GetNthChildOfType(display_type, 0).?
+                        # annotation = DM.NewTextAnnotation(13, l, t, 
+                        #     annotation, 
+                        #     DM_IMAGE_ANNOTATION_HEIGHT_FRACTION * image_height)
+                    
+                    annotation.SetForegroundColor(
+                        DM_IMAGE_ANNOTATION_COLOR[0],
+                        DM_IMAGE_ANNOTATION_COLOR[1],
+                        DM_IMAGE_ANNOTATION_COLOR[2])
+                    
+                    bounding_rect = annotation.GetBoundingRect()
+                    # get right value of bounding rect
+                    l = (bounding_rect[3] + 
+                            DM_IMAGE_ANNOTATION_PADDING_FRACTION * image_width)
+                    
+                    log_debug(self._logger, ("Added annotation '{}' of " + 
+                                             "type '{}' with bounding rect " + 
+                                             "'{}' and color '{}'").format(
+                                                 annotation, 
+                                                 annotation.GetType(),
+                                                 bounding_rect, 
+                                                 annotation.GetForegroundColor()))
+                    
+                if do_log(self._logger, logging.DEBUG):
+                    n = image_doc.GetRootComponent().GetNthChildOfType(display_type, 0).CountChildren()
+                    added_annotations = "{} annotations: [".format(n)
+                    for i in range(n):
+                        added_annotations += "{}: type={}, ".format(i, 
+                            image_doc.GetRootComponent().GetNthChildOfType(display_type, 0).GetChild(i).GetType())
+                    added_annotations += "]"
 
+                    log_debug(self._logger, ("Image document '{}' display " + 
+                                             "contains the following " + 
+                                             "annotations: {}").format(
+                                                 image_doc, added_annotations))
+                                                
+        return image_doc
         
     def getDMPyImageObject(self, name: typing.Optional[str]=None) -> DM.Py_Image:
         """Get the DigitalMicrograph.Py_Image for the current image.
@@ -416,7 +529,7 @@ class DMImage(Image):
             The image document that shows the image
         """
         log_debug(self._logger, ("Showing image with " + 
-                                "DigitalMicrograph.Py_ImageDocument '{}'").format(
+                                 "DigitalMicrograph.Py_ImageDocument '{}'").format(
                                 image_doc))
         if (isinstance(workspace_id, int) and 
             DM.WorkspaceCountWindows(workspace_id) > 0):
@@ -451,35 +564,127 @@ class DMImage(Image):
         # show in the workspace
         image_doc.ShowAtRect(*pos)
 
-        # link to file
-        if isinstance(file_path, str) or isinstance(file_path, pathlib.PurePath):
+        from .config import DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS
+
+        # link to file and/or add annotations
+        if (isinstance(file_path, str) or 
+            isinstance(file_path, pathlib.PurePath) or 
+            (DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS and 
+             isinstance(self.annotations, (list, tuple)))):
             if isinstance(workspace_id, int):
                 wsid = workspace_id
             else:
                 wsid = ""
             
-            log_debug(self._logger, "Trying to link image document to the file")
-            dmscript = "\n".join((
-                "if(WorkspaceGetIndex({}) >= 0){{".format(wsid),
-                    "for(number i = CountImageDocuments({}) - 1; i >= 0; i--){{".format(wsid),
-                        "ImageDocument img_doc = GetImageDocument(i, {});".format(wsid),
-                        "if(img_doc.ImageDocumentGetName() == name){",
-                            "img_doc.ImageDocumentSetCurrentFile(path);",
-                            "if(format != \"\"){",
-                                "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
-                            "}",
-                            "img_doc.ImageDocumentClean();",
+            dmscript = []
+            if (DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS and 
+                isinstance(self.annotations, (list, tuple))):
+                # do not link to file because annotations are missing in the
+                # file, force user to save the workspace
+
+                log_debug(self._logger, ("Adding annotations in dm-script " + 
+                                         "after showing the file, not " + 
+                                         "linking to file because in file " + 
+                                         "the annotations are missing."))
+            
+                from .config import DM_IMAGE_ANNOTATION_COLOR
+                from .config import DM_IMAGE_ANNOTATION_PADDING_FRACTION
+                from .config import DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION
+                from .config import DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+
+                dmscript += [
+                    "if(img_doc.ImageDocumentCountImages() > 0){",
+                        "Image img := img_doc.ImageDocumentGetImage(0);",
+                        "ImageDisplay display;",
+                        "if(img.ImageCountImageDisplays() == 0){",
+                            "display = img_doc.ImageDocumentAddImageDisplay(img, -2);",
+                        "}",
+                        "else{",
+                            "display = img.ImageGetImageDisplay(0);",
+                        "}",
+                        "Component annotation;",
+                        "number image_width = img.ImageGetDimensionSize(0);",
+                        "number image_height = img.ImageGetDimensionSize(1);",
+                        "number top, left, bottom, right, font_size, t, l, b, r;",
+                        "top = (1 - {ah} - {ap}) * image_height".format(
+                            ah=DM_IMAGE_ANNOTATION_HEIGHT_FRACTION,
+                            ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION),
+                        "left = {ap} * image_width".format(
+                            ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION),
+                        "font_size = {ah} * image_height".format(
+                            ah=DM_IMAGE_ANNOTATION_HEIGHT_FRACTION)
+                ]
+
+                for annotation in self.annotations:
+                    log_debug(self._logger, ("Trying to add annotation " + 
+                                             "'{}'").format(annotation))
+                                             
+                    if annotation == "scalebar":
+                        dmscript += [
+                            "bottom = (1 - {ap}) * image_height".format(
+                                ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION),
+                            "right = left + {sl} * image_width".format(
+                                sl=DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION),
+                            "annotation = NewComponent(31, top, left, bottom, right);"
+                        ]
+                    else:
+                        dmscript += [
+                            "annotation = NewTextAnnotation(left, top, \"{}\", font_size);".format(
+                                execdmscript.escape_dm_string(annotation))
+                        ]
+                    
+                    dmscript += [
+                        "annotation.ComponentSetForegroundColor({r}, {g}, {b})".format(
+                            r=DM_IMAGE_ANNOTATION_COLOR[0], 
+                            g=DM_IMAGE_ANNOTATION_COLOR[1],
+                            b=DM_IMAGE_ANNOTATION_COLOR[2]),
+                        "display.ComponentAddChildAtEnd(annotation);",
+                        "annotation.ComponentGetBoundingRect(t, l, b, r);",
+                        "left = r + {ap} * image_width;".format(
+                            ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION)
+                    ]
+                    
+                dmscript += [
+                    "}"
+                ]
+            else:
+                log_debug(self._logger, "Trying to link image document to the file")
+                dmscript = [
+                    "if(path != \"\"){",
+                        "img_doc.ImageDocumentSetCurrentFile(path);",
+                        "if(format != \"\"){",
+                            "img_doc.ImageDocumentSetCurrentFileSaveFormat(format);",
+                        "}",
+                        "img_doc.ImageDocumentClean();",
+                    "}"
+                ]
+            
+            dmscript = "\n".join([
+                "number wsid = {}".format("WorkspaceGetActive();" if wsid == "" 
+                                          else wsid),
+                "if(WorkspaceGetIndex(wsid) >= 0){",
+                    "for(number i = CountImageDocuments(wsid) - 1; i >= 0; i--){",
+                        "ImageDocument img_doc = GetImageDocument(i, wsid);",
+                        "if(img_doc.ImageDocumentGetName() == name){"
+                            ] + 
+                                dmscript + 
+                            [
                             "break;",
                         "}",
                     "}",
                 "}"
-            ))
+            ])
+            
+            if (isinstance(file_path, str) or 
+                isinstance(file_path, pathlib.PurePath)):
+                _, extension = os.path.splitext(file_path)
 
-            _, extension = os.path.splitext(file_path)
-
-            if extension in DMImage.gatan_file_types:
-                file_format = DMImage.gatan_file_types[extension]
+                if extension in DMImage.gatan_file_types:
+                    file_format = DMImage.gatan_file_types[extension]
+                else:
+                    file_format = ""
             else:
+                file_path = ""
                 file_format = ""
             
             svars = {

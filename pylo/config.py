@@ -191,10 +191,11 @@ Default: True
 KEEP_REMOVED_DIVICE_SETTINGS = True
 
 __config_docs__("DM_IMAGE_ANNOTATION_COLOR",
-"""The foreground color to use for annotations in dm images as an rgb tuple.
-Default: (0, 255, 0)
+"""The foreground color to use for annotations in dm images as an rgb tuple 
+where each color is defined with a value between [0..1].
+Default: (0, 1, 0)
 """)
-DM_IMAGE_ANNOTATION_COLOR = (0, 255, 0)
+DM_IMAGE_ANNOTATION_COLOR = (0, 1, 0)
 
 __config_docs__("DM_IMAGE_ANNOTATION_PADDING_FRACTION",
 """The padding to use for annotations as a fraction. For vertical paddings the
@@ -215,3 +216,11 @@ __config_docs__("DM_IMAGE_ANNOTATION_HEIGHT_FRACTION",
 Default: 1/20
 """)
 DM_IMAGE_ANNOTATION_HEIGHT_FRACTION = 1/20
+
+__config_docs__("DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS",
+"""Whether to add the image annotations by hybrid scripting only if the images 
+are shown. This has to be True at the moment since adding annotations does not 
+work at all in python. For more details check out DMImage._addAnnotations()
+Default: True
+""")
+DM_IMAGE_DISABLE_PYTHON_ANNOTATIONS = True
