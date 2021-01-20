@@ -145,11 +145,12 @@ try:
     }
 
     tests = [
-        "save",
-        "show",
-        "multi-image-layout",
-        "from-pyimage",
-        "to-pyimage"
+    #    "save",
+    #    "show",
+        "annotations",
+    #    "multi-image-layout",
+    #    "from-pyimage",
+    #    "to-pyimage"
     ]
 
     if "save" in tests:
@@ -160,8 +161,8 @@ try:
         image_data = (np.random.random((64, 64)) * 255).astype(dtype=np.uint8)
         start_time = time.time()
         image = pylo.DMImage(image_data, tags)
-        img_path = os.path.join(tmp_path, "test-image.dm4")
 
+        img_path = os.path.join(tmp_path, "test-image.dm4")
         thread = image.saveTo(img_path)
         thread.join()
         
@@ -249,6 +250,80 @@ try:
         del doc
         del img
 
+    if "annotations" in tests:
+        print("")
+        print("= " * 40)
+        print("")
+        print("Testing image annotations:")
+        image_data = (np.random.random((128, 128)) * 255).astype(dtype=np.uint8)
+        image = pylo.DMImage(image_data, tags)
+        image.annotations = ["scalebar", "test text", "another test"]
+        image.show_image = True
+
+        # this should work but it does not, there is an internal problem with 
+        # references, check out DMImage._addAnnotations() for more details
+        # thread = image.saveTo(img_path)
+        # thread.join()
+        
+        # time.sleep(1)
+
+        # img = DM.OpenImage(img_path)
+        # img.ShowImage()
+
+        name = "test-name"
+        image.show(name)
+
+        time.sleep(0.3)
+
+        img = DM.GetFrontImage()
+
+        display = img.GetImageDisplay(0)
+        child_count_correct = display.CountChildren() == len(image.annotations)
+        print("{} annotations are shown: ".format(len(image.annotations)), child_count_correct)
+        assert child_count_correct
+
+        scalebar_exists = display.CountChildrenOfType(31) == 1
+        print("Exactly one scalebar exists: ", scalebar_exists)
+        assert scalebar_exists
+
+        texts_exist = display.CountChildrenOfType(13) == 2
+        print("Exactly two texts exist: ", texts_exist)
+        assert texts_exist
+
+        from pylo.config import DM_IMAGE_ANNOTATION_COLOR
+        image_height = img.GetDimensionSize(1)
+        for i in range(display.CountChildren()):
+            component = display.GetChild(i)
+
+            rt, rl, rb, rr = component.GetBoundingRect()
+            
+            at_bottom = rt > image_height * 3/4
+            print("Annotation top edge is below <image height>/4: ", at_bottom)
+            assert at_bottom
+            
+            red, green, blue = component.GetForegroundColor()
+            color_correct = (math.isclose(red, DM_IMAGE_ANNOTATION_COLOR[0]) and
+                             math.isclose(green, DM_IMAGE_ANNOTATION_COLOR[1]) and
+                             math.isclose(blue, DM_IMAGE_ANNOTATION_COLOR[2]))
+            print("Foreground color is equal to DM_IMAGE_ANNOTATION_COLOR: ", 
+                  color_correct)
+            assert color_correct
+            
+            if component.GetType() == 13:
+                text_correct = component.GetText() == image.annotations[i]
+                print("Text is correct: ", text_correct)
+                assert text_correct
+
+        # get the current image document, there should only be one and close it
+        doc = img.GetOrCreateImageDocument()
+        doc.Close(False)
+
+        time.sleep(1)
+
+        del doc
+        del img
+        del display
+
     if "multi-image-layout" in tests:
         print("")
         print("= " * 40)
@@ -316,3 +391,6 @@ try:
 except Exception as e:
     print("Exception: ", e)
     traceback.print_exc()
+finally:
+    import shutil
+    # shutil.rmtree(tmp_path)
