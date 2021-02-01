@@ -247,6 +247,17 @@ class CLIView(AbstractView):
         )
 
         series_reg = re.compile(r"series-([\d]+)-([\w\-]+)")
+
+        changed_variable_depth = None
+        if isinstance(changed, str):
+            match = series_reg.match(changed)
+            if match is not None:
+                # the variable id changed, so load the default values by ignoring
+                # the start, step-width and end values
+                if match.group(2) == "variable":
+                    changed_variable_depth = int(match.group(1))
+                elif match.group(2) == "on-each-point":
+                    changed_variable_depth = int(match.group(1)) + 1
         
         start = {}
         series = {}
@@ -266,13 +277,7 @@ class CLIView(AbstractView):
                             s["on-each-point"] = {}
                         s = s["on-each-point"]
 
-                    if match.group(2) == "start":
-                        s["start"] = v
-                    elif match.group(2) == "step-width":
-                        s["step-width"] = v
-                    elif match.group(2) == "end":
-                        s["end"] = v
-                    elif (match.group(2) == "variable" and v in variable_ids and
+                    if (match.group(2) == "variable" and v in variable_ids and
                         ("variable" not in s or changed == k)):
                         # on-each-point sets the "variable" key already, only 
                         # overwrite if the user changes this value, this is 
@@ -283,6 +288,13 @@ class CLIView(AbstractView):
                         s["variable"] = v
                     elif (match.group(2) == "on-each-point" and v in variable_ids):
                         s["on-each-point"] = {"variable": v}
+                    elif changed_variable_depth != depth:
+                        if match.group(2) == "start":
+                            s["start"] = v
+                        elif match.group(2) == "step-width":
+                            s["step-width"] = v
+                        elif match.group(2) == "end":
+                            s["end"] = v
         
         # recalculate to uncalibrated values, do another validation because the
         # iteration is there anyway
@@ -961,7 +973,7 @@ class CLIView(AbstractView):
         
         Returns
         -------
-        dict, bool or None
+        dict, bool or None, str or None
             The dict with the values at index 0, True at index 1 if the user
             wants to continue, False if he/she wants to cancel and None if the
             user selected someting without "pressing" continue or "cancel" and
