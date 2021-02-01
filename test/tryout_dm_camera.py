@@ -59,16 +59,14 @@ import matplotlib.pyplot as plt
 
 try:
 	import pylo
-	import pylo.cameras
 
 	view = pylo.CLIView()
 	configuration = pylo.AbstractConfiguration()
-	pylo.cameras.DMCamera.defineConfigurationOptions(configuration)
 
 	controller = pylo.Controller(view, configuration)
+    
+    camera = pylo.loader.getDevice("Digital Micrograph Camera", controller)
 
-	# camera = pylo.cameras.DMTestCamera(controller)
-	camera = pylo.cameras.DMCamera(controller)
 	camera.show_images = True
 	img = camera.recordImage()
 
