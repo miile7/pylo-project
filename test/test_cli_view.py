@@ -70,57 +70,9 @@ import random
 
 import pylo
 
-class DummyView(pylo.AbstractView):
-    def showCreateMeasurement(self, *args, **kwargs):
-        pass
-
-    def showSettings(self, *args, **kwargs):
-        pass
-
-    def showHint(self, *args, **kwargs):
-        realprint(args, kwargs)
-
-    def showError(self, *args, **kwargs):
-        realprint(args, kwargs)
-
-    def print(self, *args, **kwargs):
-        realprint(args, kwargs)
-
-    def showRunning(self, *args, **kwargs):
-        pass
-
-    def askFor(self, *args):
-        return ["ASK_FOR_DEFAULT_OUTPUT"] * len(args)
-
-class DummyMicroscope(pylo.MicroscopeInterface):
-    def __init__(self):
-        self.supported_measurement_variables = [
-            pylo.MeasurementVariable("focus", "Focus", 0, 0xfa,
-                            format=pylo.Datatype.hex_int),
-            pylo.MeasurementVariable("magnetic-field", "Magnetic Field", 0, 5),
-            pylo.MeasurementVariable("tilt", "Tilt", -5, 5, calibration=5),
-        ]
-        self.supports_parallel_measurement_variable_setting = False
-        self.values = {}
-
-    def setInLorentzMode(self, lorentz_mode):
-        pass
-
-    def getInLorentzMode(self):
-        return True
-    
-    def setMeasurementVariableValue(self, id_, value):
-        self.values[id_] = value
-    
-    def getMeasurementVariableValue(self, id_):
-        try:
-            return self.values[id_]
-        except KeyError:
-            return None
-        
-    def resetToSafeState(self):
-        realprint("Resetting to safe state")
-        assert False
+from pylotestlib import get_equality
+from pylotestlib import DummyView
+from pylotestlib import DummyConfiguration
     
 reg = re.compile(r"\s+")
 def get_compare_text(text):
@@ -154,14 +106,14 @@ def cliview():
 
 @pytest.fixture()
 def controller():
-    controller = pylo.Controller(DummyView(), pylo.AbstractConfiguration())
-    controller.microscope = DummyMicroscope()
+    controller = pylo.Controller(DummyView(), DummyConfiguration())
+    controller.microscope = pylo.loader.getDevice("Dummy Microscope", controller)
 
     return controller
 
 @pytest.fixture()
 def configuration():
-    configuration = pylo.AbstractConfiguration()
+    configuration = DummyConfiguration()
 
     configuration.addConfigurationOption("options", "key1", datatype=int, 
         description="Input the value for the first test configuration value.")
@@ -650,12 +602,12 @@ class TestCLIView:
         ({"variable": "focus", "end": 0x100}, 1, True),
         # values are missing in child
         ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
-          "on-each-point": {"variable": "magnetic-field"}}, 2, False),
+          "on-each-point": {"variable": "pressure"}}, 2, False),
         # values are wrong in child
         ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
-          "on-each-point": {"variable": "magnetic-field", "start": -1}}, 2, True),
+          "on-each-point": {"variable": "pressure", "start": -1}}, 2, True),
         ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
-          "on-each-point": {"variable": "magnetic-field", "end": 6}}, 2, True),
+          "on-each-point": {"variable": "pressure", "end": 3061}}, 2, True),
         # invalid on-each-point variable: focus series over focus series
         ({"variable": "focus", "start": 0, "end": 5, "step-width": 1, 
           "on-each-point": {"variable": "focus"}}, 1, True),
@@ -705,31 +657,30 @@ class TestCLIView:
                 series_definition["variable"]
             )
 
-            assert v.min_value <= series_definition["start"] 
-            assert series_definition["start"] <= v.max_value
+            assert v.min_value <= v.ensureUncalibratedValue(series_definition["start"])
+            assert v.ensureUncalibratedValue(series_definition["start"]) <= v.max_value
 
-            assert v.min_value <= series_definition["end"] 
-            assert series_definition["end"] <= v.max_value
-    
+            assert v.min_value <= v.ensureUncalibratedValue(series_definition["end"])
+            assert v.ensureUncalibratedValue(series_definition["end"]) <= v.max_value
+        
     # PyLo
     # ****
-    #
-    #
+
+
     # Define the start conditions
-    # [0] Focus*:                0x0      0x0 <= val <= 0xfa
-    # [1] Magnetic Field*:       0        0 <= val <= 5
-    # [2] Tilt*:                 0        -25 <= val <= 25
-    #
+    # [0] Focus [nm]*:                   0        0 <= val <= 300
+    # [1] Objective lens current [hex]*: 0x0      0x0 <= val <= 0x800
+    # [2] Atmospheres [bar]*:            0.05     0.05 <= val <= 3.0
+
     # Define the series
-    # [3] Series variable*:      focus
-    # [4] Start value*:          0x0      0x0 <= val <= 0xfa
-    # [5] Step width*:           0x19     0x0 <= val <= 0xfa
-    # [6] End value*:            0xfa     0x0 <= val <= 0xfa
-    # [7] Series on each point:  <empty>
-    #
-    # Type in the number to change the value of, type [c] for continue and [q] for
-    # quit.
-    # Number, [c]ontinue or [q]uit:  < input: '0'
+    # [3] Series variable*:              focus
+    # [4] Start value*:                  0        0 <= val <= 300
+    # [5] Step width*:                   60.0     0 <= val <= 300
+    # [6] End value*:                    300      0 <= val <= 300
+    # [7] Series on each point:          <empty>
+
+    # Type in the number to change the value of, [c] for continue and [q] for quit.
+    # Number, [c]ontinue or [q]uit:  < input: 'c'
     # 
     # Hint: Use realprint(writer.io_log) to see what happens if an error 
     # asserts False
@@ -737,150 +688,108 @@ class TestCLIView:
     @pytest.mark.parametrize("start,series,user_inputs,expected_start,expected_series", [
         # create default series, parameter-1
         (None, None, ("c", ), 
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "focus", "start": 0, "end": 250, "step-width": 25}),
-        # change start conditions
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         # expecting: start=min, end=max, step-width = end-start/5
+         {"variable": "focus", "start": 0, "end": 100, "step-width": 20}),
+        # change start conditions, parameter-2
         (None, None, (
-            "0", "0xf", # focus to 15
-            "1", 3, # magnetic field to 3
-            "2", 4, # tilt to 4
+            "0", 15, # focus to 15
+            "1", "0xf", # obj lens current to 15
+            "2", 2, # pressure to 2
             "c", 
          ), 
-         # tilt is calibrated by 5
-         {"focus": 15, "magnetic-field": 3, "tilt": 4/5},
-         # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "focus", "start": 0, "end": 250, "step-width": 25}),
-        # create magnetic field series, parameter-2
+         # pressure is calibrated by 5
+         {"focus": 15/3, "ol-current": 15, "pressure": 2*1020},
+         # expecting: start=min, end=max, step-width = end-start/5
+         {"variable": "focus", "start": 0, "end": 100, "step-width": 20}),
+        # create obj lens current series, parameter-3
         (None, None, (
-            "3", "magnetic-field", # variable
-            "5", 0.5, # step width
-            "6", 5, # end
+            "3", "ol-current", # variable
+            "5", "0x100", # step width
+            "6", "0x200", # end
             "c" # continue
          ), 
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5}),
-        # create tilt field series, parameter-3
-        (None, {"variable": "tilt"}, (
-            "3", "tilt", # variable
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"variable": "ol-current", "start": 0x0, "end": 0x200, "step-width": 0x100}),
+        # create obj lens series, parameter-4
+        (None, {"variable": "pressure"}, (
+            "3", "ol-current", # variable
             "c"
          ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         # expecting: start=min, end=max, step-width = end-start/10
-         {"variable": "tilt", "start": -5.0, "end": 5.0, "step-width": 1.0}),
-        # create tilt field series with changed parameters, testing 
-        # calibration in on-each-point series (this was a bug), parameter-4
-        (None, {"variable": "tilt"}, (
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         # expecting: default step width and end values
+         {"variable": "ol-current", "start": 0, "end": 0x600, "step-width": 0x300}),
+        # create pressure field series with changed parameters, testing 
+        # calibration in on-each-point series (this was a bug), parameter-5
+        (None, {"variable": "pressure"}, (
             "3", "focus", # variable
-            "4", "0x0", # focus start
-            "5", "0x5", # focus step width
-            "6", "0xfa", # focus end
-            "7", "tilt", # setting on each point
-            "9", -10, # tilt start
-            "10", 2.5, # tilt step-width
-            "11", 10, # tilt end
+            "4", 0, # focus start
+            "5", 10, # focus step width
+            "6", 100, # focus end
+            "7", "pressure", # setting on each point
+            "9", "0.5", # pressure start
+            "10", "0.1", # pressure step-width
+            "11", "3", # pressure end
             "c"
          ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
          # expecting: set value divided by calibration factor, machine takes 
          # uncalibrated value
-         {"variable": "focus", "start": 0, "end": 0xfa, "step-width": 0x5, "on-each-point": 
-            {"variable": "tilt", "start": -10/5, "end": 10/5, "step-width": 2.5/5}}),
-        # create magnetic field series from 1 to 2 with 0.5 stepwidth, 
-        # parameter-5
+         {"variable": "focus", "start": 0, "end": 100/3, "step-width": 10/3, "on-each-point": 
+            {"variable": "pressure", "start": 0.5*1020, "end": 3*1020, "step-width": 0.1*1020}}),
+        # parameter-6
         (None, None, (
-            "3", "magnetic-field", # vairable
-            "4", 1, # start
-            "5", 0.5, # step width
-            "6", 2, # end
+            "3", "ol-current", # vairable
+            "4", "1", # start
+            "5", "0x50", # step width
+            "6", "0x200", # end
             "c" # continue
          ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "magnetic-field", "start": 1, "end": 2, "step-width": 0.5}),
-        # create focus series from 0 to 16 with 2 stepwidth, parameter-6
-        (None, None, (
-            "4", "0x0", # start
-            "5", "0x2", # step width
-            "6", "0x10", # end
-            "c" # continue
-         ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "focus", "start": 0, "end": 16, "step-width": 2}),
-        # create tilt series from -5 to 5 with 1 stepwidth, 
-        #   on each point: magnetic field series from 0 to 5, stepwidth 0.5
-        #       on each point: focus series from 2 to 4, stepwidth 0.25
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"variable": "ol-current", "start": 1, "end": 0x200, "step-width": 0x50}),
+        # create pressure series from 1000 to 2000 with 500 stepwidth, 
+        #   on each point: obj lens current series from 0 to 0x50, stepwidth 0x5
+        #       on each point: focus series from 2 to 40, stepwidth 8
         # parameter-7
         (None, None, (
-            "3", "tilt", # tilt series
-            "4", -5, # start
-            "5", 1, # step width
-            "6", 5, # end
-            "7", "magnetic-field", # on each point
-                "9", 0, # start
-                "10", 0.5, # step width
-                "11", 5, # end
+            "3", "pressure", # pressure series
+            "4", 0.1, # start
+            "5", 0.1, # step width
+            "6", "2.8", # end
+            "7", "ol-current", # on each point
+                "9", "0", # start
+                "10", "0x5", # step width
+                "11", "0x50", # end
                 "12", "focus", # on each point
-                    "14", "0x2", # start
-                    "15", "0x1", # step width
-                    "16", "0x4", # end
+                    "14", 2, # start
+                    "15", 8, # step width
+                    "16", 40, # end
             "c" # continue
          ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "tilt", "start": -5/5, "end": 5/5, "step-width": 1/5, "on-each-point":
-            {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 0.5, 
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"variable": "pressure", "start": 0.1*1020, "end": 2.8*1020, "step-width": 0.1*1020, "on-each-point":
+            {"variable": "ol-current", "start": 0, "end": 0x50, "step-width": 0x5, 
              "on-each-point":
-                {"variable": "focus", "start": 0x2, "end": 0x4, "step-width": 0x1}
+                {"variable": "focus", "start": 2/3, "end": 40/3, "step-width": 8/3}
             }
          }),
         # add on-each-point value, then change it (this was a bug)
         # parameter-8
         (None, None, (
-            # "0", 0x0, # focus start value
-            # "1", 0, # magnetic field start value
-            # "2", 0, # tilt start value
             "3", "focus", # set focus series
-            "4", "0x0", # start of focus series
-            "5", "0x10", # step-width of focus series
-            "6", "0xf0", # end of focus series
-            "7", "tilt", # on-each-point
-            "9", 0, # start of tilt
-            "10", 1, # step width
-            "11", 5, # end
-            "7", "magnetic-field", # switch on-each-point
+            "4", 0, # start of focus series
+            "5", 10, # step-width of focus series
+            "6", 100, # end of focus series
+            "7", "pressure", # on-each-point
+            "9", 1, # start of pressure
+            "10", 0.5, # step width
+            "11", 2, # end
+            "7", "ol-current", # switch on-each-point
             "c" # continue
          ),
-         {"focus": 0, "magnetic-field": 0, "tilt": 0},
-         {"variable": "focus", "start": 0x0, "end": 0xf0, "step-width": 0x10, "on-each-point":
-            {"variable": "magnetic-field", "start": 0.0, "end": 5.0, "step-width": 1.0}}),
-        # # create magnetic field series from -5 to 5 with 1 stepwidth (invalid)
-        # #   on each point focus series from -5 to 10 with stepwidth 1 (invalid)
-        # (None, None, (
-        #     "0", "magnetic-field", # magnetic field series
-        #     "1", -5, # start (invalid)
-        #     "2", 1, # step width
-        #     "3", 5, # end
-        #     "4", "focus", # on each point
-        #         "6", -5, # start (invalid)
-        #         "7", 1, # step width
-        #         "8", 10, # end (invalid)
-        #     "c" # continue
-        #  ),
-        #  {"focus": 0, "magnetic-field": 0, "tilt": 0},
-        #  {"variable": "magnetic-field", "start": 0, "end": 5, "step-width": 1, "on-each-point":
-        #     {"variable": "focus", "start": 0, "end": 5, "step-width": 1}
-        #  }),
-        # # create focus series from 1 to 3 with negative step width
-        # (None, None, (
-        #     "3", "magnetic-field", # vairable
-        #     "4", 1, # start
-        #     "5", -10, # step width
-        #     "6", 3, # end
-        #     "c" # continue
-        #  ),
-        #  {"focus": 0, "magnetic-field": 0, "tilt": 0},
-        #  # step-width = max-min/10, min = 0, max = 5
-        #  {"variable": "magnetic-field", "start": 1, "end": 3, "step-width": 0.5}),
+         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"variable": "focus", "start": 0, "end": 100/3, "step-width": 10/3, "on-each-point":
+            {"variable": "ol-current", "start": 0, "end": 0x600, "step-width": 0x300}}),
     ])
     def test_show_create_measurement_loop(self, cliview, controller, start, series, user_inputs, expected_start, expected_series):
         """Test the _showCreateMeasurementLoop() function."""
@@ -910,8 +819,8 @@ class TestCLIView:
 
         realprint(writer.io_log)
 
-        assert expected_start == start
-        assert expected_series == series
+        assert get_equality(expected_start, start)
+        assert get_equality(expected_series, series)
     
     @pytest.mark.usefixtures("cliview")
     def test_loader(self, cliview):
@@ -1237,12 +1146,12 @@ class TestCLIView:
     
     @pytest.mark.usefixtures("cliview", "controller")
     @pytest.mark.parametrize("series,expected_series,add_defaults", [
-        ({"variable": "focus"}, {"variable": "focus", "start": 0, "end": 0xfa, 
-          "step-width": 0xfa / 10}, True),
-        ({"variable": "focus", "on-each-point": {"variable": "magnetic-field"}}, 
-         {"variable": "focus", "start": 0, "end": 0xfa, "step-width": 0xfa / 10,
-          "on-each-point": {"variable": "magnetic-field", "start": 0, "end": 5, 
-          "step-width": 0.5}}, True),
+        ({"variable": "focus"}, {"variable": "focus", "start": 0, "end": 100, 
+          "step-width": 100 / 5}, True),
+        ({"variable": "focus", "on-each-point": {"variable": "ol-current"}}, 
+         {"variable": "focus", "start": 0, "end": 100, "step-width": 100/5,
+          "on-each-point": {"variable": "ol-current", "start": 0, "end": 0x600, 
+          "step-width": 0x300}}, True),
     ])
     def test_parse_series(self, cliview, controller, series, expected_series, add_defaults):
         """Test the parse series function."""
@@ -1348,7 +1257,7 @@ class TestCLIView:
         """Test if asking for decision works."""
         global writer
 
-        configuration = pylo.AbstractConfiguration()
+        configuration = DummyConfiguration()
         from pylo.config import CUSTOM_TAGS_GROUP_NAME
 
         for key, value in tags.items():

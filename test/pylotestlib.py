@@ -2,7 +2,9 @@
 for testing."""
 
 import sys
+import math
 import time
+import typing
 
 realstdout = sys.stdout
 
@@ -145,3 +147,75 @@ class DummyConfiguration(pylo.AbstractConfiguration):
     
     def saveConfiguration(self):
         pass
+
+def get_equality(v1: typing.Any, v2: typing.Any, 
+                 rel_tol: typing.Optional[typing.Union[int, float]]=0, 
+                 abs_tol: typing.Optional[typing.Union[int, float]]=1e-6, 
+                 default_return: typing.Optional[typing.Any]=True):
+    """Test whether the two values `v1` and `v2` are equal.
+
+    This returns True if both values are equal, False otherwise. If `v1` and 
+    `v2` both are mappings or both are sequences, they are converted to dicts
+    or lists and their elements will be compared by keys. If one key is missing
+    or if the values are not equal, False is returned. Nested maps and 
+    sequences are supported.
+
+    The `rel_tol` and the `abs_tol` can be used to define tolerances. The
+    `default_return` is returned if the values neither are numbers nor 
+    sequences nor dicts.
+
+    If the `v1` and `v2` types are incompatible False is returned.
+
+    Parameters
+    ----------
+    v1, v2 : any
+        The values to compare
+    rel_tol, abs_tol : int or float, optional
+        The relative and absolute tolerances, defaults are 0 and 1e-6
+    default_return : any, optional
+        The value to return if `v1` and `v2` or their elements are not numbers
+    
+    Returns
+    -------
+    boolean or type of `default_return`
+        Whether the `v1` and `v2` are approximately equal or not
+    """
+
+    if (isinstance(v1, (int, float, complex)) and 
+        isinstance(v2, (int, float, complex))):
+        return math.isclose(v1, v2, rel_tol=rel_tol, abs_tol=abs_tol)
+    elif isinstance(v1, str) and isinstance(v2, str):
+        return default_return
+    elif isinstance(v1, str) or isinstance(v2, str):
+        return False
+    else:
+        try:
+            v1 = dict(v1)
+            v2 = dict(v2)
+
+            for k in set(v1.keys()) | set(v2.keys()):
+                if k not in v1 or k not in v2:
+                    return False
+                elif not get_equality(v1[k], v2[k], rel_tol, abs_tol, default_return):
+                    return False
+            
+            return True
+        except ValueError:
+            pass
+            
+        try:
+            v1 = list(v1)
+            v2 = list(v2)
+            
+            if len(v1) != len(v2):
+                return False
+            else:
+                for e1, e2 in zip(v1, v2):
+                    if not get_equality(e1, e2, rel_tol, abs_tol, default_return):
+                        return False
+            
+            return True
+        except ValueError:
+            pass
+        
+        return default_return
