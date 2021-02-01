@@ -157,7 +157,9 @@ class TestPylolib:
     @pytest.mark.parametrize("text,expected", [
         ("A{?{keydoesnotexist} }B", "AB"),
         ("{?{keydoesnotexist}}", ""),
-        ("{?A {keydoesnotexist} B}", "")
+        ("{?A {keydoesnotexist} B}", ""),
+        ("{_A {keydoesnotexist} B}", "A  B"),
+        ("{_A {keydoesnotexist[index]} B}", "A  B")
     ])
     def test_expand_vars_ignore_missing(self, text, expected):
         assert expected == pylolib.expand_vars(text)[0]
