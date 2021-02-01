@@ -27,15 +27,18 @@ class DummyMicroscope(MicroscopeInterface):
             MeasurementVariable("focus", "Focus", 0, 100, "nm", Datatype.int, 3),
             lambda: self._getVal("focus"), lambda x: self._setVal("focus", x)
         )
-        self.registerMeasurementVariable(
+        var = self.registerMeasurementVariable(
             MeasurementVariable("ol-current", "Objective lens current", 0, 
                                 0x800, "hex", Datatype.hex_int),
             lambda: self._getVal("ol-current"), 
             lambda x: self._setVal("ol-current", x)
         )
+        var.default_step_width_value = 0x300
+        var.default_end_value = 0x600
+
         self.registerMeasurementVariable(
-            MeasurementVariable("pressure", "Pressure", 10, 3000, "Pa", 
-                                Datatype.int, 1020, None, "bar", "Atmospheres", 
+            MeasurementVariable("pressure", "Pressure", 51, 3060, "Pa", 
+                                Datatype.int, 1/1020, None, "bar", "Atmospheres", 
                                 calibrated_format=float),
             lambda: self._getVal("pressure"), 
             lambda x: self._setVal("pressure", x)

@@ -18,6 +18,9 @@ class DummyCamera(CameraInterface):
         The controller
     imagesize : tuple of int
         The image size
+    use_dummy_images : bool
+        Whether to use image objects created from the `DummyImage` class or 
+        normal `pylo.Image` objects
     """
 
     def __init__(self, *args, **kwargs) -> None:
@@ -25,6 +28,7 @@ class DummyCamera(CameraInterface):
         super(DummyCamera, self).__init__(*args, **kwargs)
         self.imagesize = (32, 32)
         self.tags = {"Camera": "Dummy Camera"}
+        self.use_dummy_images = False
     
     def recordImage(self, additional_tags: typing.Optional[dict]=None, **kwargs) -> "Image":
         """Get the image of the current camera.
@@ -55,7 +59,19 @@ class DummyCamera(CameraInterface):
             else:
                 image_tags[chr(i + 65)] = "Test value {}".format(i)
         
-        return Image(image_data, image_tags)
+        if self.use_dummy_images:
+            return DummyImage(image_data, image_tags)
+        else:
+            return Image(image_data, image_tags)
+
     
     def resetToSafeState(self) -> None:
+        pass
+
+class DummyImage(Image):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    """An image object that cannot save itself."""
+    def saveTo(self, *args, **kwargs):
         pass

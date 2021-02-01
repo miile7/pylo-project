@@ -142,8 +142,8 @@ class Controller:
         # the values to ask
         input_params = {}
 
-        log_debug(self._logger, "Getting values for configuration values " + 
-                               "'{}'".format(config_lookup))
+        log_debug(self._logger, ("Getting values for configuration values " + 
+                                 "'{}'").format(config_lookup))
 
         for i, (group, key, *_) in enumerate(config_lookup):
             try:
@@ -297,7 +297,7 @@ class Controller:
 
         values = self.view.askFor(*input_params)
         log_debug(self._logger, "Asking vor values '{}' returned '{}'".format(
-                            input_params, values))
+                                input_params, values))
         return values
             
     def _loadCameraAndMicroscope(self) -> bool:

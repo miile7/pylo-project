@@ -19,6 +19,15 @@ import re
 
 import pylo
 
+from pylotestlib import DummyView
+from pylotestlib import DummyConfiguration
+
+class DummyController(pylo.Controller):
+    def __init__(self, *args, **kwargs):
+        super().__init__(DummyView(), DummyConfiguration())
+        self.microscope = DummyMicroscope(self)
+        self.camera = DummyCamera(self)
+
 sleep_time = "random"
 def setSleepTime(time="random"):
     global sleep_time
@@ -110,7 +119,7 @@ class DummyMicroscope(pylo.MicroscopeInterface):
                  variable.min_value, variable.max_value, value)
             )
 
-        self.is_in_safe_state = False
+        # self.is_in_safe_state = False
         sleepRandomTime()
 
         # simulate small variance in real value in first or second digit after 
@@ -145,8 +154,8 @@ class DummyMicroscope(pylo.MicroscopeInterface):
         self.currently_setting_lorentz_mode = True
         sleepRandomTime()
 
-        if lorentz_mode:
-            self.is_in_safe_state = False
+        # if lorentz_mode:
+        #     self.is_in_safe_state = False
         
         self.is_in_lorentz_mode = lorentz_mode
         self.currently_setting_lorentz_mode = False
@@ -180,9 +189,9 @@ class DummyCamera(pylo.CameraInterface):
         
         self.is_in_safe_state = True
     
-    def recordImage(self, *args):
+    def recordImage(self, *args, **kwargs):
         self.currently_recording_image = True
-        self.is_in_safe_state = False
+        # self.is_in_safe_state = False
         size = len(self.microscope.supported_measurement_variables) + 1
         # create grayscale image
         image_data = np.zeros((size, max(2, size)), dtype=np.uint8)
@@ -221,41 +230,6 @@ class DummyCamera(pylo.CameraInterface):
         self.currently_recording_image = False
 
         return pylo.Image(image_data, tags)
-
-class DummyConfiguration(pylo.AbstractConfiguration):
-    def __init__(self):
-        super().__init__()
-    
-    def loadConfiguration(self):
-        pass
-    
-    def saveConfiguration(self):
-        pass
-
-class DummyController(pylo.Controller):
-    def __init__(self):
-        self.microscope = DummyMicroscope(self)
-        self.camera = DummyCamera(self)
-        self.configuration = DummyConfiguration()
-        self.view = DummyView()
-
-class DummyView(pylo.AbstractView):
-    def askFor(self, *args, **kwargs):
-        print(args, kwargs)
-        assert False
-        return ["DEFAULT_ASK_FOR_ANSWER"] * len(args)
-    
-    def showError(self, error, how_to_fix):
-        if isinstance(error, Exception):
-            raise error
-        else:
-            raise Exception(error)
-    
-    def _updateRunning(self):
-        pass
-
-    def print(self, *inputs, sep=" ", end="\n", inset=""):
-        print(*inputs, sep=sep, end=end)
 
 def remove_dirs(directories=None):
     """Remove all given directories recursively with files inside."""
@@ -368,13 +342,11 @@ class PerformedMeasurement:
         self.name_test_format = ["{counter}"]
         # add all measurement variables
         for var in self.controller.microscope.supported_measurement_variables:
-            self.name_test_format.append("{variables[" + var.unique_id + "]}")
+            # self.name_test_format.append("{{varname[{v}]}}".format(v=var.unique_id))
+            self.name_test_format.append("{{step[{v}]}}".format(v=var.unique_id))
         # add all tags
         for key in self.measurement.tags:
             self.name_test_format.append("{tags[" + key + "]}")
-        # add some static/assumable image tags
-        self.name_test_format.append("{imgtags[image-count]}")
-        self.name_test_format.append("{imgtags[camera]}")
         # add time
         self.name_test_format.append("{time:%Y%m%d%H%M,%S}")
         # convert to string
@@ -707,14 +679,15 @@ class TestMeasurement:
                 assert ("{}".format(performed_measurement.measurement.tags[key]) 
                         in check_tags)
             
-            # check some image tags
-            s = e
-            e += 2
-            check_imgtags = name[s:e]
-            # check the image counter, it should be equal to the step counter
-            assert "{}".format(i) in check_imgtags
-            # check the camera name
-            assert "{}".format(dummy_camera_name) in check_imgtags
+            # image tags are not supported anymore
+            # # check some image tags
+            # s = e
+            # e += 2
+            # check_imgtags = name[s:e]
+            # # check the image counter, it should be equal to the step counter
+            # assert "{}".format(i) in check_imgtags
+            # # check the camera name
+            # assert "{}".format(dummy_camera_name) in check_imgtags
 
             # test time
             s = e
@@ -749,15 +722,15 @@ class TestMeasurement:
     @pytest.mark.usefixtures("performed_measurement")
     def test_log_created(self, performed_measurement):
         """Test if there is a log created."""
-        assert os.path.exists(performed_measurement.measurement._log_path)
-        assert os.path.isfile(performed_measurement.measurement._log_path)
+        assert os.path.exists(performed_measurement.measurement._measurement_log_path)
+        assert os.path.isfile(performed_measurement.measurement._measurement_log_path)
     
     @pytest.mark.slow()
     @pytest.mark.usefixtures("performed_measurement")
     def test_log_row_count_is_correct(self, performed_measurement):
         """Test if there is a log has the correct number of rows."""
         
-        with open(performed_measurement.measurement._log_path) as f:
+        with open(performed_measurement.measurement._measurement_log_path) as f:
             line_num = sum([1 if line != "" else 0 for line in f])
 
             # for each step one log before and one after, then plus one for the 
@@ -774,7 +747,7 @@ class TestMeasurement:
         #     print(row)
         # assert False
         
-        with open(performed_measurement.measurement._log_path) as f:
+        with open(performed_measurement.measurement._measurement_log_path) as f:
             reader = csv.reader(f)
             
             column_order = {}
@@ -1118,8 +1091,9 @@ class TestMeasurement:
         # stop the measurement
         stop_callable(performed_measurement, operation_time)
 
-        # event is only triggered once
-        assert len(self.after_stop_times) == 1
+        # event is triggered after stop, if blocked function is called, the 
+        # event may be called a second time
+        assert len(self.after_stop_times) >= 1
         # event is triggered immediately after the stop call
         assert math.isclose(self.after_stop_times[0], time.time(), rel_tol=0,
                             abs_tol=0.01)

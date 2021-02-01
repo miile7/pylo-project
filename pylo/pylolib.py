@@ -95,20 +95,30 @@ def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
         else:
             try:
                 value = float(value)
+                error_context = None
+            except ValueError as e:
+                error_context = e
 
+            if isinstance(value, float):
                 # prevent issues with float rounding
                 if math.isclose(value, 1):
                     value = True
-                else:
+                elif math.isclose(value, 0):
                     value = False
-            except ValueError as e:
-                if not suppress_errors:
-                    raise ValueError(("Please use {} to indicate a true " + 
-                                    "boolean, use {} to represent false " + 
-                                    "(case insensitive)").format(
-                                        human_concat_list(true_vals + [1]),
-                                        human_concat_list(false_vals + [0]),
-                                    )) from e
+            
+            if not isinstance(value, bool) and not suppress_errors:
+                err = ValueError(("'{}' is not supported for a boolean. " + 
+                                  "Please use {} to indicate a true " + 
+                                  "boolean, use {} to represent false " + 
+                                  "(case insensitive)").format(value,
+                                    human_concat_list(true_vals + [1]),
+                                    human_concat_list(false_vals + [0]),
+                                ))
+                
+                if isinstance(error_context, Exception):
+                    raise err from error_context
+                else:
+                    raise err
     
     if isinstance(datatype, (type, Datatype)):
         try:
@@ -284,6 +294,22 @@ def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'",
         return ""
     else:
         return surround * 2
+
+class _ExpandVarsDefaultValue:
+    """The default value for the `pylolib.expand_vars()` function if keys do 
+    not exist"""
+    
+    def __str__(self):
+        return ""
+    
+    def __getattr__(self, name):
+        return self
+    
+    def __getitem__(self, name):
+        return self
+    
+    def __contains__(self, name):
+        return True
     
 def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
                 step: typing.Optional[dict]=None, 
@@ -355,6 +381,8 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
 
     if isinstance(series, dict):
         series_nests = list(MeasurementSteps.getSeriesNests(series))
+    else:
+        series_nests = None
 
     format_kwargs = kwargs
 
@@ -393,25 +421,26 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
                 format_kwargs["humanstart"][var.unique_id] = human_value(
                     var, start[var.unique_id])
         
-        for nest in series_nests:
-            if ("variable" in nest and "start" in nest and "end" in nest and 
-                "step-width" in nest):
-                try:
-                    var = controller.microscope.getMeasurementVariableById(
-                        nest["variable"])
-                    if var.has_calibration and var.calibrated_name is not None:
-                        name = str(var.calibrated_name)
-                    else:
-                        name = str(var.name)
-                    
-                    format_kwargs["humanseries"].append({
-                        "variable": name,
-                        "start": human_value(var, nest["start"]),
-                        "end": human_value(var, nest["end"]),
-                        "step-width": human_value(var, nest["step-width"]),
-                    })
-                except KeyError:
-                    pass 
+        if isinstance(series_nests, (list, tuple)):
+            for nest in series_nests:
+                if ("variable" in nest and "start" in nest and "end" in nest and 
+                    "step-width" in nest):
+                    try:
+                        var = controller.microscope.getMeasurementVariableById(
+                            nest["variable"])
+                        if var.has_calibration and var.calibrated_name is not None:
+                            name = str(var.calibrated_name)
+                        else:
+                            name = str(var.name)
+                        
+                        format_kwargs["humanseries"].append({
+                            "variable": name,
+                            "start": human_value(var, nest["start"]),
+                            "end": human_value(var, nest["end"]),
+                            "step-width": human_value(var, nest["step-width"]),
+                        })
+                    except KeyError:
+                        pass 
 
     if tags is not None:
         format_kwargs["tags"] = tags
@@ -428,7 +457,7 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
         name = []
         for modifier, t in groups:
             if modifier == "_":
-                t = t.format_map(defaultdict(str, **format_kwargs))
+                t = t.format_map(defaultdict(_ExpandVarsDefaultValue, **format_kwargs))
             else:
                 try:
                     t = t.format(**format_kwargs)
