@@ -85,7 +85,7 @@ class DummyCamera(pylo.CameraInterface):
         self.init_time = time.time()
         self.recorded_images = []
     
-    def recordImage(self, *args):
+    def recordImage(self, *args, **kwargs):
         self.recorded_images.append(time.time())
         img_data = (np.random.rand(5, 5) * 255).astype(dtype=np.uint8)
         args = (img_data, {"dummy-tag": True})
