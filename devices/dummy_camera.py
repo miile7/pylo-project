@@ -68,7 +68,7 @@ class DummyCamera(CameraInterface):
     def resetToSafeState(self) -> None:
         pass
 
-class DummyImage(pylo.Image):
+class DummyImage(Image):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     

@@ -217,16 +217,24 @@ class Measurement:
         # the index in the steps that is currently being measured
         self._step_index = -1
     
-    def formatName(self) -> str:
+    def formatName(self, name_format: typing.Optional[str]=None) -> str:
         """Return the name for the current measurement step
+
+        Parameters
+        ----------
+        name_format : str, optional
+            The name to use, if not given the `Measurement.name_format` is used
         
         Returns
         -------
         str
             The formatted file name for the current measurement step
         """
+
+        if not isinstance(name_format, str):
+            name_format = self.name_format
         
-        name, *_ = expand_vars(self.name_format, controller=self.controller, 
+        name, *_ = expand_vars(name_format, controller=self.controller, 
                                step=self.steps[self._step_index], 
                                start=self.series_start, 
                                series=self.series_definition, 
