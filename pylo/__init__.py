@@ -2,6 +2,14 @@
 
 This provides both, the GUI and the backend for measuring. Multiple GUIs are 
 offered together with various cameras and TEM implementations.
+
+Attributes
+----------
+loader : pylo.DeviceLoader
+    The loader instance to use to load devices
+GMS : bool
+    Whether pylo is executed inside GMS or not (if the DigitalMicrograph module
+    could be loaded or not)
 """
 
 import logging
@@ -81,13 +89,16 @@ from .microscope_interface import MicroscopeInterface
 from .abstract_configuration import AbstractConfiguration
 
 try:
+    from . import pylodmlib
     from .dm_view import DMView
     from .dm_image import DMImage
     from .dm_configuration import DMConfiguration
+    GMS = False
 except ExecutionOutsideEnvironmentError:
     DMView = None
     DMImage = None
     DMConfiguration = None
+    GMS = True
 
 import os
 import typing
@@ -220,3 +231,82 @@ def execute(view: AbstractView, configuration: AbstractConfiguration) -> Control
     controller.waitForProgram()
 
     return controller
+
+def getDeviceText(additional_paths: typing.Optional[typing.Iterable]=None,
+                  additional_device_files: typing.Optional[typing.Iterable]=None) -> str:
+    """Get the device information text.
+
+    The returned string contains all the directories where `devices.ini` files 
+    can be placed in plus the `devices.ini` files that are loaded.
+
+    Parameters
+    ----------
+    additional_paths : iterable
+        Additional paths to show where device files can be
+    additional_device_files : iterable
+        Additional paths of `devices.ini` files
+
+    Returns
+    -------
+    str
+        The device files
+    """
+
+    try:
+        additional_paths = set(additional_paths)
+    except TypeError:
+        additional_paths = set()
+
+    try:
+        additional_device_files = set(additional_device_files)
+    except TypeError:
+        additional_device_files = set()
+
+    from .config import PROGRAM_DATA_DIRECTORIES
+    global loader
+
+    text = ["Device directories",
+            "==================",
+            "In the following directories `devices.ini` files can be placed:"
+            ""]
+    text += ["- {}".format(p) for p in PROGRAM_DATA_DIRECTORIES | additional_paths]
+
+    text += ["",
+            "Registered device files",
+            "=======================",
+            "The following `devices.ini` files are used when the program runs:"
+            ""]
+    text += ["- {}".format(p) for p in loader.device_ini_files | additional_device_files]
+    
+    return "\n".join(text)
+
+if __name__ == "__main__":
+    import argparse
+
+    from .config import PROGRAM_NAME
+
+    parser = argparse.ArgumentParser(PROGRAM_NAME, 
+                                     description="Record lorentz-TEM images")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-s", "--settings", description="Show the settings", 
+                       action="store_true")
+    group.add_argument("-d", "--devices", 
+                       description="Show the directories and the device.ini files",
+                       action="store_true")
+    group.add_argument("-r", "--reset", description="Reset the settings", 
+                       action="store_true")
+
+    program_args = parser.parse_args()
+
+    view = CLIView()
+    configuration = IniConfiguration()
+
+    if program_args.settings:
+        view.showSettings(configuration)
+    elif program_args.devices:
+        view.showHint(getDeviceText())
+    elif program_args.reset:
+        configuration.reset()
+    else:
+        # execute pylo if it is run as a program
+        execute(view, configuration)

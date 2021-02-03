@@ -298,7 +298,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def showHint(self, hint : str) -> None:
+    def showHint(self, hint : str, **kwargs) -> None:
         """Show the user a hint.
 
         Raises

@@ -43,6 +43,9 @@ class AbstractConfiguration:
         dict contains the key, the value is another dict with the "value", the
         "datatype", the "default_value", the "ask_if_not_present" and the 
         "description" indices
+    protected_groups : list of str
+        A list with group names that are not deleted (by default) when the 
+        `AbstractConfiguration.reset()` function is called
     """
 
     def __init__(self) -> None:
@@ -54,6 +57,7 @@ class AbstractConfiguration:
         self.configuration = {}
         self.marked_states = {}
         self.loadConfiguration()
+        self.protected_groups = ["Private"]
     
     def _keyExists(self, group: str, key: str, configuration: typing.Optional[dict]=None) -> bool:
         """Get whether there is the key and the group.
@@ -797,6 +801,44 @@ class AbstractConfiguration:
                 # group is empty, delete it too
                 del self.configuration[group]
                 log_debug(self._logger, ("Removing group '{}'").format(group))
+    
+    def removeGroup(self, group: str) -> None:
+        """Remove the given `group` with all values.
+
+        If the `group` does not exist, nothing will happen.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        """
+
+        if group in self.configuration:
+            log_debug(self._logger, ("Removing group '{}' with all keys").format(group))
+            del self.configuration[group]
+    
+    def reset(self, reprieve_protected: typing.Optional[bool]=True,
+              save: typing.Optional[bool]=True) -> None:
+        """Reset the configuration to be empty again.
+        
+        Parameters
+        ----------
+        reprieve_protected : bool, optional
+            Whether to prevent deleting all groups that are listed in 
+            `AbstractConfiguration.protected_groups` (True) or not (False),
+            default: True
+        save : bool, optional
+            Whether to save the configuration after the reset, default: True
+        """
+        log_debug(self._logger, ("Resetting configuration").format())
+
+        groups = list(self.configuration.keys())
+        for group in groups:
+            if not reprieve_protected or group not in self.protected_groups:
+                self.removeGroup(group)
+        
+        if save:
+            self.saveConfiguration()
 
     def markState(self) -> int:
         """Mark the current state of the configuration.

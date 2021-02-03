@@ -106,10 +106,22 @@ DEFAULT_SAVE_DIRECTORY = os.path.join(DEFAULT_USER_DIRECTORY, "measurements", __
 
 __config_docs__("DEFAULT_SAVE_FILE_NAME",
 """The name to use for each file if the user does not change it
-Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4" 
-    (Needs DM-extension for the file extension, use .tif otherwise)
+Default: "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.tif"
 """)
-DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.dm4"
+DEFAULT_SAVE_FILE_NAME = "{counter}_{time:%Y-%m-%d_%H-%M-%S}_lorentz-measurement.tif"
+
+__config_docs__("DM_REPLACE_EXTENSION_WITH",
+"""If a string is given, the extension (including the dot) of the 
+`DEFAULT_SAVE_FILE_NAME` will be replaced with this value if PyLo is executed 
+in GMS. To prevent replacing use `False`.
+
+Note: If `DM_REPLACE_EXTENSION_WITH` does not have a leading dot, the image 
+file does not have an extension but this text will be appended to the name. If
+`DM_REPLACE_EXTENSION_WITH` is an empty string, the image will not have an
+extension at all.
+Default: ".dm4"
+""")
+DM_REPLACE_EXTENSION_WITH = ".dm4"
 
 __config_docs__("DEFAULT_LOG_PATH",
 """The default path to save the log to.
