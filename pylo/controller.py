@@ -22,6 +22,7 @@ from .datatype import Datatype
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
+from .pylolib import defineConfigurationOptions
 from .measurement import Measurement
 from .stop_program import StopProgram
 from .abstract_view import AbstractView
@@ -86,8 +87,7 @@ class Controller:
         self.view = view
         self.configuration = configuration
 
-        Controller.defineConfigurationOptions(self.configuration)
-        Measurement.defineConfigurationOptions(self.configuration)
+        defineConfigurationOptions(self.configuration)
 
         self.microscope = None
         self.camera = None

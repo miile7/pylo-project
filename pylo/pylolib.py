@@ -9,8 +9,10 @@ path_like : tuple
 """
 
 import os
+import sys
 import math
 import typing
+import inspect
 import logging
 import pathlib
 import datetime
@@ -19,6 +21,9 @@ from collections import defaultdict
 
 from .datatype import Datatype
 from .datatype import OptionDatatype
+from .logginglib import log_debug
+from .logginglib import log_error
+
 
 # allow to check if a variable is a path
 path_like = []
@@ -32,7 +37,8 @@ if hasattr(os, "PathLike"):
 
 path_like = tuple(path_like)
 
-def format_value(datatype: typing.Union[type, Datatype], value: typing.Any) -> str:
+def format_value(datatype: typing.Union[type, Datatype], value: typing.Any,
+                suppress_errors: typing.Optional[bool]=False) -> str:
     """Get the `value` correctly formatted as a string.
 
     Parameters
@@ -41,6 +47,9 @@ def format_value(datatype: typing.Union[type, Datatype], value: typing.Any) -> s
         The datatype
     value : any
         The value to format
+    suppress_errors : bool, optional
+        If True no errors will be shown, if the value is not parsable a default
+        value will be returned, default: False
     
     Returns
     -------
@@ -49,9 +58,13 @@ def format_value(datatype: typing.Union[type, Datatype], value: typing.Any) -> s
     """
 
     if isinstance(datatype, Datatype):
-        return datatype.format(value)
-    else:
-        return "{}".format(value)
+        try:
+            return datatype.format(value)
+        except ValueError as e:
+            if not suppress_errors:
+                raise e
+    
+    return "{}".format(value)
 
 def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
                 suppress_errors: typing.Optional[bool]=True) -> typing.Any:
@@ -614,3 +627,81 @@ def get_expand_vars_text(controller_given: typing.Optional[bool]=True,
                              "format for formatting.")
 
     return "Some placeholders can be used. " + (" ".join(placeholder_texts))
+
+def getDeviceText(additional_paths: typing.Optional[typing.Iterable]=None,
+                  additional_device_files: typing.Optional[typing.Iterable]=None) -> str:
+    """Get the device information text.
+
+    The returned string contains all the directories where `devices.ini` files 
+    can be placed in plus the `devices.ini` files that are loaded.
+
+    Parameters
+    ----------
+    additional_paths : iterable
+        Additional paths to show where device files can be
+    additional_device_files : iterable
+        Additional paths of `devices.ini` files
+
+    Returns
+    -------
+    str
+        The device files
+    """
+
+    try:
+        additional_paths = set(additional_paths)
+    except TypeError:
+        additional_paths = set()
+
+    try:
+        additional_device_files = set(additional_device_files)
+    except TypeError:
+        additional_device_files = set()
+
+    from . import loader
+    from .config import PROGRAM_DATA_DIRECTORIES
+
+    text = ["Device directories",
+            "==================",
+            "In the following directories `devices.ini` files can be placed:"
+            ""]
+    text += ["- {}".format(p) for p in PROGRAM_DATA_DIRECTORIES | additional_paths]
+
+    text += ["",
+            "Registered device files",
+            "=======================",
+            "The following `devices.ini` files are used when the program runs:"
+            ""]
+    text += ["- {}".format(p) for p in loader.device_ini_files | additional_device_files]
+    
+    return "\n".join(text)
+
+def defineConfigurationOptions(configuration: "AbstractConfiguration", *, 
+                               logger: typing.Optional[logging.Logger]=None) -> None:
+    """Adds the configuration option of all classes that are loaded inside
+    pylo (does NOT include the classes loaded via the loader)
+
+    Parameters
+    ----------
+    configuration : AbstractConfiguration
+        The configuration to load the definitions in
+    logger : typing.Logger
+        A logger to add debug logging information to
+    """
+    for name, _class in inspect.getmembers(sys.modules["pylo"], inspect.isclass):
+        # print(name, _class, "@pylolib.defineConfigurationOptions()")
+        if (hasattr(_class, "defineConfigurationOptions") and 
+            callable(_class.defineConfigurationOptions)):
+            # print("    has function", "@pylolib.defineConfigurationOptions()")
+            try:
+                # print("    executing function", "@pylolib.defineConfigurationOptions()")
+                _class.defineConfigurationOptions(configuration)
+                # print("    done", "@pylolib.defineConfigurationOptions()")
+                if logger is not None:
+                    log_debug(logger, ("Defining configuration options of " +   
+                                       "class {}").format(name))
+            except TypeError as e:
+                # print("    error", e, "@pylolib.defineConfigurationOptions()")
+                # arguemts
+                if logger is not None:
+                    log_error(logger, e, logging.DEBUG)
