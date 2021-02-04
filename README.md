@@ -1,7 +1,6 @@
 # PyLo
 
-A Python script for measuring magnetic domains, in particular Skyrmions, in the Lorentz 
-Mode with transmission electron microscopes. 
+PyLo is a Python module and program for recording Lorentz-TEM images.
 
 The software is written for the JEOL NeoArm F200 with Gatan Microscopy Suite as the 
 displaying software but can be extended to use any microscope. Also it comes with a 
@@ -16,30 +15,102 @@ PyLo is easily extended. It provides an Event system to hook in before or after 
 actions. It allows to use and change all settings at any time. Also it provides an easy to 
 use settings manager where plugins can add their settings which will be shown to the user 
 before every measurement run. Microscopes and cameras can be customized or replaced by 
-creating own classes that implement an interface. This way PyLo can deal with every 
-microscope and camera. 
+creating own classes that implement an interface. Those classes can be loaded dynamically.
+This way PyLo can deal with every microscope and camera without having to learn the whole
+program code. 
 
-With PyLo there come two different views, one only usable in Gatans Microscopy Suite, the 
-other one for using PyLo in the command line. Also here PyLo provides an easy to implement
-interface to create own views.
+## Installation
 
-## Dependencies
+### GMS (Internet connection required)
+
+For PyLo with the GMS integration, follow the instructions in the 
+[PyLo GMS Frontend](https://github.com/miile7/pylo-gms) repository.
+
+### Command line interface (Internet connection required)
+
+For the command line installation install Python (<https://www.python.org/>). 
+
+Then use 
+```cmd
+python -m pip install pylo
+```
+to install PyLo.
+
+After [installing the devices](#install-devices) (camera and microscope) you can start 
+PyLo by invoking
+```cmd
+python -m pylo
+```
+
+### Install devices
+
+> **TL;DR**: Download `devices/` directory and `devices.ini`, move to both files to
+> `%programfiles%\Gatan\Plugins\` for the GMS installation and to `%username%\pylo\`
+> for windows or to `~/pylo/` for Unix CLI installation.
+
+In PyLo the microscope and the camera (and potential other hardware machines) are called 
+"devices". Those are loaded on runtime and can be selected by the users. Devices are 
+defined in python standalone files that are not integrated in the PyLo source code. They 
+are installed by adding their definitions to the `devices.ini` file(s) which can be 
+located at various places.
+
+PyLo offers 3 cameras and 3 microscopes:
+1. Cameras
+  1. Digital Micrograph Camera: Any camara that can be used in Gatans Microscopy Suite (only
+    usable in GMS mode)
+  2. Dummy Camera: A camera that creates images filled with random pixel data (for testing)
+  3. PyJEM Camera: A camera using JEOLs `PyJEM` library (not well tested)
+2. Microscopes
+  1. Digital Micrograph Microscope: Any microscope that can be used in Gatans Microscopy
+     Suite (only usable in GMS mode)
+  2. Dummy Microscope: A microscope that has a focus measurement variable, an objectiv 
+     lens current variable and a pressure variable that can be modified, each change in 
+     one of those values does nothing (for testing)
+  3. PyJEM Microscope: A microscope using JEOLs `PyJEM` library (not well tested)
+To install those, download the `devices` directory and the `devices.ini` file. Move them 
+into one of the devices directories listed below. To prevent one device showing up, you 
+can either delete the python file or set the `disabled` value in the `devices.ini` to `No`.
+
+PyLo will look for `devices.ini` files in the following locations. If there are multiple 
+files, all of them are used. If there are multiple devices with the same name, the file
+found first is used (not the order below):
+1. The program data directory, Windows: `%username%\pylo\`, Unix: `~/pylo/`
+   (**recommended for CLI installation**, create if necessary)
+2. The current user directory, Windows: `%username%`, Unix: `~/`
+3. The current working directory (the directory PyLo is executed in)
+4. *GMS only:* GMS "plugin" directory, Windows: `%programfiles%\Gatan\Plugins`
+   (**recommended for GMS installation**, create if necessary)
+5. *GMS only:* GMS "application" directory, Windows: `%programfiles%\Gatan`
+
+### Manual installation (No Internet connection needed)
+
+To install PyLo manually [download this repository](/archive/master.zip) and extract it. 
+
+For executing PyLo in GMS, move the `pylo-master` directory to 
+`%programfiles\Gatan\Plugins`. Now open the `gms`. Follow the installation instructions
+from the [PyLo GMS Frontend](https://github.com/miile7/pylo-gms) installation but use the
+files from the `gms` directory.
+
+For the command line usage move the extracted `pylo-master` directory anywhere 
+(`%userdata%` recommended for Windows, `~` recommended for Unix). Open the command line,
+move to this directory and start pylo by invoking it as a module:
+
+**Windows**
+```cmd
+cd %userdata%\pylo-master\
+python -m pylo
+```
+
+**Unix**
+```bash
+cd ~/pylo-master
+python -m pylo
+```
+
+#### Dependencies
 
 PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
 
-- PyJEM by JEOL (needs the following packages, not installed by default)
-  - [httplib2](https://github.com/httplib2/httplib2) 
-    ([pip](https://pypi.org/project/httplib2/), 
-    [conda](https://anaconda.org/conda-forge/httplib2))
-  - [cv2 (OpenCV)](https://opencv.org/) 
-    ([pip](https://pypi.org/project/opencv-python/), 
-    [conda](https://anaconda.org/conda-forge/opencv))
-  - [matplolib](https://matplotlib.org/) 
-    ([pip](https://pypi.org/project/matplotlib/), 
-    [conda](https://anaconda.org/conda-forge/matplotlib))
-    - [sip](https://www.riverbankcomputing.com/software/sip/) 
-      ([pip](https://pypi.org/project/sip/),
-      [conda](https://anaconda.org/anaconda/sip))
 - [NumPy](https://numpy.org/) ([pip](https://pypi.org/project/numpy/), 
   [conda](https://anaconda.org/anaconda/numpy))
 - [PIL (Pillow)](https://python-pillow.org/) 
@@ -48,20 +119,4 @@ PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
 - [execdmscript](https://github.com/miile7/execdmscript)
   ([pip](https://pypi.org/project/execdmscript/))
 
-## Usage
-
-This chapter will come soon.
-
-To use PyLo from the start, download and execute the `cli_main.py` in the command line or 
-open Gatan Microscopy Suite (GMS) and execute the `dm_main.py` there. Note that PyLo 
-cannot be installed as a menu option at the moment (coming soon).
-
-## Internal structure
-
-### Class structure 
-
-<img src="docs/pylo-Page-1.svg" />
-
-### Program flow
-
-<img src="docs/pylo-Page-2.svg" />
+Note that the devices may need more libraries.

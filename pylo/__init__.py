@@ -2,6 +2,14 @@
 
 This provides both, the GUI and the backend for measuring. Multiple GUIs are 
 offered together with various cameras and TEM implementations.
+
+Attributes
+----------
+loader : pylo.DeviceLoader
+    The loader instance to use to load devices
+GMS : bool
+    Whether pylo is executed inside GMS or not (if the DigitalMicrograph module
+    could be loaded or not)
 """
 
 import logging
@@ -81,13 +89,16 @@ from .microscope_interface import MicroscopeInterface
 from .abstract_configuration import AbstractConfiguration
 
 try:
+    from . import pylodmlib
     from .dm_view import DMView
     from .dm_image import DMImage
     from .dm_configuration import DMConfiguration
+    GMS = False
 except ExecutionOutsideEnvironmentError:
     DMView = None
     DMImage = None
     DMConfiguration = None
+    GMS = True
 
 import os
 import typing

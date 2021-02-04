@@ -998,12 +998,12 @@ class CLIView(AbstractView):
                 if line["value"] is not None:
                     # none_val width is already counted in the beginning
                     value_widths.append(len(format_value(
-                        line["datatype"], line["value"]
+                        line["datatype"], line["value"], suppress_errors=True
                     )))
                 max_index += 1
-
+        
         # the label char width, +1 for the colon, +1 for the "required" asterix
-        label_width = max(label_widths) + 2
+        label_width = max(label_widths) + 2 if len(label_widths) > 0 else 2
         value_width = max(value_widths)
         
         if max_index > 0:
@@ -1029,16 +1029,20 @@ class CLIView(AbstractView):
                 conditions = ""
                 if "min_value" in line and "max_value" in line:
                     conditions = " {} <= val <= {}".format(
-                        format_value(line["datatype"], line["min_value"]),
-                        format_value(line["datatype"], line["max_value"])
+                        format_value(line["datatype"], line["min_value"], 
+                                     suppress_errors=True),
+                        format_value(line["datatype"], line["max_value"], 
+                                     suppress_errors=True)
                     )
                 elif "min_value" in line:
                     conditions = " >= {}".format(
-                        format_value(line["datatype"], line["min_value"])
+                        format_value(line["datatype"], line["min_value"], 
+                                     suppress_errors=True)
                     )
                 elif "max_value" in line:
                     conditions = " >= {}".format(
-                        format_value(line["datatype"], line["max_value"])
+                        format_value(line["datatype"], line["max_value"], 
+                                     suppress_errors=True)
                     )
                 
                 text_value = ""
@@ -1046,7 +1050,7 @@ class CLIView(AbstractView):
                     text_value = none_val
                 else:
                     text_value = format_value(
-                        line["datatype"], line["value"]
+                        line["datatype"], line["value"], suppress_errors=True
                     )
 
                 text = text.format(
