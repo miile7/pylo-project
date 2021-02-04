@@ -21,33 +21,32 @@ program code.
 
 ## Installation
 
-### GMS
+### GMS (Internet connection required)
 
-1. Download 
+For PyLo with the GMS integration, follow the instructions in the 
+[PyLo GMS Frontend](https://github.com/miile7/pylo-gms) repository.
 
-### Command line interface
+### Command line interface (Internet connection required)
 
-> **TL;DR**: Execute `python -m pip install pylo`, then [install devices](#install-devices)
+For the command line installation install Python (<https://www.python.org/>). 
 
-For the command line installation install Python (<https://www.python.org/>). Then use 
+Then use 
 ```cmd
 python -m pip install pylo
 ```
 to install PyLo.
 
-The next step is to install a microscope and a camera. You can use one of the pre-defined
-ones as described below in the [install devices](#install-devices) section. PyLo contains
-a PyJEM Microscope and PyJEM Camera supporting JEOLs `PyJEM` library. For testing you can 
-use the Dummy Microscope and Cameras. For all other microscope and cameras you will have 
-to implement your own device adapter.
-
-After installing the microscope and camera you can start the program by running 
-`python -m pylo`.
+After [installing the devices](#install-devices) (camera and microscope) you can start 
+PyLo by invoking
+```cmd
+python -m pylo
+```
 
 ### Install devices
 
-> **TL;DR**: Download `devices/` directory and `devices.ini`, move to `%username%\pylo\`
-> for windows, to `~/pylo/` for Unix
+> **TL;DR**: Download `devices/` directory and `devices.ini`, move to both files to
+> `%programfiles%\Gatan\Plugins\` for the GMS installation and to `%username%\pylo\`
+> for windows or to `~/pylo/` for Unix CLI installation.
 
 In PyLo the microscope and the camera (and potential other hardware machines) are called 
 "devices". Those are loaded on runtime and can be selected by the users. Devices are 
@@ -83,11 +82,31 @@ found first is used (not the order below):
    (**recommended for GMS installation**, create if necessary)
 5. *GMS only:* GMS "application" directory, Windows: `%programfiles%\Gatan`
 
-### Manual installation
+### Manual installation (No Internet connection needed)
 
-To install PyLo manually download this repository. For executing PyLo in GMS use either
-the `dm_main.s` or the `dm_main.py` (the former executes the latter). For executing PyLo
-in the command line, execute the `main.py`.
+To install PyLo manually [download this repository](/archive/master.zip) and extract it. 
+
+For executing PyLo in GMS, move the `pylo-master` directory to 
+`%programfiles\Gatan\Plugins`. Now open the `gms`. Follow the installation instructions
+from the [PyLo GMS Frontend](https://github.com/miile7/pylo-gms) installation but use the
+files from the `gms` directory.
+
+For the command line usage move the extracted `pylo-master` directory anywhere 
+(`%userdata%` recommended for Windows, `~` recommended for Unix). Open the command line,
+move to this directory and start pylo by invoking it as a module:
+
+**Windows**
+```cmd
+cd %userdata%\pylo-master\
+python -m pylo
+```
+
+**Unix**
+```bash
+cd ~/pylo-master
+python -m pylo
+```
+
 #### Dependencies
 
 PyLo is written with python 3.5.6+ (tested with 3.5.6 and 3.7.1).
