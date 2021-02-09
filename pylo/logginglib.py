@@ -151,6 +151,40 @@ def log_error(logger: logging.Logger, error: Exception,
 
 def log_debug(logger: logging.Logger, msg: str, *args,
               logging_level: typing.Optional[int]=logging.DEBUG, **kwargs) -> None:
+    """Log the given `msg` to the `logger` with the level `logging.DEBUG`. 
+
+    This is a shorthand for `log()`.
+
+    Parameters
+    ----------
+    logger : logging.Logger
+        The logger object
+    msg : str
+        The message to log
+    loggin_level : int, optional
+        The level to log for, default: logging.DEBUG
+    """
+    log(logger, logging_level, msg, *args, **kwargs)
+
+def log_info(logger: logging.Logger, msg: str, *args,
+             logging_level: typing.Optional[int]=logging.INFO, **kwargs) -> None:
+    """Log the given `msg` to the `logger` with the level `logging.INFO`. 
+
+    This is a shorthand for `log()`.
+
+    Parameters
+    ----------
+    logger : logging.Logger
+        The logger object
+    msg : str
+        The message to log
+    loggin_level : int, optional
+        The level to log for, default: logging.INFO
+    """
+    log(logger, logging_level, msg, *args, **kwargs)
+
+def log(logger: logging.Logger, logging_level: typing.Optional[int], msg: str, 
+        *args, **kwargs) -> None:
     """Log the given `msg` to the `logger` if logging is enabled.
 
     All `args` and `kwargs` will be passed to the `logger` instance. 
