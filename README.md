@@ -87,9 +87,10 @@ found first is used (not the order below):
 To install PyLo manually [download this repository](/archive/master.zip) and extract it. 
 
 For executing PyLo in GMS, move the `pylo-master` directory to 
-`%programfiles\Gatan\Plugins`. Now open the `gms`. Follow the installation instructions
-from the [PyLo GMS Frontend](https://github.com/miile7/pylo-gms) installation but use the
-files from the `gms` directory.
+`%programfiles\Gatan\Plugins`. Now open the `pylo-gms` directory. Follow the installation 
+instructions from the [PyLo GMS Frontend](https://github.com/miile7/pylo-gms) installation 
+but use the files from the `pylo-gms` directory instead of downloading files (the files to
+download are the files in the `pylo-gms` directory).
 
 For the command line usage move the extracted `pylo-master` directory anywhere 
 (`%userdata%` recommended for Windows, `~` recommended for Unix). Open the command line,
