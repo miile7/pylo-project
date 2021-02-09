@@ -11,6 +11,19 @@ from .logginglib import get_logger
 from .pylolib import get_datatype_human_text
 
 class MeasurementSteps(collections.abc.Sequence):
+    """A sequence containing all measurement steps.
+
+    Attributes
+    ----------
+    series : dict
+        The formatted series dict that is used to create the measurement steps
+    start : dict
+        The formatted start dict
+    series_variables : set
+        The variable ids of the variables that are modified at least one time
+        when performing all the steps
+    """
+
     def __init__(self, controller: "Controller", start: dict, series: dict):
         """Create the steps for the measurement by the given `start` conditions
         and the `series`.
@@ -69,6 +82,7 @@ class MeasurementSteps(collections.abc.Sequence):
 
         self._logger = get_logger(self, instance_args=(series, start))
         
+        self.series_variables = set()
         self.controller = controller
         self.series = self._formatSeries(controller, series)
         self.start = self._formatStart(controller, start, self.series)
@@ -196,6 +210,8 @@ class MeasurementSteps(collections.abc.Sequence):
                                 ))
                 log_error(self._logger, err)
                 raise err
+    
+        self.series_variables.add(series_variable.unique_id)
 
         if isinstance(series_path, (tuple, list)):
             series_path = list(series_path)

@@ -73,9 +73,10 @@ def get_additional_device_files() -> typing.Set[str]:
     additional_device_files = set()
 
     for d in get_additional_dirs():
-        ini_path = os.path.realpath(os.path.join(d, "devices.ini"))
-        if os.path.exists(ini_path) and os.path.isfile(ini_path):
-            # add the values to the ini loader
-            additional_device_files.add(ini_path)
+        for f in ("devices.ini", "plugins.ini"):
+            ini_path = os.path.realpath(os.path.join(d, f))
+            if os.path.exists(ini_path) and os.path.isfile(ini_path):
+                # add the values to the ini loader
+                additional_device_files.add(ini_path)
     
     return additional_device_files

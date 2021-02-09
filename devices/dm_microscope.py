@@ -162,7 +162,7 @@ class DMMicroscope(MicroscopeInterface):
         self.objective_lense_coarse_fine_stepwidth = self.controller.configuration.getValue(
             self.config_group_name, 
             "objective-lense-coarse-fine-stepwidth", datatype=Datatype.int,
-            fallback_default=None)
+            fallback_default=True, default_value=None)
         
         if (not isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) or 
             math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
