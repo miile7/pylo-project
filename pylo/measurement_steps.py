@@ -196,8 +196,10 @@ class MeasurementSteps(collections.abc.Sequence):
         
         # test if the start and end values are in the boundaries
         for index in ("start", "end"):
-            if (series[index] < series_variable.min_value or 
-                series[index] > series_variable.max_value):
+            if ((isinstance(series_variable.min_value, (int, float)) and 
+                 series[index] < series_variable.min_value) or 
+                (isinstance(series_variable.max_value, (int, float)) and
+                 series[index] > series_variable.max_value)):
                 err = ValueError(("The '{index}' index in the series{path} is " + 
                                   "out of bounds. The {index} has to be " + 
                                   "{min} <= {index} <= {max} but it is " + 
@@ -309,8 +311,10 @@ class MeasurementSteps(collections.abc.Sequence):
                                      type(start[var.unique_id])))
                 log_error(self._logger, err)
                 raise err
-            elif (start[var.unique_id] < var.min_value or 
-                  start[var.unique_id] > var.max_value):
+            elif ((isinstance(var.min_value, (int, float)) and 
+                   start[var.unique_id] < var.min_value) or 
+                  (isinstance(var.max_value, (int, float)) and
+                   start[var.unique_id] > var.max_value)):
                 err = ValueError(("The '{index}' index in the start " + 
                                   "conditions is out of bounds. The {index} " + 
                                   "has to be {min} <= {index} <= {max} but " + 

@@ -303,6 +303,9 @@ class MeasurementVariable:
             there is no calibration or None if the `value` is None
         """
 
+        if not isinstance(value, (int, float)):
+            return value
+
         if self.has_calibration:
             return self.convertToCalibrated(value)
         else:
@@ -323,6 +326,9 @@ class MeasurementVariable:
             The uncalibrated value if there is a calibration or the `value` if 
             there is no calibration or None if the `value` is None
         """
+
+        if not isinstance(value, (int, float)):
+            return value
 
         if self.has_calibration:
             return self.convertToUncalibrated(value)

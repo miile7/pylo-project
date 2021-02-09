@@ -233,13 +233,20 @@ class Controller:
             for i, (group, key) in enumerate(input_params):
                 self.configuration.setValue(group, key, input_vals[i])
         
-    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Sequence]]) -> tuple:
+    def askForConfigValues(self, *values: typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Sequence]],
+                           **kwargs) -> tuple:
         """Ask for the configuration values.
 
         Execute the `AbstractView::askFor()` function on each entry of the 
         `values` list. The `values` list contains the configuration group
         at index 0 and the key at index 1. This function will try to get 
-        the description and datatype.
+        the description and datatype:
+
+        ```python
+        v1, v2 = controller.askForConfigValues(("group-1-name", "key-1-name"), 
+                                               ("group-2-name", "key-2-name", 
+                                                    ["option 1", "option 2"]))
+        ```
 
         Parameters
         ----------
@@ -247,6 +254,10 @@ class Controller:
             A list of tuples with the configuration group name at index 0 
             and the configuration key name at index 1 of each tuple, the 
             optional index 2 can contain a list of options
+        
+        Keyword Arguments
+        -----------------
+        The kwargs are directly passed to the `AbstractView.askFor()` function
         
         Returns
         -------
@@ -298,7 +309,7 @@ class Controller:
             
             input_params.append(input_param)
 
-        values = self.view.askFor(*input_params)
+        values = self.view.askFor(*input_params, **kwargs)
         log_debug(self._logger, "Asking vor values '{}' returned '{}'".format(
                                 input_params, values))
         return values

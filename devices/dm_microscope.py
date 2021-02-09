@@ -367,6 +367,26 @@ class DMMicroscope(MicroscopeInterface):
             # just to be extra sure
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
+        
+        variable = self.registerMeasurementVariable(
+            MeasurementVariable(
+                "stage-x", 
+                "Stage x position", 
+                unit="um",
+                # unit="µm",
+            ),
+            self._getStageX, self._setStageX
+        )
+
+        variable = self.registerMeasurementVariable(
+            MeasurementVariable(
+                "stage-y", 
+                "Stage y position", 
+                unit="um",
+                # unit="µm",
+            ),
+            self._getStageY, self._setStageY
+        )
 
         from pylo.config import OFFLINE_MODE
 
@@ -702,6 +722,81 @@ class DMMicroscope(MicroscopeInterface):
         # block until the value is reached
         self._waitForVariableValue("om-current", 
                                    self._getObjectiveMiniLensCurrent, value)
+    
+    def _getObjectiveMiniLensCurrent(self) -> int:
+        """Get the objective mini lens current.
+        
+        The value is equal to the 'hex' value for the lens current but as an 
+        integer. This also only works in LowMAG mode sice this uses the 
+        `DigitalMicrograph.Py_Microscope.SetFocus()` which is directed to the 
+        mini lens only in LowMAG mode.
+
+        Raises
+        ------
+        RuntimeError
+            When the microscope is not in the LowMag mode.
+
+        Returns
+        -------
+        int
+            The focus
+        """
+        if not self.getInLorentzMode():
+            err = RuntimeError("The objective mini lens current (and " + 
+                               "therefore the focus) can only beused if the " + 
+                               "microscope is in the LowMAG mode. But the " + 
+                               "microscope is not in the LowMag mode.")
+            logginglib.log_error(self._logger, err)
+            raise err
+        
+        return int(self.dm_microscope.GetFocus())
+        # return self.dm_microscope.GetCalibratedFocus()
+    
+    def _setStageX(self, value: float) -> None:
+        """Set the stage x position in µm.
+
+        Parameters
+        ----------
+        value : float
+            The stage x position in µm
+        """
+        self.dm_microscope.SetStageX(value)
+        
+        # block until the value is reached
+        self._waitForVariableValue("stage-x", self._getStageX, value)
+    
+    def _getStageX(self) -> None:
+        """Get the stage x position in µm.
+
+        Returns
+        ----------
+        float
+            The stage y position in µm
+        """
+        return float(self.dm_microscope.GetStageX())
+    
+    def _setStageY(self, value: float) -> None:
+        """Set the stage y position in µm.
+
+        Parameters
+        ----------
+        value : float
+            The stage y position in µm
+        """
+        self.dm_microscope.SetStageY(value)
+        
+        # block until the value is reached
+        self._waitForVariableValue("stage-y", self._getStageY, value)
+    
+    def _getStageY(self) -> None:
+        """Get the stage y position in µm.
+
+        Returns
+        ----------
+        float
+            The stage y position in µm
+        """
+        return float(self.dm_microscope.GetStageY())
     
     def _getObjectiveMiniLensCurrent(self) -> int:
         """Get the objective mini lens current.

@@ -550,23 +550,29 @@ class AbstractView:
                                             v.unique_id))
                     return None, errors
                 elif v.default_start_value is not None:
-                    start[v.unique_id] = min(max(v.min_value, v.default_start_value), 
-                                             v.max_value)
+                    start[v.unique_id] =  v.default_start_value
                 else:
-                    start[v.unique_id] = min(max(0, v.min_value), v.max_value)
+                    start[v.unique_id] = 0
+                
+                if isinstance(v.min_value, (int, float)):
+                    start[v.unique_id] = max(start[v.unique_id], v.min_value)
+                if isinstance(v.max_value, (int, float)):
+                    start[v.unique_id] = min(start[v.unique_id], v.max_value)
             else:
                 if uncalibrate:
                     start[v.unique_id] = v.ensureUncalibratedValue(
                         start[v.unique_id]
                     )
                 
-                if start[v.unique_id] > v.max_value:
+                if (isinstance(v.max_value, (int, float)) and 
+                    start[v.unique_id] > v.max_value):
                     errors.append(("The start value '{}' for '{}' is gerater " + 
                                 "than the maximum value {}.").format(
                                     v.unique_id, start[v.unique_id], v.max_value
                                 ))
                     start[v.unique_id] = v.max_value
-                elif start[v.unique_id] < v.min_value:
+                elif (isinstance(v.min_value, (int, float)) and 
+                      start[v.unique_id] < v.min_value):
                     errors.append(("The start value '{}' for '{}' is less " + 
                                 "than the minimum value {}.").format(
                                     v.unique_id, start[v.unique_id], v.min_value
@@ -689,11 +695,8 @@ class AbstractView:
         
         if var.default_step_width_value is not None:
             keys["step-width"] = var.default_step_width_value 
-        elif (isinstance(var.max_value, (int, float)) and 
-              isinstance(var.min_value, (int, float))):
-            keys["step-width"] = round((var.max_value - var.max_value) / 10, 2)
         else:
-            keys["step-width"] = 1
+            keys["step-width"] = round((keys["end"] - keys["start"]) / 10, 2)
 
         for k, d in keys.items():
             if k in series and parse:
@@ -717,13 +720,15 @@ class AbstractView:
                 if uncalibrate:
                     series[k] = var.ensureUncalibratedValue(series[k])
                 
-                if (k == "start" or k == "end") and series[k] < var.min_value:
+                if (isinstance(var.min_value, (int, float)) and 
+                    (k == "start" or k == "end") and series[k] < var.min_value):
                     series[k] = var.min_value
                     errors.append(("The series{} '{}' key is less than the " + 
                                 "minimum value of {}.").format(
                                     path_str, k, var.min_value
                                 ))
-                elif (k == "start" or k == "end") and series[k] > var.max_value:
+                elif (isinstance(var.max_value, (int, float)) and 
+                      (k == "start" or k == "end") and series[k] > var.max_value):
                     series[k] = var.max_value
                     errors.append(("The series{} '{}' key is greater than the " + 
                                 "maximum value of {}.").format(
