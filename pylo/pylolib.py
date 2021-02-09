@@ -329,7 +329,7 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
                 start: typing.Optional[dict]=None,
                 series: typing.Optional[dict]=None,
                 tags: typing.Optional[dict]=None, 
-                counter: typing.Optional[int]=None, **kwargs) -> str:
+                counter: typing.Optional[int]=None, **kwargs) -> typing.Sequence[str]:
     """Format the given text.
 
     The placeholders in the `text` are replaced with pythons format mini 
