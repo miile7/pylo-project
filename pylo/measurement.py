@@ -13,6 +13,7 @@ from collections import defaultdict
 from .events import emergency
 from .events import after_stop
 from .events import microscope_ready
+from .events import before_approach
 from .events import before_record
 from .events import after_record
 from .events import measurement_ready
@@ -20,12 +21,14 @@ from .events import measurement_ready
 from .errors import BlockedFunctionError
 
 from .image import Image
+from .logginglib import log_info
 from .logginglib import log_debug
 from .logginglib import log_error
 from .datatype import Datatype
 from .logginglib import get_logger
 from .log_thread import LogThread
 from .pylolib import expand_vars
+from .pylolib import human_concat_list
 from .pylolib import get_expand_vars_text
 from .stop_program import StopProgram
 from .exception_thread import ExceptionThread
@@ -270,9 +273,11 @@ class Measurement:
         microscope_ready
             Fired when the microscope is in lorentz mode the measurement is 
             right about starting
+        before_approach
+            Fired before approaching the next measurement point
         before_record
-            Fired before setting the microscope to the the next measurement 
-            point
+            Fired after the measurements points values are reached but before
+            recording the image
         after_record
             Fired after setting the microscope to measurement point and 
             recording an image but before saving the image to the directory
@@ -357,9 +362,9 @@ class Measurement:
                 # check all thread exceptions
                 self.raiseThreadErrors()
                 
-                # fire event before recording
-                log_debug(self._logger, "Firing 'before_record' event")
-                before_record(self.controller)
+                # fire event before approaching
+                log_debug(self._logger, "Firing 'before_approach' event")
+                before_approach(self.controller)
 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 
@@ -424,7 +429,19 @@ class Measurement:
                 # check all thread exceptions
                 self.raiseThreadErrors(*measurement_variable_threads)
                 
+                info = "{{varname[{v}]}}: {{humanstep[{v}]}}{{varunit[{v}]}}"
+                info = human_concat_list(map(lambda v: info.format(v=v),
+                                             step.keys()), surround="",
+                                             word=" and ")
+                info, *_ = expand_vars(("Reached point {counter} with values " + 
+                                        info), controller=self.controller, 
+                                       step=step, counter=self._step_index)
+                log_info(self._logger, info)
                 self.controller.view.print("Done.", inset="  ")
+                
+                # fire event before recording
+                log_debug(self._logger, "Firing 'before_record' event")
+                before_record(self.controller)
                 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 

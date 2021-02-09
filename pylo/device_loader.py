@@ -232,9 +232,11 @@ class DeviceLoader:
         """
 
         devices = []
-        required_keys = {"kind": str, "file": str, "class": str}
-        optional_keys = {"description": str, "disabled": bool, 
+        needs_class = ("microscope", "camera")
+        required_keys = {"kind": str, "file": str}
+        optional_keys = {"description": str, "disabled": bool, "class": str,
                          "inherit-config-defaults-from": str}
+        synonyms = {"file_path": "file", "class_name": "class"}
 
         for ini_file in self.device_ini_files:
             with open(ini_file, "r") as f:
@@ -248,6 +250,11 @@ class DeviceLoader:
                         "config_defaults": {}
                     }
                     for key, value in config.items(name):
+                        config_key = key
+                        
+                        if key in synonyms:
+                            key = synonyms[key]
+                        
                         t = None
                         if key in required_keys:
                             t = required_keys[key]
@@ -265,15 +272,16 @@ class DeviceLoader:
                         if t == str:
                             dev[key] = value
                         elif t == int:
-                            dev[key] = config.getint(name, key)
+                            dev[key] = config.getint(name, config_key)
                         elif t == float:
-                            dev[key] = config.getfloat(name, key)
+                            dev[key] = config.getfloat(name, config_key)
                         elif t == bool:
-                            dev[key] = config.getboolean(name, key)
+                            dev[key] = config.getboolean(name, config_key)
 
                     # check if all required keys exist and the device is not 
                     # disabled
                     if (len(set(required_keys.keys()) - set(dev.keys())) == 0 and 
+                        (dev["kind"] not in needs_class or "class" in dev) and
                         ("disabled" not in dev or not dev["disabled"])):
                         devices.append(dev)
 
@@ -349,7 +357,7 @@ class DeviceLoader:
         if found_device is None:
             for device in self._device_class_files + self._getDeviceDefinitionsFromInis():
                 if ("name" in device and device["name"] == name and 
-                    ("class_name" in device or "class" in device) and 
+                    # ("class_name" in device or "class" in device) and 
                     ("file_path" in device or "file" in device)):
                     if "class" in device:
                         if "class_name" not in device:
@@ -393,8 +401,8 @@ class DeviceLoader:
         
         return found_device
     
-    def getDeviceClassFile(self, name: str, 
-                           find_object_file: typing.Optional[bool]=False) -> typing.Union[str, None]:
+    def getDeviceFile(self, name: str, 
+                      find_object_file: typing.Optional[bool]=False) -> typing.Union[str, None]:
         """Get the absolute file path of the file where the device object for 
         the given `name` is defined in.
 
@@ -468,10 +476,54 @@ class DeviceLoader:
                                     "file device").format(class_, name))
             return class_
     
+    def importPlugins(self, controller: typing.Optional["Controller"]=None,
+                      *constructor_args: typing.Any, 
+                      **constructor_kwargs: typing.Any) -> None:
+        """Import all elements where the kind is plugin.
+
+        Raises
+        ------
+        DeviceImportError
+            When the file is not importable
+        DeviceClassNotDefined
+            When a class is loaded from the file and the module does not define 
+            the `class_name`
+        DeviceCreationError
+            When a class is loaded from the file and the `class_name` object 
+            could not be created
+        StopProgram
+            When the loaded code raises a `StopProgram` exception anywhere
+        
+        Parameters
+        ----------
+        name : str
+            The name of the device
+        controller : Controller, optional
+            The controller object to handle configuration options, 
+            default: None
+        constructor_args : any
+            The arguments that are passed to the construcor if the device is 
+            created and a `Device` object
+        constructor_kwargs : any
+            The keyword arguments that are passed to the constructor if the 
+            device is created and a `Device` object
+        """
+
+        log_debug(self._logger, "Importing plugins")
+        plugin_names = self.getInstalledDeviceNames("plugin")
+
+        log_debug(self._logger, "Found plugins '{}'".format(plugin_names))
+
+        for plugin in plugin_names:
+            log_debug(self._logger, "Loading plugin '{}'".format(plugin))
+
+            self.getDevice(plugin, controller, *constructor_args, 
+                           **constructor_kwargs)
+    
     def getDevice(self, name: str, 
                   controller: typing.Optional["Controller"]=None,
                   *constructor_args: typing.Any, 
-                  **constructor_kwargs: typing.Any) -> typing.Union["Device", object]:
+                  **constructor_kwargs: typing.Any) -> typing.Union["Device", "module", object, None]:
         """Get the device with the given `name`.
 
         If the `name` does not exist None is returned. The available device 
@@ -486,15 +538,15 @@ class DeviceLoader:
         Raises
         ------
         DeviceImportError
-            When class is loaded from the file and the file is not importable
+            When a class is loaded from the file and the file is not importable
         DeviceClassNotDefined
-            When class is loaded from the file and the module does not define 
+            When a class is loaded from the file and the module does not define 
             the `class_name`
         DeviceCreationError
-            When class is loaded from the file and the `class_name` object 
+            When a class is loaded from the file and the `class_name` object 
             could not be created
         StopProgram
-            When class is loaded from the file and the class raises a 
+            When a class is loaded from the file and the class raises a 
             `StopProgram` exception anywhere
         
         Parameters
@@ -506,16 +558,17 @@ class DeviceLoader:
             as the first parameter for microscopes and cameras, default: None
         constructor_args : any
             The arguments that are passed to the construcor if the device is 
-            created
+            created and a `Device` object
         constructor_kwargs : any
             The keyword arguments that are passed to the constructor if the 
-            device is created
+            device is created and a `Device` object
         
         Returns
         -------
         Device or object or None
             The device object if the defined device extends the Device class 
-            (should be the case but is not guaranteed) or the object or None if
+            (should be the case but is not guaranteed) or the object or the 
+            module if there is no class_name given for the device or None if
             no element with the `name` can be found
         """
 
@@ -542,54 +595,39 @@ class DeviceLoader:
                                     "object list").format(device, name))
 
             return device
-
-        return self._loadObject(device_definition, controller, *constructor_args,
-                                **constructor_kwargs)
+        if "class_name" in device_definition:
+            return self._loadObject(device_definition, controller, 
+                                    *constructor_args, **constructor_kwargs)
+        else:
+            return self._loadFile(device_definition)
     
-    def _loadClass(self, device: typing.Mapping, 
-                   controller: typing.Optional["Controller"]=None) -> typing.Tuple[type, str, typing.Union[typing.List[typing.Tuple[str, str]], None]]:
+    def _loadFile(self, device: typing.Mapping) -> "module":
         """
-        Load the class (not the object!) defined by the `device`.
+        Load the file defined by the `device`.
 
-        The device has to have a "file_path", "class_name" and "name" index 
-        where the first one contains the path to the file to import (either as 
-        a string or as a path), the middle one has to contain the class name as
-        a string and the last one the name to use for the device.
-        
-        If the `class_name` class has a `defineConfigurationOptions()` class 
-        method and the `controller` is given, the `defineConfigurationOptions()`
-        method will be executed with the controllers configuration object. Also
-        the `Controller.askIfNotPresentConfigurationOptions()` function will be 
-        executed to set all required configuration options if needed.
+        The device has to have a "file_path" and a "name" index.
 
         Raises
         ------
         DeviceImportError
             When the file is not importable
-        DeviceClassNotDefined
-            When the module does not define the `class_name`
         StopProgram
-            When the class raises a `StopProgram` exception anywhere
+            When the a StopProgram is raised anywhere
 
         Parameters
         ----------
         device : mapping
             The device definition with the file path at the "file_path" index, 
             the class name at "class_name" and the device name at "device"
-        controller : Controller, optional
-            The controller object to handle configuration options
         
         Returns
         -------
-        type, str, list of tuples or None
-            The class, the module name and the configuration groups and keys as 
-            a list of tuples or None if the `controller` is not given or the 
-            class does not define configuration keys
+        module
+            The module thatis loaded
         """
         
         name = device["name"]
         file_path = device["file_path"]
-        class_name = device["class_name"]
         
         file_path = os.path.realpath(os.path.expanduser(file_path))
         if os.path.isfile(file_path):
@@ -625,6 +663,55 @@ class DeviceLoader:
                                      module_name, e.__class__.__name__, str(e))).with_traceback(e.__traceback__)
             log_error(self._logger, err)
             raise err
+        
+        return module
+    
+    def _loadClass(self, device: typing.Mapping, 
+                   controller: typing.Optional["Controller"]=None) -> typing.Tuple[type, "module", typing.Union[typing.List[typing.Tuple[str, str]], None]]:
+        """
+        Load the class (not the object!) defined by the `device`.
+
+        The device has to have a "file_path", "class_name" and "name" index 
+        where the first one contains the path to the file to import (either as 
+        a string or as a path), the middle one has to contain the class name as
+        a string and the last one the name to use for the device.
+        
+        If the `class_name` class has a `defineConfigurationOptions()` class 
+        method and the `controller` is given, the `defineConfigurationOptions()`
+        method will be executed with the controllers configuration object. Also
+        the `Controller.askIfNotPresentConfigurationOptions()` function will be 
+        executed to set all required configuration options if needed.
+
+        Raises
+        ------
+        DeviceImportError
+            When the file is not importable
+        DeviceClassNotDefined
+            When the module does not define the `class_name`
+        StopProgram
+            When the class raises a `StopProgram` exception anywhere
+
+        Parameters
+        ----------
+        device : mapping
+            The device definition with the file path at the "file_path" index, 
+            the class name at "class_name" and the device name at "device"
+        controller : Controller, optional
+            The controller object to handle configuration options
+        
+        Returns
+        -------
+        type, module, list of tuples or None
+            The class, the module and the configuration groups and keys as 
+            a list of tuples or None if the `controller` is not given or the 
+            class does not define configuration keys
+        """
+        
+        name = device["name"]
+        file_path = device["file_path"]
+        class_name = device["class_name"]
+        
+        module = self._loadFile(device)
 
         # get the class
         try:
@@ -641,7 +728,7 @@ class DeviceLoader:
                                          "not be found in the module '{}'. " + 
                                          "Retrieving it raised a '{}' error " + 
                                          "with the message '{}'.").format(
-                                         name, class_name, module_name, 
+                                         name, class_name, module, 
                                          e.__class__.__name__, str(e))).with_traceback(e.__traceback__)
             log_error(self._logger, err)
             raise err
@@ -665,7 +752,7 @@ class DeviceLoader:
             # ask all non-existing but required configuration values
             controller.askIfNotPresentConfigurationOptions()
         
-        return class_, module_name, config_keys
+        return class_, module, config_keys
     
     def _loadObject(self, device: typing.Mapping, 
                     controller: typing.Optional["Controller"]=None,
@@ -728,7 +815,7 @@ class DeviceLoader:
         """
 
         log_debug(self._logger, "Trying to load object for device '{}'".format(device))
-        class_, module_name, config_keys = self._loadClass(device, controller)
+        class_, module, config_keys = self._loadClass(device, controller)
         
         # add the kwargs of the device if the class is a device
         if Device in class_.__mro__:
@@ -783,7 +870,7 @@ class DeviceLoader:
                                        "creating raised a '{}' error with " + 
                                        "the message '{}'.").format(
                                             class_.__name__, device["name"], 
-                                            module_name, e.__class__.__name__, 
+                                            module, e.__class__.__name__, 
                                             str(e))).with_traceback(e.__traceback__)
             log_error(self._logger, err)
             raise err

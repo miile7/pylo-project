@@ -14,7 +14,8 @@ class Device:
     Attributes
     ----------
     kind : str
-        The kind, at the moment "camera" and "microscope" are supported
+        The kind, at the moment "plugin", "camera" and "microscope" are 
+        supported
     name : str
         The name to show in the GUI and to use to load this device
     config_group_name : str
@@ -36,7 +37,8 @@ class Device:
         Parameters
         ----------
         kind : str
-            The kind, at the moment "camera" and "microscope" are supported
+            The kind, at the moment "plugin", "camera" and "microscope" are 
+            supported
         name : str, optional
             The name to show in the GUI and to use to load this device, if not 
             a str the class name of the `self` is used (which is the child 

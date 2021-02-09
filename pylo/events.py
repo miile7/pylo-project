@@ -49,9 +49,14 @@ __event_docs__("microscope_ready",
 starting. The current `controller` will be the first argument.""")
 microscope_ready = Event()
 
+__event_docs__("before_approach", 
+"""Fired before approaching the microscope to the the next measurement points 
+values. The current `controller` will be the first argument.""")
+before_approach = Event()
+
 __event_docs__("before_record", 
-"""Fired before setting the microscope to the the next measurement point. The 
-current `controller` will be the first argument.""")
+"""Fired after the measurement points values are reached but before recording 
+the image. The current `controller` will be the first argument.""")
 before_record = Event()
 
 __event_docs__("after_record", 

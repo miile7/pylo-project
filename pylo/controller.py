@@ -82,7 +82,7 @@ class Controller:
             Fired right after the function is called, nothing is set up
         """
 
-        before_start(self)
+        from . import loader
         
         self.view = view
         self.configuration = configuration
@@ -96,6 +96,9 @@ class Controller:
         self._measurement_thread = None
 
         self._logger = get_logger(self)
+
+        loader.importPlugins(self)
+        before_start(self)
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],
                                     save_if_not_exists: typing.Optional[bool]=True,
@@ -411,7 +414,7 @@ class Controller:
                     fix = ("Fix the error was raised during creation of " + 
                            "the '{}' object in the file '{}'. Fix the error " + 
                            "there, then the loading should work.").format(
-                            name, loader.getDeviceClassFile(name))
+                            name, loader.getDeviceFile(name))
                     log_error(self._logger, e)
                     self.view.showError(e, fix)
                 

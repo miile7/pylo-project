@@ -40,6 +40,7 @@ from .events import init_ready
 from .events import user_ready
 from .events import series_ready
 from .events import microscope_ready
+from .events import before_approach
 from .events import before_record
 from .events import after_record
 from .events import measurement_ready
@@ -125,11 +126,12 @@ def get_loader(*args, **kwargs) -> DeviceLoader:
 loader = get_loader()
 from .config import PROGRAM_DATA_DIRECTORIES
 for d in PROGRAM_DATA_DIRECTORIES:
-    p = os.path.join(d, "devices.ini")
-    if (os.path.exists(p) and os.path.isfile(p) and 
-        not p in loader.device_ini_files):
-        logginglib.log_debug(logger, "Adding ini file '{}' to loader".format(p))
-        loader.device_ini_files.add(p)
+    for f in ("devices.ini", "plugins.ini"):
+        p = os.path.join(d, f)
+        if (os.path.exists(p) and os.path.isfile(p) and 
+            not p in loader.device_ini_files):
+            logginglib.log_debug(logger, "Adding ini file '{}' to loader".format(p))
+            loader.device_ini_files.add(p)
 
 # controller = None
 def get_controller(view: AbstractView, configuration: AbstractConfiguration) -> Controller:
