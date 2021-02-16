@@ -26,7 +26,8 @@ before_init = Event()
 
 __event_docs__("init_ready", 
 """Fired when the view and the configuration are loaded but before everything 
-else. The current `controller` will be the first argument.""")
+else isn't and before the program dialogs are shown. The current `controller` 
+will be the first argument.""")
 init_ready = Event()
 
 __event_docs__("user_ready", 

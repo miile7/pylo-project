@@ -358,6 +358,12 @@ class CLIView(AbstractView):
             if s["variable"] in on_each_point_ids:
                 on_each_point_ids.remove(s["variable"])
 
+            if (isinstance(var.max_value, (int, float)) and 
+                isinstance(var.min_value, (int, float))):
+                step_width = var.max_value - var.min_value
+            else:
+                step_width = 1
+            
             series_inputs += [
                 {
                     "id": "series-{}-variable".format(depth),
@@ -382,7 +388,7 @@ class CLIView(AbstractView):
                     "label": "Step width",
                     "datatype": var.calibrated_format if var.has_calibration else var.format,
                     "min_value": var.ensureCalibratedValue(0),
-                    "max_value": var.ensureCalibratedValue(var.max_value - var.min_value),
+                    "max_value": var.ensureCalibratedValue(step_width),
                     "required": True,
                     "value": var.ensureCalibratedValue(s["step-width"]),
                     "inset": depth * "  "
@@ -1374,7 +1380,8 @@ class CLIView(AbstractView):
             val = parse_value(input_definition["datatype"], val, 
                               suppress_errors=False)
 
-            if "min_value" in input_definition:
+            if ("min_value" in input_definition and 
+                isinstance(input_definition["min_value"], (int, float))):
                 try:
                     if val < input_definition["min_value"]:
                         raise ValueError(("The value must be greater than " + 
@@ -1385,7 +1392,8 @@ class CLIView(AbstractView):
                     # < operator is not supported
                     pass
 
-            if "max_value" in input_definition:
+            if ("max_value" in input_definition and 
+                isinstance(input_definition["max_value"], (int, float))):
                 try:
                     if val > input_definition["max_value"]:
                         raise ValueError(("The value must be lesser than or " + 
