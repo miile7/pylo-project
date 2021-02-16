@@ -354,6 +354,7 @@ class PerformedMeasurement:
 
         # prepare event timers
         self.microscope_ready_time = []
+        self.before_approach_time = []
         self.before_record_time = []
         self.after_record_time = []
         self.measurement_ready_time = []
@@ -377,6 +378,7 @@ class PerformedMeasurement:
 
         # register events
         pylo.microscope_ready.append(self.microscope_ready_handler)
+        pylo.before_approach.append(self.before_approach_handler)
         pylo.before_record.append(self.before_record_handler)
         pylo.after_record.append(self.after_record_handler)
         pylo.measurement_ready.append(self.measurement_ready_handler)
@@ -433,6 +435,9 @@ class PerformedMeasurement:
     
     def microscope_ready_handler(self, *args):
         self.microscope_ready_time.append(time.time())
+    
+    def before_approach_handler(self, *args):
+        self.before_approach_time.append(time.time())
     
     def before_record_handler(self, *args):
         self.before_record_time.append(time.time())
@@ -1000,8 +1005,9 @@ class TestMeasurement:
 
         # check that the following events are executed
         assert len(performed_measurement.microscope_ready_time) > 0
-        assert len(performed_measurement.before_record_time) > 0
+        assert len(performed_measurement.before_approach_time) > 0
         # check that the following events are not executed
+        assert len(performed_measurement.before_record_time) == 0
         assert len(performed_measurement.after_record_time) == 0
         assert len(performed_measurement.measurement_ready_time) == 0
 
@@ -1096,7 +1102,7 @@ class TestMeasurement:
         assert len(self.after_stop_times) >= 1
         # event is triggered immediately after the stop call
         assert math.isclose(self.after_stop_times[0], time.time(), rel_tol=0,
-                            abs_tol=0.01)
+                            abs_tol=0.1)
 
         # wait until the thread is done
         thread.join()
