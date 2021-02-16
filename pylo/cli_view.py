@@ -19,6 +19,7 @@ from .datatype import OptionDatatype
 from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
+from .measurement_steps import MeasurementSteps
 
 class CLIView(AbstractView):
     """This class represents a very basic CLI view. It uses `print()` and 
@@ -203,10 +204,28 @@ class CLIView(AbstractView):
         measuremnt_vars_inputs = []
         errors = []
 
-        start, start_errors = self.parseStart(
+        if not isinstance(series, dict):
+            series = {}
+        if not isinstance(start, dict):
+            start = {}
+        
+        new_start = len(start) == 0
+        new_series = len(series) == 0
+
+        series, series_inputs, series_errors = self._parseSeriesInputs(
+            controller, series)
+        start, start_errors = MeasurementSteps.formatStart(
             controller.microscope.supported_measurement_variables, start, 
-            add_defaults=True, parse=False, uncalibrate=False
+            series, add_default_values=True, parse=False, uncalibrate=False
         )
+
+        if not new_start:
+            errors += map(str, start_errors)
+        if not new_series:
+            errors += map(str, series_errors)
+
+        self.error = "\n".join(errors)
+
         for id_ in start:
             v = controller.microscope.getMeasurementVariableById(id_)
             
@@ -228,15 +247,6 @@ class CLIView(AbstractView):
                 "required": True,
                 "value": v.ensureCalibratedValue(start[v.unique_id])
             })
-        
-        errors += start_errors
-        if not isinstance(series, dict):
-            series = {}
-        
-        series_inputs, series_errors = self._parseSeriesInputs(controller, series)
-        errors += series_errors
-
-        self.error = "\n".join(errors)
 
         values, command, changed = self._printSelect(
             "Define the start conditions",
@@ -296,15 +306,27 @@ class CLIView(AbstractView):
                         elif match.group(2) == "end":
                             s["end"] = v
         
+        if changed in variable_ids:
+            # start changed, force to change the start of the series too
+            s = series
+            while s is not None and s["variable"] != changed:
+                if "on-each-point" in s and isinstance(s["on-each-point"], dict):
+                    s = s["on-each-point"]
+                else:
+                    s = None
+            
+            if s is not None and "variable" in s and s["variable"] == changed:
+                s["start"] = start[changed]
+        
         # recalculate to uncalibrated values, do another validation because the
         # iteration is there anyway
-        start, _ = self.parseStart(
-            controller.microscope.supported_measurement_variables, start,
-            add_defaults=True, parse=False, uncalibrate=True
-        )
-        series, _ = self.parseSeries(
+        series, _ = MeasurementSteps.formatSeries(
             controller.microscope.supported_measurement_variables, series, 
-            add_defaults=True, parse=False, uncalibrate=True
+            add_default_values=True, parse=False, uncalibrate=True
+        )
+        start, _ = MeasurementSteps.formatStart(
+            controller.microscope.supported_measurement_variables, start,
+            series, add_default_values=True, parse=False, uncalibrate=True
         )
 
         if command == True:
@@ -334,17 +356,18 @@ class CLIView(AbstractView):
         
         Returns
         -------
-        list, list
-            The input list at index 0, the error message list at index 1
+        dict, list, list
+            The formatted series dict at index 0, input list at index 1, the 
+            error message list at index 2
         """
         
         series_inputs = []
-        series, errors = self.parseSeries(
+        series, errors = MeasurementSteps.formatSeries(
             controller.microscope.supported_measurement_variables, series, 
-            add_defaults=True, parse=False, uncalibrate=False
+            add_default_values=True, parse=False, uncalibrate=False
         )
         if series is None:
-            return series_inputs, errors
+            return series, series_inputs, errors
         
         variable_ids = [v.unique_id for v in
                         controller.microscope.supported_measurement_variables]
@@ -422,7 +445,7 @@ class CLIView(AbstractView):
             else:
                 break
         
-        return series_inputs, errors
+        return series, series_inputs, errors
 
     def showHint(self, hint : str) -> None:
         """Show the user a hint.
@@ -1380,8 +1403,7 @@ class CLIView(AbstractView):
             val = parse_value(input_definition["datatype"], val, 
                               suppress_errors=False)
 
-            if ("min_value" in input_definition and 
-                isinstance(input_definition["min_value"], (int, float))):
+            if "min_value" in input_definition:
                 try:
                     if val < input_definition["min_value"]:
                         raise ValueError(("The value must be greater than " + 
@@ -1392,8 +1414,7 @@ class CLIView(AbstractView):
                     # < operator is not supported
                     pass
 
-            if ("max_value" in input_definition and 
-                isinstance(input_definition["max_value"], (int, float))):
+            if "max_value" in input_definition:
                 try:
                     if val > input_definition["max_value"]:
                         raise ValueError(("The value must be lesser than or " + 

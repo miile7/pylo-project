@@ -22,6 +22,7 @@ from .stop_program import StopProgram
 from .abstract_view import AskInput
 from .abstract_view import AbstractView
 from .abstract_configuration import AbstractConfiguration
+from .measurement_steps import MeasurementSteps
 
 from .logginglib import do_log
 from .logginglib import log_debug
@@ -796,7 +797,7 @@ class DMView(AbstractView):
         return results[4]
     
     def _showDialog(self, 
-                    measurement_variables: typing.Optional[typing.Union[list, dict]]=None, 
+                    measurement_variables: typing.Optional[typing.List["MeasurementVariable"]]=None, 
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     ask_for_values: typing.Optional[typing.Sequence[AskInput]]=None,
                     ask_for_msg: typing.Optional[str]="",
@@ -832,21 +833,18 @@ class DMView(AbstractView):
                                 "converted to '{}' as a string value").format(
                                 dialog_type, dialog_startup))
         
-        if isinstance(measurement_variables, list):
-            m_vars = {}
-            for var in measurement_variables:
-                m_vars[var.unique_id] = var
-            measurement_variables = m_vars
+        if isinstance(measurement_variables, dict):
+            measurement_variables = list(measurement_variables.values())
 
         m_vars = []
         
         # add all measurement variables if there are some
-        if isinstance(measurement_variables, dict):
+        if isinstance(measurement_variables, list):
             var_keys = ("unique_id", "name", "unit", "min_value", "max_value",
                         "start", "end", "step")
             cal_keys = ("name", "unit")
             num_keys = ("start", "step", "end", "min_value", "max_value")
-            for var in measurement_variables.values():
+            for var in measurement_variables:
                 m_var = {}
 
                 for name in var_keys:
@@ -1038,29 +1036,31 @@ class DMView(AbstractView):
             except KeyError:
                 success = False
 
-            if isinstance(measurement_variables, dict):
-                try:
-                    start = script["start"]
-                except KeyError:
-                    start = None
-                
-                if start is not None:
-                    start, errors = self.parseStart(
-                        measurement_variables, start, add_defaults=False,
-                        parse=True, uncalibrate=True
-                    )
-
-            if isinstance(measurement_variables, dict):
+            if isinstance(measurement_variables, list):
                 try:
                     series = script["series"]
                 except KeyError:
                     series = None
                 
                 if series is not None:
-                    series, errors = self.parseSeries(
-                        measurement_variables, series, add_defaults=False,
-                        parse=True, uncalibrate=True
-                    )
+                    series = MeasurementSteps.formatSeries(
+                        measurement_variables, series, add_default_values=False,
+                        parse=True, uncalibrate=True)
+                else:
+                    series = None
+
+            if isinstance(measurement_variables, list):
+                try:
+                    start = script["start"]
+                except KeyError:
+                    start = None
+                
+                if start is not None and series is not None:
+                    start = MeasurementSteps.formatStart(
+                        measurement_variables, start, series, 
+                        add_default_values=False, parse=True, uncalibrate=True)
+                else:
+                    start = None
 
             try:
                 config = script["configuration"]
