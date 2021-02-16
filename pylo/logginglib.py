@@ -116,6 +116,9 @@ def do_log(logger: logging.Logger, log_level: int) -> bool:
     """
     global __do_log_cache
 
+    if not isinstance(logger, logging.Logger):
+        return False
+
     if logger.name not in __do_log_cache:
         __do_log_cache[logger.name] = {}
     
@@ -205,7 +208,7 @@ def log(logger: logging.Logger, logging_level: typing.Optional[int], msg: str,
     loggin_level : int, optional
         The level to log for, default: logging.DEBUG
     """
-    if do_log(logger, logging_level):
+    if isinstance(logger, logging.Logger) and do_log(logger, logging_level):
         logger.log(logging_level, msg, *args, **kwargs)
 
 def get_logger(obj: typing.Union[str, object], 

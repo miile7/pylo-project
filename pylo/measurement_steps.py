@@ -5,6 +5,8 @@ import logging
 import functools
 import collections.abc
 
+from .datatype import Datatype
+from .pylolib import parse_value
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
@@ -82,38 +84,59 @@ class MeasurementSteps(collections.abc.Sequence):
 
         self._logger = get_logger(self, instance_args=(series, start))
         
-        self.series_variables = set()
+        self.series_variables = []
         self.controller = controller
-        self.series = self._formatSeries(controller, series)
-        self.start = self._formatStart(controller, start, self.series)
+
+        self.series = MeasurementSteps.formatSeries(
+            controller.microscope.supported_measurement_variables, 
+            series, self.series_variables, add_default_values=False,
+            logger=self._logger)
+        self.series_variables = set(self.series_variables)
+
+        self.start = MeasurementSteps.formatStart(
+            controller.microscope.supported_measurement_variables, start, 
+            self.series, add_default_values=False, logger=self._logger)
 
         self._cached_len = None
         self._cached_nests = None
     
-    def _formatSeries(self, controller: "Controller", series: dict, 
-                      series_path: typing.Optional[list]=[]) -> dict:
+    @staticmethod
+    def formatSeries(measurement_variables: typing.Iterable["MeasurementVariable"], 
+                     series: dict, series_path: typing.Optional[list]=None,
+                     add_default_values: typing.Optional[bool]=False,
+                     parse: typing.Optional[bool]=False,
+                     uncalibrate: typing.Optional[bool]=False,
+                     default_values: typing.Optional[dict]=None,
+                     logger: typing.Optional[logging.Logger]=None) -> dict:
         """Format the given `series` to contain valid values only.
 
-        If an invalid value is found, an error will be raised.
+        If an invalid value is found and `add_default_values` is True, the 
+        error will be added to the returned error list and the value will be 
+        replaced with a default value.
+
+        If an invalid value is found and `add_default_values` is False, an 
+        Error is raised.
 
         Raises
         ------
         KeyError
             When the `series` is missing the one of the 'variable', 'start', 
-            'end' or 'step-width' indices
+            'end' or 'step-width' indices and `add_default_values` is False
         ValueError
             When the `series` 'start', 'step-width' or 'end' index contains 
             invalid values (e.g. values are out of the bounds the 
             `MeasurementVariable` defines or the 'step-width' is smaller or 
             equal to zero) or the 'on-each-point' contains a variable that is 
-            measured already (preventing recursive series)
+            measured already (preventing recursive series) and 
+            `add_default_values` is False
         TypeError
-            When one of the values has the wrong type
+            When one of the values has the wrong type and `add_default_values` 
+            is False
 
         Parameters
         ----------
-        controller : Controller
-            The controller for the measurement and the microscope
+        measurement_variables : iterable of MeasurementVariables
+            The measurement variables
         series : dict with str, and three or four times int or float
             A dict with the 'variable', 'start', 'step-width', 'end' and the 
             optional 'on-each-point' indices. The series iterate the 
@@ -122,31 +145,149 @@ class MeasurementSteps(collections.abc.Sequence):
             the 'step-width'. The 'on-each-point' can hold another series dict
             that defines another series that will be iterated over on each step
             the current series does.
-        series_path : tuple, optional
-            This is for internal use only. It holds the variable names of the 
-            parent series if the current parse series is in the 'on-each-point'
-            index of another series
+        series_path : list, optional
+            A list to which the variable names of the parent series are added 
+            if the current parse series is in the 'on-each-point' index of 
+            another series, if something else than a list is given, the value 
+            is ignored, only use this as a reference parameter, and only use 
+            empty lists, default: None
+        add_default_values : bool, optional
+            Whether to try adding default values until the series is valid 
+            (True) and return the errors to the list at index 1 or to raise 
+            the errors (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
+        default_values : dict, optional
+            The default values to use, the key must be the variable id, the 
+            values is another dict with the "start", "step-width" and "end" 
+            values containing the default values, if not given the 
+            measurement variables definitions are used, default: None
+        raise_errors : bool, optional
+            Whether to raise the errors and stop the execution on an error or 
+            to continue and return all errors, default: False
+        logger : logging.Logger, optional
+            The logger object to log to, if not given no logs are made
         
         Returns
         -------
-        dict
-            The valid `start` dict
+        (dict, list) or dict
+            A tuple with the valid `series` at index 0 and the error list at 
+            index 1 if `add_default_values` is True, otherwise the valid 
+            `series` dict at index 0
         """
 
-        log_debug(self._logger, "Formatting series '{}'".format(series))
+        log_debug(logger, "Formatting series '{}'".format(series))
+        errors = []
 
-        if isinstance(series_path, (list, tuple)):
+        if isinstance(series_path, list) and len(series_path) > 0:
             error_str = "".join([" in 'on-each-point' of {}".format(p) 
                                   for p in series_path])
         else:
-            series_path = []
+            if not isinstance(series_path, list):
+                series_path = []
             error_str = ""
+        
+        if not isinstance(series, dict):
+            try:
+                series = dict(series)
+            except TypeError:
+                err = ValueError(("The series{} '{}' is not a dict").format(
+                        error_str, series))
+                
+                if add_default_values:
+                    errors.append(err)
+                    series = {}
+                else:
+                    log_error(logger, err)
+                    raise err
+
+        series_variable = None
+        if "variable" in series:
+            for var in measurement_variables:
+                if var.unique_id == series["variable"]:
+                    series_variable = var
+                    break
+
+        if series_variable is None:
+            if "variable" not in series:
+                err = KeyError(("The series{} does not have a 'variable' " +
+                                "index").format(error_str))
+            else:
+                err = ValueError(("The series{} variable '{}' is not a " + 
+                                  "measurement variable.").format(error_str,
+                                    series["variable"]))
+
+            if add_default_values:
+                errors.append(err)
+                series_variable = None
+
+                for var in measurement_variables:
+                    if var.unique_id not in series_path:
+                        series_variable = var
+                        series["variable"] = var.unique_id
+                        break
+            else:
+                log_error(logger, err)
+                raise err
+        
+        # prevent recursive series, the series variable must not be in one of 
+        # the parent series (if there are parent series)
+        if series_variable.unique_id in series_path:
+            err = ValueError(("The variable '{}' in the series{} is " + 
+                              "already measured in one of the parent " +
+                              "series.").format(series_variable.unique_id, 
+                                                error_str))
+
+            if add_default_values:
+                errors.append(err)
+                return None, errors
+            else:
+                log_error(logger, err)
+                raise err
+        
+        if not isinstance(default_values, dict):
+            default_values = {}
+        
+        if not series_variable.unique_id in default_values:
+            default_values[series_variable.unique_id] = {}
+        
+        if not "start" in default_values[series_variable.unique_id]:
+            if series_variable.default_start_value is not None:
+                default_values[series_variable.unique_id]["start"] = series_variable.default_start_value 
+            elif series_variable.min_value is not None:
+                default_values[series_variable.unique_id]["start"] = series_variable.min_value
+            else:
+                default_values[series_variable.unique_id]["start"] = 0
+        
+        if not "end" in default_values[series_variable.unique_id]:
+            if series_variable.default_end_value is not None:
+                default_values[series_variable.unique_id]["end"] = series_variable.default_end_value 
+            elif series_variable.max_value is not None:
+                default_values[series_variable.unique_id]["end"] = series_variable.max_value
+            else:
+                default_values[series_variable.unique_id]["end"] = 10
+        
+        if not "step-width" in default_values[series_variable.unique_id]:
+            if series_variable.default_step_width_value is not None:
+                default_values[series_variable.unique_id]["step-width"] = series_variable.default_step_width_value 
+            else:
+                try:
+                    default_values[series_variable.unique_id]["step-width"] = ((
+                            default_values[series_variable.unique_id]["end"] - 
+                            default_values[series_variable.unique_id]["start"]
+                        ) / 5)
+                except TypeError:
+                    default_values[series_variable.unique_id]["step-width"] = 1
 
         series_definition = {
             "start": (int, float), 
             "end": (int, float), 
             "step-width": (int, float), 
-            "variable": str
         }
 
         # check if all required indices are present and if their type is 
@@ -155,88 +296,134 @@ class MeasurementSteps(collections.abc.Sequence):
             if key not in series:
                 err = KeyError(("The series{} does not have a '{}' " + 
                                 "index.").format(error_str, key))
-                log_error(self._logger, err)
-                raise err
-            elif not isinstance(series[key], datatype):
-                err = TypeError(("The series{} '{}' key has to be of type {} " + 
-                                 "but it is {}.").format(
-                                     error_str,
-                                     key, 
-                                     get_datatype_human_text(datatype),
-                                     type(series[key])))
-                log_error(self._logger, err)
-                raise err
+                            
+                if add_default_values:
+                    errors.append(err)
+                    series[key] = default_values[series_variable.unique_id][key]
+                else:
+                    log_error(logger, err)
+                    raise err
+            else:
+                if parse:
+                    if (series_variable.has_calibration and 
+                        isinstance(series_variable.calibrated_format, (type, Datatype))):
+                        series[key] = parse_value(series_variable.calibrated_format, 
+                                                  series[key])
+                    else:
+                        series[key] = parse_value(series_variable.format, 
+                                                  series[key])
+
+                if uncalibrate:
+                    series[key] = series_variable.ensureUncalibratedValue(series[key])
+                
+                if not isinstance(series[key], datatype):
+                    err = TypeError(("The series{} '{}' key has to be of type {} " + 
+                                    "but it is {}.").format(
+                                        error_str,
+                                        key, 
+                                        get_datatype_human_text(datatype),
+                                        type(series[key])))
+
+                    if add_default_values:
+                        errors.append(err)
+                        series[key] = default_values[series_variable.unique_id][key]
+                    else:
+                        log_error(logger, err)
+                        raise err
         
-        # check if the series variable exists
-        try:
-            series_variable = controller.microscope.getMeasurementVariableById(
-                series["variable"]
-            )
-        except KeyError:
-            err = ValueError(("The variable '{}' in the series{} is not a " + 
-                              "valid measurement variable id.").format(
-                                  series["variable"], error_str))
-            log_error(self._logger, err)
-            raise err
-        
-        # prevent recursive series, the series variable must not be in one of 
-        # the parent series (if there are parent series)
-        if series["variable"] in series_path:
-            err = ValueError(("The variable '{}' in the series{} is " + 
-                              "already measured in one of the parent " +
-                              "series.").format(series["variable"], error_str))
-            log_error(self._logger, err)
-            raise err
         # test if step is > 0
         if series["step-width"] <= 0:
             err = ValueError(("The 'step-width' in the series{} must be "+ 
                               "greater than 0.").format(error_str))
-            log_error(self._logger, err)
-            raise err
+
+            if add_default_values:
+                errors.append(err)
+                series["step-width"] = default_values[series_variable.unique_id]["step-width"]
+            else:
+                log_error(logger, err)
+                raise err
         
         # test if the start and end values are in the boundaries
         for index in ("start", "end"):
-            if ((isinstance(series_variable.min_value, (int, float)) and 
-                 series[index] < series_variable.min_value) or 
-                (isinstance(series_variable.max_value, (int, float)) and
-                 series[index] > series_variable.max_value)):
-                err = ValueError(("The '{index}' index in the series{path} is " + 
-                                  "out of bounds. The {index} has to be " + 
-                                  "{min} <= {index} <= {max} but it is " + 
-                                  "{val}.").format(
-                                      path=error_str,
-                                      index=index, 
-                                      min=series_variable.min_value,
-                                      max=series_variable.max_value,
-                                      val=series[index]
-                                ))
-                log_error(self._logger, err)
-                raise err
-    
-        self.series_variables.add(series_variable.unique_id)
+            in_bounds = True
 
-        if isinstance(series_path, (tuple, list)):
-            series_path = list(series_path)
-        else:
-            series_path = []
+            try:
+                in_bounds = (in_bounds and 
+                             series[index] >= series_variable.min_value)
+            except TypeError:
+                pass
+
+            try:
+                in_bounds = (in_bounds and 
+                             series[index] <= series_variable.max_value)
+            except TypeError:
+                pass
+
+            if not in_bounds:
+                err = ValueError(("The '{index}' index in the series{path} " + 
+                                "is out of bounds. The {index} has to be " + 
+                                "{min} <= {index} <= {max} but it is " + 
+                                "{val}.").format(
+                                    path=error_str,
+                                    index=index, 
+                                    min=series_variable.min_value,
+                                    max=series_variable.max_value,
+                                    val=series[index]
+                                ))
+                
+                if add_default_values:
+                    errors.append(err)
+                    series[index] = default_values[series_variable.unique_id][index]
+                else:
+                    log_error(logger, err)
+                    raise err
         
-        series_path.append(series["variable"])
+        series_path.append(series_variable.unique_id)
 
         if "on-each-point" in series:
             if isinstance(series["on-each-point"], dict):
-                series["on-each-point"] = self._formatSeries(
-                    controller, series["on-each-point"], series_path
-                )
-            else:
+                on_each_point = MeasurementSteps.formatSeries(
+                    measurement_variables, series["on-each-point"], 
+                    series_path=series_path, 
+                    add_default_values=add_default_values, parse=parse, 
+                    default_values=default_values,
+                    uncalibrate=uncalibrate, logger=logger)
+                
+                if add_default_values:
+                    series["on-each-point"] = on_each_point[0]
+                    errors += on_each_point[1]
+                else:
+                    series["on-each-point"] = on_each_point
+            
+            if not isinstance(series["on-each-point"], dict):
                 del series["on-each-point"]
         
-        log_debug(self._logger, "Done with formatting, series is now '{}'".format(series))
-        return series
-        
-    def _formatStart(self, controller: "Controller", start: dict, series: dict) -> dict:
+        log_debug(logger, "Done with formatting, series is now '{}'".format(series))
+
+        if add_default_values:
+            return series, errors
+        else:
+            return series
+    
+    @staticmethod
+    def formatStart(measurement_variables: typing.Iterable["MeasurementVariable"], 
+                    start: dict, series: dict,
+                    add_default_values: typing.Optional[bool]=False,
+                    parse: typing.Optional[bool]=False,
+                    uncalibrate: typing.Optional[bool]=False,
+                    default_values: typing.Optional[dict]=None,
+                    logger: typing.Optional[logging.Logger]=None) -> dict:
         """Format the given `start` to contain valid values only.
 
-        If an invalid value is found, an error will be raised.
+        If an invalid value is found and `add_default_values` is True, the 
+        error will be added to the returned error list and the value will be 
+        replaced with a default value.
+
+        If an invalid value is found and `add_default_values` is False, an 
+        Error is raised.
+
+        Make sure to pass a valid `series` only. Use the 
+        `MeasurementSteps.formatSeries()` for the `series` at first.
 
         Raises
         ------
@@ -251,8 +438,8 @@ class MeasurementSteps(collections.abc.Sequence):
 
         Parameters
         ----------
-        controller : Controller
-            The controller for the measurement and the microscope
+        measurement_variables : iterable of MeasurementVariables
+            The measurement variables
         start : dict of int or floats
             The start conditions, the `MeasurementVariable` id has to be the 
             key, the value to start with (in the `MeasurementVariable` specific 
@@ -265,7 +452,24 @@ class MeasurementSteps(collections.abc.Sequence):
             and ending at 'end' (including start and end) while travelling with 
             the 'step-width'. The 'on-each-point' can hold another series dict
             that defines another series that will be iterated over on each step
-            the current series does.
+            the current series does
+        add_default_values : bool, optional
+            Whether to try adding default values until the series is valid 
+            (True) and return the errors to the list at index 1 or to raise 
+            the errors (False)
+        parse : bool, optional
+            Whether to parse the input (if there is a datatype given for the 
+            measurement variable), default: False
+        uncalibrate : bool, optional
+            Whether to assume that the values are given as calibrated values 
+            and to enforce them to be uncalibrated (if there is a calibration
+            given for the measurment variable), default: False
+        default_values : dict, optional
+            The default values to use, the key must be the variable id, the 
+            value is the corresponding default value to use, if not given the 
+            default values of the measurement variables are used, default: None
+        logger : logging.Logger, optional
+            The logger object to log to, if not given no logs are made
         
         Returns
         -------
@@ -273,8 +477,28 @@ class MeasurementSteps(collections.abc.Sequence):
             The valid `start` dict
         """
 
-        log_debug(self._logger, ("Formatting start '{}' with series " + 
-                                "'{}'").format(start, series))
+        errors = []
+        log_debug(logger, ("Formatting start '{}' with series '{}'").format(
+                            start, series))
+        
+        if not isinstance(series, dict):
+            try:
+                series = dict(series)
+            except TypeError:
+                series = {}
+        
+        if not isinstance(start, dict):
+            try:
+                start = dict(start)
+            except TypeError:
+                err = ValueError(("The start '{}' is not a dict").format(start))
+                
+                if add_default_values:
+                    errors.append(err)
+                    start = {}
+                else:
+                    log_error(logger, err)
+                    raise err
 
         # extract the start values from the series
         series_starts = {}
@@ -287,48 +511,99 @@ class MeasurementSteps(collections.abc.Sequence):
             else:
                 s = None
                 break
+        
+        if not isinstance(default_values, dict):
+            default_values = {}
+
+        for var in measurement_variables:
+            if var.unique_id not in default_values:
+                if var.default_start_value is not None:
+                    default_values[var.unique_id] = var.default_start_value
+                else:
+                    default_values[var.unique_id] = 0
 
         # check and create start variables
-        for var in controller.microscope.supported_measurement_variables:
+        for var in measurement_variables:
             if var.unique_id in series_starts:
                 # make sure also the measured variable is correct
                 start[var.unique_id] = series_starts[var.unique_id]
             elif var.unique_id not in start:
                 err = KeyError(("The measurement variable {} (id: {}) "  + 
-                                  "is neither contained in the start " + 
-                                  "conditions nor in the series. All " + 
-                                  "parameters (measurement variables) " + 
-                                  "values must be known!").format(
-                                      var.name, var.unique_id))
-                log_error(self._logger, err)
-                raise err
+                                "is neither contained in the start " + 
+                                "conditions nor in the series. All " + 
+                                "parameters (measurement variables) " + 
+                                "values must be known!").format(
+                                    var.name, var.unique_id))
+                if add_default_values:
+                    start[var.unique_id] = default_values[var.unique_id]
+                    errors.append(err)
+                else:
+                    log_error(logger, err)
+                    raise err
+            else:
+                if parse:
+                    if (var.has_calibration and 
+                        isinstance(var.calibrated_format, (type, Datatype))):
+                        start[var.unique_id] = parse_value(var.calibrated_format, 
+                                                           start[var.unique_id])
+                    else:
+                        start[var.unique_id] = parse_value(var.format, 
+                                                           start[var.unique_id])
 
-            if not isinstance(start[var.unique_id], (int, float)):
-                err = TypeError(("The '{}' index in the start conditions " + 
-                                 "contains a {} but only int or float are " + 
-                                 "supported.").format(
-                                     var.unique_id, 
-                                     type(start[var.unique_id])))
-                log_error(self._logger, err)
-                raise err
-            elif ((isinstance(var.min_value, (int, float)) and 
-                   start[var.unique_id] < var.min_value) or 
-                  (isinstance(var.max_value, (int, float)) and
-                   start[var.unique_id] > var.max_value)):
-                err = ValueError(("The '{index}' index in the start " + 
-                                  "conditions is out of bounds. The {index} " + 
-                                  "has to be {min} <= {index} <= {max} but " + 
-                                  "it is {val}.").format(
-                                    index=var.unique_id, 
-                                    min=var.min_value,
-                                    max=var.max_value,
-                                    val=start[var.unique_id]
-                                ))
-                log_error(self._logger, err)
-                raise err
+                if uncalibrate:
+                    start[var.unique_id] = var.ensureUncalibratedValue(
+                        start[var.unique_id])
+                
+                if not isinstance(start[var.unique_id], (int, float)):
+                    err = TypeError(("The '{}' index in the start conditions " + 
+                                    "contains a {} but only int or float are " + 
+                                    "supported.").format(
+                                        var.unique_id, 
+                                        type(start[var.unique_id])))
+                    if add_default_values:
+                        errors.append(err)
+                        start[var.unique_id] = default_values[var.unique_id]
+                    else:
+                        log_error(logger, err)
+                        raise err
+                else:
+                    in_bounds = True
 
-        log_debug(self._logger, "Done with formatting, start is now '{}'".format(start))
-        return start
+                    try:
+                        in_bounds = (in_bounds and 
+                                     start[var.unique_id] >= var.min_value)
+                    except TypeError:
+                        pass
+
+                    try:
+                        in_bounds = (in_bounds and 
+                                     start[var.unique_id] <= var.max_value)
+                    except TypeError:
+                        pass
+                        
+                    if not in_bounds:
+                        err = ValueError(("The '{id}' value in the start " + 
+                                        "is out of bounds. The {id} has to be " + 
+                                        "{min} <= {id} <= {max} but it is " + 
+                                        "{val}.").format(
+                                            id=var.unique_id, 
+                                            min=var.min_value,
+                                            max=var.max_value,
+                                            val=start[var.unique_id]
+                                        ))
+                        if add_default_values:
+                            errors.append(err)
+                            start[var.unique_id] = default_values[var.unique_id]#
+                        else:
+                            log_error(logger, err)
+                            raise err
+
+        log_debug(logger, "Done with formatting, start is now '{}'".format(start))
+
+        if add_default_values:
+            return start, errors
+        else:
+            return start
     
     def __len__(self) -> int:
         """Get the number of steps.

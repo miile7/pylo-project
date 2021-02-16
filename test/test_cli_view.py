@@ -616,11 +616,12 @@ class TestCLIView:
         """Test if the _parseSeriesInputs() function returns the correct 
         inputs and can deal with easy to correct values."""
         
-        inputs, messages = cliview._parseSeriesInputs(controller, series)
+        realprint(series)
+        series, inputs, messages = cliview._parseSeriesInputs(controller, series)
         
         expected_keys = ("variable", "start", "end", "step-width", "on-each-point")
 
-        realprint(inputs)
+        realprint(series, inputs, messages)
         assert len(inputs) == len(expected_keys) * depth
 
         if expecting_errors:
@@ -701,7 +702,7 @@ class TestCLIView:
          # pressure is calibrated by 5
          {"focus": 15/3, "ol-current": 15, "pressure": 2*1020},
          # expecting: start=min, end=max, step-width = end-start/5
-         {"variable": "focus", "start": 0, "end": 100, "step-width": 20}),
+         {"variable": "focus", "start": 15/3, "end": 300/3, "step-width": 60/3}),
         # create obj lens current series, parameter-3
         (None, None, (
             "3", "ol-current", # variable
@@ -732,7 +733,7 @@ class TestCLIView:
             "11", "3", # pressure end
             "c"
          ),
-         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"focus": 0, "ol-current": 0, "pressure": 0.5*1020},
          # expecting: set value divided by calibration factor, machine takes 
          # uncalibrated value
          {"variable": "focus", "start": 0, "end": 100/3, "step-width": 10/3, "on-each-point": 
@@ -745,7 +746,7 @@ class TestCLIView:
             "6", "0x200", # end
             "c" # continue
          ),
-         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"focus": 0, "ol-current": 1, "pressure": 0.05*1020},
          {"variable": "ol-current", "start": 1, "end": 0x200, "step-width": 0x50}),
         # create pressure series from 1000 to 2000 with 500 stepwidth, 
         #   on each point: obj lens current series from 0 to 0x50, stepwidth 0x5
@@ -766,7 +767,7 @@ class TestCLIView:
                     "16", 40, # end
             "c" # continue
          ),
-         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"focus": 2/3, "ol-current": 0, "pressure": 0.1*1020},
          {"variable": "pressure", "start": 0.1*1020, "end": 2.8*1020, "step-width": 0.1*1020, "on-each-point":
             {"variable": "ol-current", "start": 0, "end": 0x50, "step-width": 0x5, 
              "on-each-point":
@@ -787,7 +788,7 @@ class TestCLIView:
             "7", "ol-current", # switch on-each-point
             "c" # continue
          ),
-         {"focus": 0, "ol-current": 0, "pressure": 0.05*1020},
+         {"focus": 0, "ol-current": 0, "pressure": 1*1020},
          {"variable": "focus", "start": 0, "end": 100/3, "step-width": 10/3, "on-each-point":
             {"variable": "ol-current", "start": 0, "end": 0x600, "step-width": 0x300}}),
     ])
@@ -933,8 +934,8 @@ class TestCLIView:
         ({"datatype": int, "min_value": 0, "max_value": 2}, -1),
         ({"datatype": float, "min_value": -0.0001, "max_value": 0.0001}, 0.0002),
         ({"datatype": float, "min_value": -0.0001, "max_value": 0.0001}, -0.0002),
-        # ({"datatype": str, "min_value": "b", "max_value": "d"}, "a"),
-        # ({"datatype": str, "min_value": "b", "max_value": "d"}, "e")
+        ({"datatype": str, "min_value": "b", "max_value": "d"}, "a"),
+        ({"datatype": str, "min_value": "b", "max_value": "d"}, "e")
     ])
     def test_parse_invalid_value(self, cliview, input_definition, value):
         """Test if the _parseValue() function works."""
@@ -1143,24 +1144,6 @@ class TestCLIView:
         for i, r in enumerate(results):
             assert r == expected[i]
             assert type(r) == type(expected[i])
-    
-    @pytest.mark.usefixtures("cliview", "controller")
-    @pytest.mark.parametrize("series,expected_series,add_defaults", [
-        ({"variable": "focus"}, {"variable": "focus", "start": 0, "end": 100, 
-          "step-width": 100 / 5}, True),
-        ({"variable": "focus", "on-each-point": {"variable": "ol-current"}}, 
-         {"variable": "focus", "start": 0, "end": 100, "step-width": 100/5,
-          "on-each-point": {"variable": "ol-current", "start": 0, "end": 0x600, 
-          "step-width": 0x300}}, True),
-    ])
-    def test_parse_series(self, cliview, controller, series, expected_series, add_defaults):
-        """Test the parse series function."""
-
-        series, errors = cliview.parseSeries(
-            controller.microscope.supported_measurement_variables, series, 
-            add_defaults
-        )
-        assert series == expected_series
     
     @pytest.mark.usefixtures("cliview")
     @pytest.mark.parametrize("tags,user_inputs,expected", [
