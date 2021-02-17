@@ -55,7 +55,9 @@ class AbstractView:
         if self.show_running:
             self._updateRunning()
 
-    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+    def showProgramDialogs(self, controller: "Controller",
+                           series: typing.Optional[dict]=None,
+                           start: typing.Optional[dict]=None) -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
         """Show the measurement creation, the configuration and the custom
         tags.
         
@@ -64,6 +66,14 @@ class AbstractView:
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict, optional
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict, optional
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
         
         Returns
         -------
@@ -73,7 +83,8 @@ class AbstractView:
             functions
         """
         log_debug(self._logger, "Showing program dialogs")
-        start, series = self.showCreateMeasurement(controller)
+        start, series = self.showCreateMeasurement(controller, series=series,
+                                                   start=start)
         configuration = self.showSettings(controller.configuration)
         custom_tags = self.showCustomTags(controller.configuration)
 
@@ -94,11 +105,11 @@ class AbstractView:
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
-        series : dict
+        series : dict, optional
             The series dict that defines the series that is shown on startup
             with uncalibrated and parsed values, if not given the default 
             values are used, default: None
-        start : dict
+        start : dict, optional
             The series start definition that is shown on startup  with 
             uncalibrated and parsed values, if not given the default values are 
             used, default: None

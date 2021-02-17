@@ -142,20 +142,21 @@ class DMMicroscope(MicroscopeInterface):
             self.config_group_name, "default-om-current-step-width-value", 
             datatype=Datatype.hex_int, default_value=0x1000)
         
-        logginglib.log_debug(self._logger, "Asking the user to set the focus to 0")
+        # logginglib.log_debug(self._logger, "Asking the user to for the " + 
+        #                      "current focus")
         
-        # GMS needs some time here, don't know why but this fixes the bug, if 
-        # the sleeping is removed, the dialog will never show up but the 
-        # program will wait for interaction so it freezes
-        time.sleep(0.1)
-        button = self.controller.view.askForDecision(("Please set the focus " + 
-            "to zero manually now. This will be  saved as the reference value."),
-            ("Focus is 0 now", "Cancel"))
+        # # GMS needs some time here, don't know why but this fixes the bug, if 
+        # # the sleeping is removed, the dialog will never show up but the 
+        # # program will wait for interaction so it freezes
+        # time.sleep(0.1)
+        # focus = self.controller.view.askFor(
+        #     {"name": "Focus (um)", "datatype": Datatype.int, 
+        #      "description": "The current focus in micrometer. This will " + 
+        #         "set focus to the given value and link it to the objectiv " + 
+        #         "lens current that is currently applied."},
+        #     text="Please enter the current focus value")
         
-        if button == 1:
-            err = StopProgram()
-            logginglib.log_debug(self._logger, "Stopping program", exc_info=err)
-            raise err
+        # logginglib.log_debug(self._logger, "User set the focus to '{]'".format(focus))
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
@@ -368,25 +369,25 @@ class DMMicroscope(MicroscopeInterface):
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
         
-        variable = self.registerMeasurementVariable(
-            MeasurementVariable(
-                "stage-x", 
-                "Stage x position", 
-                unit="um",
-                # unit="µm",
-            ),
-            self._getStageX, self._setStageX
-        )
+        # variable = self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "stage-x", 
+        #         "Stage x position", 
+        #         unit="um",
+        #         # unit="µm",
+        #     ),
+        #     self._getStageX, self._setStageX
+        # )
 
-        variable = self.registerMeasurementVariable(
-            MeasurementVariable(
-                "stage-y", 
-                "Stage y position", 
-                unit="um",
-                # unit="µm",
-            ),
-            self._getStageY, self._setStageY
-        )
+        # variable = self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "stage-y", 
+        #         "Stage y position", 
+        #         unit="um",
+        #         # unit="µm",
+        #     ),
+        #     self._getStageY, self._setStageY
+        # )
 
         from pylo.config import OFFLINE_MODE
 
@@ -395,6 +396,9 @@ class DMMicroscope(MicroscopeInterface):
             self.dm_microscope = DM.Py_Microscope()
         else:
             self.dm_microscope = None
+        
+        self.controller.view.showHint("Setting microscope to lorentz mode")
+        self.setInLorentzMode(True)
     
     def _confirmHolder(self, *args) -> None:
         """Show a confirm dialog with the view if the holder is not yet
@@ -712,7 +716,7 @@ class DMMicroscope(MicroscopeInterface):
             err = RuntimeError("The objective mini lens current (and " + 
                                "therefore the focus) can only beused if the " + 
                                "microscope is in the LowMAG mode. But the " + 
-                               "microscope is not in the LowMag mode.")
+                               "microscope is not in the LowMAG mode.")
             logginglib.log_error(self._logger, err)
             raise err
         

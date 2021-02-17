@@ -644,14 +644,20 @@ class Controller:
             while (not isinstance(self.measurement, Measurement) and 
                 security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
+
+                # get start values
+                start = {}
+                for v in self.microscope.supported_measurement_variables:
+                    start[v.unique_id] = self.microscope.getMeasurementVariableValue(v.unique_id)
                 
                 # index 0: measurement start parameters
                 # index 1: measurement series paramters
                 # index 2: configuration as a dict
                 # index 3: custom tags as a dict
                 log_debug(self._logger, ("Showing all program dialogs for the " + 
-                                        "{}th time").format(security_counter))
-                interactions = self.view.showProgramDialogs(self)
+                                        "{}th time with the start values " + 
+                                        "'{}'").format(security_counter, start))
+                interactions = self.view.showProgramDialogs(self, start=start)
 
                 log_debug(self._logger, "User entered the following values {}".format(
                                     interactions))

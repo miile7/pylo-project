@@ -223,7 +223,8 @@ class CLIView(AbstractView):
         new_series = len(series) == 0
 
         series, series_inputs, series_errors = self._parseSeriesInputs(
-            controller, series)
+            controller, series, start=start)
+        
         start, start_errors = MeasurementSteps.formatStart(
             controller.microscope.supported_measurement_variables, start, 
             series, add_default_values=True, parse=False, uncalibrate=False
@@ -347,7 +348,8 @@ class CLIView(AbstractView):
             # restart loop
             return self._showCreateMeasurementLoop(controller, start, series)
     
-    def _parseSeriesInputs(self, controller: "Controller", series: dict) -> typing.Tuple[list, list]:
+    def _parseSeriesInputs(self, controller: "Controller", series: dict,
+                           start: typing.Optional[dict]=None) -> typing.Tuple[list, list]:
         """Parse the given `series` recursively and return the inputs and the 
         errors if there are some.
 
@@ -374,7 +376,8 @@ class CLIView(AbstractView):
         series_inputs = []
         series, errors = MeasurementSteps.formatSeries(
             controller.microscope.supported_measurement_variables, series, 
-            add_default_values=True, parse=False, uncalibrate=False
+            add_default_values=True, parse=False, uncalibrate=False,
+            start=start
         )
         if series is None:
             return series, series_inputs, errors

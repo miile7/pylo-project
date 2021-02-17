@@ -106,6 +106,7 @@ class MeasurementSteps(collections.abc.Sequence):
                      add_default_values: typing.Optional[bool]=False,
                      parse: typing.Optional[bool]=False,
                      uncalibrate: typing.Optional[bool]=False,
+                     start: typing.Optional[dict]=None,
                      default_values: typing.Optional[dict]=None,
                      logger: typing.Optional[logging.Logger]=None) -> dict:
         """Format the given `series` to contain valid values only.
@@ -162,11 +163,15 @@ class MeasurementSteps(collections.abc.Sequence):
             Whether to assume that the values are given as calibrated values 
             and to enforce them to be uncalibrated (if there is a calibration
             given for the measurment variable), default: False
+        start : dict, optional
+            The start dict to use the values of if the start value of the 
+            series is not given or invalid, default: None
         default_values : dict, optional
             The default values to use, the key must be the variable id, the 
             values is another dict with the "start", "step-width" and "end" 
             values containing the default values, if not given the 
-            measurement variables definitions are used, default: None
+            measurement variables definitions are used, note that the defaults
+            must be valid, they are **not** checked, default: None
         raise_errors : bool, optional
             Whether to raise the errors and stop the execution on an error or 
             to continue and return all errors, default: False
@@ -293,10 +298,14 @@ class MeasurementSteps(collections.abc.Sequence):
         # check if all required indices are present and if their type is 
         # correct
         for key, datatype in series_definition.items():
+            if (key not in series and key == "start" and 
+                isinstance(start, dict) and series_variable.unique_id in start):
+                series[key] = start[series_variable.unique_id]
+            
             if key not in series:
                 err = KeyError(("The series{} does not have a '{}' " + 
                                 "index.").format(error_str, key))
-                            
+                
                 if add_default_values:
                     errors.append(err)
                     series[key] = default_values[series_variable.unique_id][key]
@@ -387,7 +396,7 @@ class MeasurementSteps(collections.abc.Sequence):
                     series_path=series_path, 
                     add_default_values=add_default_values, parse=parse, 
                     default_values=default_values,
-                    uncalibrate=uncalibrate, logger=logger)
+                    uncalibrate=uncalibrate, start=start, logger=logger)
                 
                 if add_default_values:
                     series["on-each-point"] = on_each_point[0]
@@ -466,7 +475,8 @@ class MeasurementSteps(collections.abc.Sequence):
             given for the measurment variable), default: False
         default_values : dict, optional
             The default values to use, the key must be the variable id, the 
-            value is the corresponding default value to use, if not given the 
+            value is the corresponding default value to use, note that the 
+            defaults must be valid, they are **not** checked, if not given the 
             default values of the measurement variables are used, default: None
         logger : logging.Logger, optional
             The logger object to log to, if not given no logs are made

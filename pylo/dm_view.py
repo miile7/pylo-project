@@ -593,7 +593,9 @@ class DMView(AbstractView):
             self._created_tagnames.add(self._progress_dialog_progress_tagname)
             self._created_tagnames.add(self._progress_dialog_text_tagname)
     
-    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+    def showProgramDialogs(self, controller: "Controller",
+                           series: typing.Optional[dict]=None,
+                           start: typing.Optional[dict]=None) -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
         """Show the measurement creation, the configuration and the custom
         tags.
         
@@ -602,6 +604,14 @@ class DMView(AbstractView):
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict, optional
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict, optional
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
         
         Returns
         -------
@@ -614,6 +624,7 @@ class DMView(AbstractView):
         
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
+            series=series, start=start,
             configuration=controller.configuration,
             custom_tags=self._getCustomTagsFromConfiguration(controller.configuration),
             dialog_type=0b10 | 0b01 | 0b100
@@ -895,10 +906,13 @@ class DMView(AbstractView):
                 start = {}
             
             series, *_ = MeasurementSteps.formatSeries(measurement_variables,
-                series, add_default_values=True, parse=False, uncalibrate=False)
+                series, add_default_values=True, parse=False, uncalibrate=False,
+                start=start)
+
             start, *_ = MeasurementSteps.formatStart(measurement_variables,
                 start, series, add_default_values=True, parse=False, 
                 uncalibrate=False)
+
             series_nests = list(MeasurementSteps.getSeriesNests(series))
             series_def = list(map(lambda s: s["variable"], series_nests))
 

@@ -43,6 +43,10 @@ class DummyMicroscope(MicroscopeInterface):
             lambda: self._getVal("pressure"), 
             lambda x: self._setVal("pressure", x)
         )
+
+        self.setMeasurementVariableValue("focus", random.randint(0, 100))
+        self.setMeasurementVariableValue("ol-current", random.randint(0, 0x800))
+        self.setMeasurementVariableValue("pressure", random.randint(51, 3060))
     
     def _setVal(self, id_, value):
         if isinstance(self.record_time, (int, float)):
