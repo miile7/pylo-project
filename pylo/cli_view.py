@@ -136,7 +136,9 @@ class CLIView(AbstractView):
         log_debug(self._logger, "Input is '{}'".format(i))
         return i
 
-    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller",
+                              series: typing.Optional[dict]=None,
+                              start: typing.Optional[dict]=None) -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
@@ -149,6 +151,14 @@ class CLIView(AbstractView):
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
         
         Returns
         -------
@@ -161,7 +171,7 @@ class CLIView(AbstractView):
             may contain another series (value has to be the uncalibrated value)
         """
 
-        measurement = self._showCreateMeasurementLoop(controller)
+        measurement = self._showCreateMeasurementLoop(controller, start, series)
         log_debug(self._logger, "User defined measurement '{}'".format(measurement))
         return measurement
     

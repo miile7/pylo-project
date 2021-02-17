@@ -10,7 +10,7 @@ from .logginglib import get_logger
 if hasattr(typing, "TypedDict"):
     AskInput = typing.TypedDict("AskInput", {
                                 "datatype": typing.Union[type, Datatype],
-                                "description": str
+                                "name": str
                                 }, total=False)
 else:
     AskInput = typing.Dict
@@ -79,7 +79,9 @@ class AbstractView:
 
         return start, series, configuration, custom_tags
 
-    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller",
+                              series: typing.Optional[dict]=None,
+                              start: typing.Optional[dict]=None) -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
@@ -92,6 +94,14 @@ class AbstractView:
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
 
         Returns
         -------

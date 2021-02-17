@@ -77,9 +77,10 @@ try:
 		# "error",
 		# "hint",
 		# "create-measurement",
+		"create-measurement-series",
 		# "ask-for-decision",
 		# "show-settings",
-		"show-custom-tags",
+		# "show-custom-tags",
 		# "ask-for",
 		# "show-running",
 	]
@@ -106,6 +107,21 @@ try:
 		print("")
 		print("Showing create Measurement")
 		pprint.pprint(view.showCreateMeasurement(controller))
+
+	if "create-measurement-series" in tests:
+		print("")
+		print("= " * 40)
+		print("")
+		print("Showing create Measurement with a series")
+		series, *_ = pylo.MeasurementSteps.formatSeries(
+			controller.microscope.supported_measurement_variables, 
+			{"variable": "focus", "start": 33, "end": 99, "step": 3, "on-each-point": {
+				"variable": "pressure", "start": 1020, "step": 510, "end": 2040
+			}}, add_default_values=True)
+		start, *_ = pylo.MeasurementSteps.formatStart(
+			controller.microscope.supported_measurement_variables, 
+			{"ol-current": 0x1000}, series, add_default_values=True)
+		pprint.pprint(view.showCreateMeasurement(controller, series, start))
 
 	if "ask-for-decision" in tests:
 		print("")
