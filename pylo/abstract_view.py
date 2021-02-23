@@ -430,6 +430,8 @@ class AbstractView:
         - 'name' : str, required - The name of the input to show
         - 'datatype' : type or Datatype - The datatype to allow
         - 'description' : str - A description what this value is about
+
+        The returned values are parsed with the given 'datatype'.
         
         Raises
         ------
@@ -456,7 +458,7 @@ class AbstractView:
         """
         raise NotImplementedError()
 
-    def _formatAskForInput(self, input_dict : AskInput) -> dict:
+    def _formatAskForInputs(self, inputs: typing.Sequence[AskInput]) -> typing.Tuple[dict]:
         """Format and check the `input_dict` used in `AbstractView::askFor()`.
 
         Raises
@@ -468,31 +470,68 @@ class AbstractView:
         
         Parameters
         ----------
-        input_dict : dict
-            A dict with the 'name' key that defines the name to show. Optional
-            additional keys are 'datatype', and 'description'
+        inputs : sequence of dict
+            The input dicts with the 'name' key that defines the name to show. 
+            Optional additional keys are 'datatype', and 'description'
         
         Returns
         -------
-        dict
+        tuple of dict
             The same dict with valid keys only, if the value was None or empty
             the key is removed
         """
 
-        if not "name" in input_dict:
-            raise KeyError("There is no '{}' index given.".format("name"))
+        res = []
+        for input_dict in inputs:
+            if not "name" in input_dict:
+                raise KeyError("There is no '{}' index given.".format("name"))
 
-        for key, datatype in {"name": str, "datatype": (type, Datatype), 
-                              "description": str}.items():
-            if key in input_dict:
-                if input_dict[key] is None:
-                    del input_dict[key]
-                elif not isinstance(input_dict[key], datatype):
-                    raise TypeError(("The value for index '{}' has to be a {} " + 
-                                    "but {} is given").format(key, datatype, 
-                                    type(input_dict[key])))
+            for key, datatype in {"name": str, "datatype": (type, Datatype), 
+                                "description": str}.items():
+                if key in input_dict:
+                    if input_dict[key] is None:
+                        del input_dict[key]
+                    elif not isinstance(input_dict[key], datatype):
+                        raise TypeError(("The value for index '{}' has to be a {} " + 
+                                        "but {} is given").format(key, datatype, 
+                                        type(input_dict[key])))
+            
+            if "datatype" not in input_dict:
+                input_dict["datatype"] = str
+            
+            if "description" in input_dict and input_dict["description"] == "":
+                del input_dict["description"]
+            
+            res.append(input_dict)
         
-        if "description" in input_dict and input_dict["description"] == "":
-            del input_dict["description"]
+        return tuple(res)
+    
+    def _parseAskForOutput(self, inputs: typing.Sequence[AskInput], results: typing.Sequence) -> typing.Sequence:
+        """Parse the `results` of the `AbstractView.askFor()` function for the
+        given `input_dict`.
+
+        Parameters
+        ----------
+        inputs : sequence of dict
+            The input dicts with the 'name' key that defines the name to show. 
+            Optional additional keys are 'datatype', and 'description'
+        results : sequence
+            The results, has to have the same length as the `input_dict`
+
+        Returns
+        -------
+        tuple
+            The results with the values parsed with the given 'datatype' for
+            each `input_dict`, the returned list will have the length of the 
+            shorter sequence of the `results` and the `inputs`
+        """
+
+        res = []
+        for input_dict, result in zip(inputs, results):
+            if "datatype" in input_dict:
+                res.append(parse_value(input_dict["datatype"], result, 
+                                       suppress_errors=True))
+            else:
+                res.append(result)
         
-        return input_dict
+        return tuple(res)

@@ -343,6 +343,8 @@ class DMView(AbstractView):
             `inputs[0]` and so on
         """
 
+        inputs = self._formatAskForInputs(inputs)
+
         if "text" not in kwargs:
             if len(inputs) > 1:
                 kwargs["text"] = "Please enter the following values"
@@ -364,7 +366,7 @@ class DMView(AbstractView):
         log_debug(self._logger, ("User was asked for values '{}' with kwargs " + 
                                 "'{}' and entered '{}'").format(inputs, kwargs, 
                                 results[3]))
-        return results[3]
+        return self._parseAskForOutput(inputs, results[3])
     
     def clear(self) -> None:
         """Clear the current text output."""

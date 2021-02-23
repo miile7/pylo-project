@@ -776,10 +776,12 @@ class CLIView(AbstractView):
             `inputs[0]` and so on
         """
 
+        inputs = self._formatAskForInputs(inputs)
+
         values = self._askForLoop(inputs, None, **kwargs)
         log_debug(self._logger, ("User was asked for values '{}' with kwargs '{}'" + 
                                 "and entered '{}'").format(inputs, kwargs, values))
-        return values
+        return self._parseAskForOutput(inputs, values)
 
     def _askForLoop(self, inputs: typing.Sequence[AskInput], 
                     ask_dict: typing.Optional[dict]=None, **kwargs):
