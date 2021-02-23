@@ -19,6 +19,7 @@ from .errors import BlockedFunctionError
 from .errors import DeviceClassNotDefined
 
 from .datatype import Datatype
+from .logginglib import do_log
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
@@ -614,6 +615,11 @@ class Controller:
                     self.camera.defineConfigurationOptions(self.configuration,
                         self.camera.config_group_name, 
                         self.camera.config_defaults)
+            
+            if do_log(self._logger, logging.INFO):
+                self._logger.info("Using camera '{}' and microscope '{}'".format(
+                    self.camera.__class__.__name__,
+                    self.microscope.__class__.__name__))
 
             # ask all non-existing but required configuration values
             self.askIfNotPresentConfigurationOptions()
