@@ -1047,6 +1047,7 @@ class DMView(AbstractView):
         ask_vals = []
         if isinstance(ask_for_values, (tuple, list)):
             for input_definition in ask_for_values:
+                input_definition = input_definition.copy()
                 if "datatype" in input_definition:
                     if isinstance(input_definition["datatype"], OptionDatatype):
                         input_definition["options"] = input_definition["datatype"].options
