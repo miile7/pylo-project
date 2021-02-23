@@ -133,14 +133,14 @@ class DMMicroscope(MicroscopeInterface):
             self._setObjectiveMiniLensCurrent
         )
         variable.default_start_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-om-current-start-value", 
-            datatype=Datatype.hex_int, default_value=0)
+            self.config_group_name, "default-om-current-start-value",
+            datatype=Datatype.hex_int)
         variable.default_end_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-om-current-end-value", 
-            datatype=Datatype.hex_int, default_value=0x200)
+            self.config_group_name, "default-om-current-end-value",
+            datatype=Datatype.hex_int)
         variable.default_step_width_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-om-current-step-width-value", 
-            datatype=Datatype.hex_int, default_value=0x1000)
+            self.config_group_name, "default-om-current-step-width-value",
+            datatype=Datatype.hex_int)
         
         # logginglib.log_debug(self._logger, "Asking the user to for the " + 
         #                      "current focus")
@@ -223,14 +223,14 @@ class DMMicroscope(MicroscopeInterface):
             self._setObjectiveLensCurrent
         )
         variable.default_start_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-ol-current-start-value", 
-            datatype=Datatype.hex_int, default_value=0)
+            self.config_group_name, "default-ol-current-start-value",
+            datatype=Datatype.hex_int)
         variable.default_end_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-ol-current-end-value", 
-            datatype=Datatype.hex_int, default_value=0x200)
+            self.config_group_name, "default-ol-current-end-value",
+            datatype=Datatype.hex_int)
         variable.default_step_width_value = self.controller.configuration.getValue(
-            self.config_group_name, "default-ol-current-step-width-value", 
-            datatype=Datatype.hex_int, default_value=0x1000)
+            self.config_group_name, "default-ol-current-step-width-value",
+            datatype=Datatype.hex_int)
         self._ol_currents = {}
 
         # try to find idx files
@@ -314,13 +314,13 @@ class DMMicroscope(MicroscopeInterface):
         )
         variable.default_start_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-start-value", 
-            datatype=float, default_value=0)
+            datatype=float)
         variable.default_end_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-end-value", 
-            datatype=float, default_value=10)
+            datatype=float)
         variable.default_step_width_value = self.controller.configuration.getValue(
             self.config_group_name, "default-x-tilt-step-width-value", 
-            datatype=float, default_value=5)
+            datatype=float)
 
         # load the tolerance for the x tilt
         x_tilt_tolerance = self.controller.configuration.getValue(
@@ -358,13 +358,13 @@ class DMMicroscope(MicroscopeInterface):
             )
             variable.default_start_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-start-value", 
-                datatype=float, default_value=0)
+                datatype=float)
             variable.default_end_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-end-value", 
-                datatype=float, default_value=10)
+                datatype=float)
             variable.default_step_width_value = self.controller.configuration.getValue(
                 self.config_group_name, "default-y-tilt-step-width-value", 
-                datatype=float, default_value=5)
+                datatype=float)
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
@@ -401,6 +401,13 @@ class DMMicroscope(MicroscopeInterface):
         if not self.getInLorentzMode():
             self.controller.view.showHint("Setting microscope to lorentz mode")
             self.setInLorentzMode(True)
+        
+    def __del__(self):
+        """Delete the microscope."""
+
+        # prevent asking multiple times for the holder
+        if self._confirmHolder in microscope_ready:
+            microscope_ready.remove(self._confirmHolder)
     
     def _confirmHolder(self, *args) -> None:
         """Show a confirm dialog with the view if the holder is not yet
@@ -1198,7 +1205,6 @@ class DMMicroscope(MicroscopeInterface):
             default_value=(config_defaults["default-y-tilt-step-width-value"]
                            if "default-y-tilt-step-width-value" in config_defaults
                            else None))
-
 
 class IDXReader:
     """A reader to read out JEOL idx files that contain holder data.
