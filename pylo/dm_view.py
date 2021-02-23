@@ -343,6 +343,8 @@ class DMView(AbstractView):
             `inputs[0]` and so on
         """
 
+        inputs = self._formatAskForInputs(inputs)
+
         if "text" not in kwargs:
             if len(inputs) > 1:
                 kwargs["text"] = "Please enter the following values"
@@ -364,7 +366,7 @@ class DMView(AbstractView):
         log_debug(self._logger, ("User was asked for values '{}' with kwargs " + 
                                 "'{}' and entered '{}'").format(inputs, kwargs, 
                                 results[3]))
-        return results[3]
+        return self._parseAskForOutput(inputs, results[3])
     
     def clear(self) -> None:
         """Clear the current text output."""
@@ -593,7 +595,9 @@ class DMView(AbstractView):
             self._created_tagnames.add(self._progress_dialog_progress_tagname)
             self._created_tagnames.add(self._progress_dialog_text_tagname)
     
-    def showProgramDialogs(self, controller: "Controller") -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
+    def showProgramDialogs(self, controller: "Controller",
+                           series: typing.Optional[dict]=None,
+                           start: typing.Optional[dict]=None) -> typing.Tuple[typing.Tuple[dict, dict], dict, dict]:
         """Show the measurement creation, the configuration and the custom
         tags.
         
@@ -602,6 +606,14 @@ class DMView(AbstractView):
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict, optional
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict, optional
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
         
         Returns
         -------
@@ -614,6 +626,7 @@ class DMView(AbstractView):
         
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
+            series=series, start=start,
             configuration=controller.configuration,
             custom_tags=self._getCustomTagsFromConfiguration(controller.configuration),
             dialog_type=0b10 | 0b01 | 0b100
@@ -645,7 +658,9 @@ class DMView(AbstractView):
 
         return start, series, configuration, custom_tags
     
-    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller",
+                              series: typing.Optional[dict]=None,
+                              start: typing.Optional[dict]=None) -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
@@ -660,6 +675,14 @@ class DMView(AbstractView):
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
 
         Returns
         -------
@@ -676,6 +699,7 @@ class DMView(AbstractView):
         results = self._showDialog(
             measurement_variables=controller.microscope.supported_measurement_variables,
             configuration=controller.configuration,
+            start=start, series=series,
             dialog_type=0b10
         )
 
@@ -798,6 +822,8 @@ class DMView(AbstractView):
     
     def _showDialog(self, 
                     measurement_variables: typing.Optional[typing.List["MeasurementVariable"]]=None, 
+                    series: typing.Optional[dict]=None,
+                    start: typing.Optional[dict]=None,
                     configuration: typing.Optional[AbstractConfiguration]=None, 
                     ask_for_values: typing.Optional[typing.Sequence[AskInput]]=None,
                     ask_for_msg: typing.Optional[str]="",
@@ -805,8 +831,38 @@ class DMView(AbstractView):
                     dialog_type: typing.Optional[int]=0b11):
         """Show the dm-script dialog.
 
+        The base dialog is the same for all dialogs. The `dialog_type` shows 
+        which dialog is created in the dm-script code. Only the parameters for
+        this dialog are required, the others can be omitted
+
         Parameters
         ----------
+        measurement_variables : list of MeasurementVariable
+            The measurement variables that the current microscope supports,
+            required for 'series' dialog (`0b0010`)
+        series : dict
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, optional for 'series' dialog (`0b0010`), 
+            default: None
+        start : dict
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, optional for 'series' dialog (`0b0010`), default: None
+        configuration : AbstractConfiguration
+            The configuration to get the values of, required for 'configuration'
+            dialog (`0b0001`)
+        ask_for_values : sequence of dicts
+            A sequence of dicts where the dict contains the "datatype" and the 
+            "name" index and an optional "description" defining the values 
+            to ask the user for, required for 'ask_for' dialog (`0b0100`)
+        ask_for_msg : str
+            The message to show in the ask for dialog, optional for 'ask_for' 
+            dialog (`0b0100`)
+        custom_tags : dict of dicts
+            The tags dict where the keys are the tag names and the values are 
+            dicts with the "value" and "save" indices, required for 
+            'custom_tags' dialog (`0b1000`)
         dialog_type : int, optional
             Define which dialog to show, use
             - `0b01` for showing the configuration dialog
@@ -837,6 +893,7 @@ class DMView(AbstractView):
             measurement_variables = list(measurement_variables.values())
 
         m_vars = []
+        series_def = []
         
         # add all measurement variables if there are some
         if isinstance(measurement_variables, list):
@@ -844,45 +901,56 @@ class DMView(AbstractView):
                         "start", "end", "step")
             cal_keys = ("name", "unit")
             num_keys = ("start", "step", "end", "min_value", "max_value")
+
+            if not isinstance(series, dict):
+                series = {}
+            if not isinstance(start, dict):
+                start = {}
+            
+            series, *_ = MeasurementSteps.formatSeries(measurement_variables,
+                series, add_default_values=True, parse=False, uncalibrate=False,
+                start=start)
+
+            start, *_ = MeasurementSteps.formatStart(measurement_variables,
+                start, series, add_default_values=True, parse=False, 
+                uncalibrate=False)
+
+            series_nests = list(MeasurementSteps.getSeriesNests(series))
+            series_def = list(map(lambda s: s["variable"], series_nests))
+
             for var in measurement_variables:
                 m_var = {}
 
                 for name in var_keys:
                     val = None
-                    
-                    if name == "start":
-                        if var.default_start_value is not None:
-                            val = var.default_start_value
-                        elif var.min_value is not None:
-                            val = var.min_value
-                        else:
-                            val = 0
-                    elif name == "end":
-                        if var.default_end_value is not None:
-                            val = var.default_end_value
-                        elif var.max_value is not None:
-                            val = var.max_value
-                        else:
-                            val = 100
-                    elif name == "step":
-                        if var.default_step_width_value is not None:
-                            val = var.default_step_width_value
-                        elif (var.min_value is not None and 
-                              var.max_value is not None and 
-                              var.min_value != var.max_value):
-                            val = "{:.4}".format(
-                                abs(var.min_value - var.max_value) / 10
-                            )
-                        else:
-                            val = 1
+
+                    if name == "step":
+                        key = "step-width"
                     else:
-                        if var.has_calibration and name in cal_keys:
-                            n = "calibrated_{}".format(name)
-                            if hasattr(var, n) and getattr(var, n) != None:
-                                val = getattr(var, n)
+                        key = name
+                    
+                    if var.unique_id in series_def:
+                        i = series_def.index(var.unique_id)
+                        defaults = series_nests[i]
+                    else:
+                        fake_series = {"variable": var.unique_id}
+                        if var.unique_id in start:
+                            fake_series["start"] = start[var.unique_id]
                         
-                        if val is None:
-                            val = getattr(var, name)
+                        defaults, *_ = MeasurementSteps.formatSeries(
+                            measurement_variables, fake_series, 
+                            add_default_values=True, parse=False, uncalibrate=False)
+                    
+                    if var.has_calibration and name in cal_keys:
+                        n = "calibrated_{}".format(name)
+                        if hasattr(var, n) and getattr(var, n) != None:
+                            val = getattr(var, n)
+                    
+                    if val is None and key in defaults:
+                        val = defaults[key]
+                    
+                    if val is None and hasattr(var, name):
+                        val = getattr(var, name)
 
                     if name in num_keys and val != "":
                         if var.has_calibration:
@@ -979,6 +1047,7 @@ class DMView(AbstractView):
         ask_vals = []
         if isinstance(ask_for_values, (tuple, list)):
             for input_definition in ask_for_values:
+                input_definition = input_definition.copy()
                 if "datatype" in input_definition:
                     if isinstance(input_definition["datatype"], OptionDatatype):
                         input_definition["options"] = input_definition["datatype"].options
@@ -999,6 +1068,7 @@ class DMView(AbstractView):
 
         variables = {
             "m_vars": m_vars,
+            "series_def": series_def,
             "config_vars": config_vars,
             "ask_vals": ask_vals,
             "message": ask_for_msg,

@@ -136,7 +136,9 @@ class CLIView(AbstractView):
         log_debug(self._logger, "Input is '{}'".format(i))
         return i
 
-    def showCreateMeasurement(self, controller: "Controller") -> typing.Tuple[dict, dict]:
+    def showCreateMeasurement(self, controller: "Controller",
+                              series: typing.Optional[dict]=None,
+                              start: typing.Optional[dict]=None) -> typing.Tuple[dict, dict]:
         """Show the dialog for creating a measurement.
 
         Raises
@@ -149,6 +151,14 @@ class CLIView(AbstractView):
         controller : Controller
             The current controller for the microsocpe and the allowed 
             measurement variables
+        series : dict
+            The series dict that defines the series that is shown on startup
+            with uncalibrated and parsed values, if not given the default 
+            values are used, default: None
+        start : dict
+            The series start definition that is shown on startup  with 
+            uncalibrated and parsed values, if not given the default values are 
+            used, default: None
         
         Returns
         -------
@@ -161,7 +171,7 @@ class CLIView(AbstractView):
             may contain another series (value has to be the uncalibrated value)
         """
 
-        measurement = self._showCreateMeasurementLoop(controller)
+        measurement = self._showCreateMeasurementLoop(controller, start, series)
         log_debug(self._logger, "User defined measurement '{}'".format(measurement))
         return measurement
     
@@ -213,7 +223,8 @@ class CLIView(AbstractView):
         new_series = len(series) == 0
 
         series, series_inputs, series_errors = self._parseSeriesInputs(
-            controller, series)
+            controller, series, start=start)
+        
         start, start_errors = MeasurementSteps.formatStart(
             controller.microscope.supported_measurement_variables, start, 
             series, add_default_values=True, parse=False, uncalibrate=False
@@ -337,7 +348,8 @@ class CLIView(AbstractView):
             # restart loop
             return self._showCreateMeasurementLoop(controller, start, series)
     
-    def _parseSeriesInputs(self, controller: "Controller", series: dict) -> typing.Tuple[list, list]:
+    def _parseSeriesInputs(self, controller: "Controller", series: dict,
+                           start: typing.Optional[dict]=None) -> typing.Tuple[list, list]:
         """Parse the given `series` recursively and return the inputs and the 
         errors if there are some.
 
@@ -364,7 +376,8 @@ class CLIView(AbstractView):
         series_inputs = []
         series, errors = MeasurementSteps.formatSeries(
             controller.microscope.supported_measurement_variables, series, 
-            add_default_values=True, parse=False, uncalibrate=False
+            add_default_values=True, parse=False, uncalibrate=False,
+            start=start
         )
         if series is None:
             return series, series_inputs, errors
@@ -763,10 +776,12 @@ class CLIView(AbstractView):
             `inputs[0]` and so on
         """
 
+        inputs = self._formatAskForInputs(inputs)
+
         values = self._askForLoop(inputs, None, **kwargs)
         log_debug(self._logger, ("User was asked for values '{}' with kwargs '{}'" + 
                                 "and entered '{}'").format(inputs, kwargs, values))
-        return values
+        return self._parseAskForOutput(inputs, values)
 
     def _askForLoop(self, inputs: typing.Sequence[AskInput], 
                     ask_dict: typing.Optional[dict]=None, **kwargs):

@@ -142,20 +142,21 @@ class DMMicroscope(MicroscopeInterface):
             self.config_group_name, "default-om-current-step-width-value", 
             datatype=Datatype.hex_int, default_value=0x1000)
         
-        logginglib.log_debug(self._logger, "Asking the user to set the focus to 0")
+        # logginglib.log_debug(self._logger, "Asking the user to for the " + 
+        #                      "current focus")
         
-        # GMS needs some time here, don't know why but this fixes the bug, if 
-        # the sleeping is removed, the dialog will never show up but the 
-        # program will wait for interaction so it freezes
-        time.sleep(0.1)
-        button = self.controller.view.askForDecision(("Please set the focus " + 
-            "to zero manually now. This will be  saved as the reference value."),
-            ("Focus is 0 now", "Cancel"))
+        # # GMS needs some time here, don't know why but this fixes the bug, if 
+        # # the sleeping is removed, the dialog will never show up but the 
+        # # program will wait for interaction so it freezes
+        # time.sleep(0.1)
+        # focus = self.controller.view.askFor(
+        #     {"name": "Focus (um)", "datatype": Datatype.int, 
+        #      "description": "The current focus in micrometer. This will " + 
+        #         "set focus to the given value and link it to the objectiv " + 
+        #         "lens current that is currently applied."},
+        #     text="Please enter the current focus value")
         
-        if button == 1:
-            err = StopProgram()
-            logginglib.log_debug(self._logger, "Stopping program", exc_info=err)
-            raise err
+        # logginglib.log_debug(self._logger, "User set the focus to '{]'".format(focus))
         
         # the factor to get from the objective fine lense value to the 
         # objective coarse lense value
@@ -168,9 +169,9 @@ class DMMicroscope(MicroscopeInterface):
             math.isclose(self.objective_lense_coarse_fine_stepwidth, 0)):
             self.objective_lense_coarse_fine_stepwidth = None
         
-        logginglib.log_debug(self._logger, ("Objective fine-coarse lens stepwidth is " + 
-                                "'{}'").format(
-                                self.objective_lense_coarse_fine_stepwidth))
+        logginglib.log_debug(self._logger, ("Objective fine-coarse lens " + 
+                                            "stepwidth is '{}'").format(
+                                                self.objective_lense_coarse_fine_stepwidth))
 
         # the factor to multiply the lense current with to get the magnetic
         # field
@@ -183,8 +184,9 @@ class DMMicroscope(MicroscopeInterface):
             math.isclose(magnetic_field_calibration_factor, 0)):
             magnetic_field_calibration_factor = None
         
-        logginglib.log_debug(self._logger, "Magnetic field calibration factor is '{}'".format(
-                               magnetic_field_calibration_factor))
+        logginglib.log_debug(self._logger, ("Magnetic field calibration " + 
+                                            "factor is '{}'").format(
+                                                magnetic_field_calibration_factor))
         
         if magnetic_field_calibration_factor is not None:
             # the units of the magnetic field that results when multiplying with 
@@ -368,25 +370,25 @@ class DMMicroscope(MicroscopeInterface):
             self.holder_confirmed = False
         microscope_ready.append(self._confirmHolder)
         
-        variable = self.registerMeasurementVariable(
-            MeasurementVariable(
-                "stage-x", 
-                "Stage x position", 
-                unit="um",
-                # unit="µm",
-            ),
-            self._getStageX, self._setStageX
-        )
+        # variable = self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "stage-x", 
+        #         "Stage x position", 
+        #         unit="um",
+        #         # unit="µm",
+        #     ),
+        #     self._getStageX, self._setStageX
+        # )
 
-        variable = self.registerMeasurementVariable(
-            MeasurementVariable(
-                "stage-y", 
-                "Stage y position", 
-                unit="um",
-                # unit="µm",
-            ),
-            self._getStageY, self._setStageY
-        )
+        # variable = self.registerMeasurementVariable(
+        #     MeasurementVariable(
+        #         "stage-y", 
+        #         "Stage y position", 
+        #         unit="um",
+        #         # unit="µm",
+        #     ),
+        #     self._getStageY, self._setStageY
+        # )
 
         from pylo.config import OFFLINE_MODE
 
@@ -395,6 +397,10 @@ class DMMicroscope(MicroscopeInterface):
             self.dm_microscope = DM.Py_Microscope()
         else:
             self.dm_microscope = None
+        
+        if not self.getInLorentzMode():
+            self.controller.view.showHint("Setting microscope to lorentz mode")
+            self.setInLorentzMode(True)
     
     def _confirmHolder(self, *args) -> None:
         """Show a confirm dialog with the view if the holder is not yet
@@ -611,13 +617,39 @@ class DMMicroscope(MicroscopeInterface):
             The actual current of the objective lense at the microscope,
             measured in objective fine lense steps
         """
+
+        self._logger.info("objective_lense_coarse_fine_stepwidth: '{}'".format(self.objective_lense_coarse_fine_stepwidth))
         
-        if "fine" in self._ol_currents:
-            fine_value = self._ol_currents["fine"]
-        else:
-            raise IOError("The microscope cannot get the objective lens " + 
-                          "current by the API and the current has not yet " + 
-                          "been saved.")
+        if "fine" not in self._ol_currents:
+            ask_for = []
+            if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+                ask_for.append({"name": "Obj. lens coarse (OLc)", 
+                                "datatype": Datatype.hex_int,
+                                "description": "The objectiv coarse lens " + 
+                                "current in hex units"})
+                ask_for.append({"name": "Obj. lens fine (OLf)", 
+                                "datatype": Datatype.hex_int,
+                                "description": "The objectiv fine lens " + 
+                                "current in hex units"})
+                use_fine_and_coarse = True
+            else:
+                ask_for.append({"name": "Obj. lens", 
+                                "datatype": Datatype.hex_int,
+                                "description": "The objectiv lens " + 
+                                "current in hex units"})
+                use_fine_and_coarse = False
+
+            values = self.controller.view.askFor(*ask_for, 
+                text=("The microscope cannot get the objective lens current " + 
+                      "from the API and the current has not yet been saved."))
+            
+            if use_fine_and_coarse:
+                self._ol_currents["coarse"] = values[0]
+                self._ol_currents["fine"] = values[1]
+            else:
+                self._ol_currents["fine"] = values[0]
+        
+        fine_value = self._ol_currents["fine"]
 
         coarse_value = None
         if "coarse" in self._ol_currents:
@@ -712,7 +744,7 @@ class DMMicroscope(MicroscopeInterface):
             err = RuntimeError("The objective mini lens current (and " + 
                                "therefore the focus) can only beused if the " + 
                                "microscope is in the LowMAG mode. But the " + 
-                               "microscope is not in the LowMag mode.")
+                               "microscope is not in the LowMAG mode.")
             logginglib.log_error(self._logger, err)
             raise err
         
@@ -818,7 +850,7 @@ class DMMicroscope(MicroscopeInterface):
         """
         if not self.getInLorentzMode():
             err = RuntimeError("The objective mini lens current (and " + 
-                               "therefore the focus) can only beused if the " + 
+                               "therefore the focus) can only be used if the " + 
                                "microscope is in the LowMAG mode. But the " + 
                                "microscope is not in the LowMag mode.")
             logginglib.log_error(self._logger, err)

@@ -19,6 +19,7 @@ from .errors import BlockedFunctionError
 from .errors import DeviceClassNotDefined
 
 from .datatype import Datatype
+from .logginglib import do_log
 from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
@@ -614,6 +615,11 @@ class Controller:
                     self.camera.defineConfigurationOptions(self.configuration,
                         self.camera.config_group_name, 
                         self.camera.config_defaults)
+            
+            if do_log(self._logger, logging.INFO):
+                self._logger.info("Using camera '{}' and microscope '{}'".format(
+                    self.camera.__class__.__name__,
+                    self.microscope.__class__.__name__))
 
             # ask all non-existing but required configuration values
             self.askIfNotPresentConfigurationOptions()
@@ -644,14 +650,20 @@ class Controller:
             while (not isinstance(self.measurement, Measurement) and 
                 security_counter < MAX_LOOP_COUNT):
                 security_counter += 1
+
+                # get start values
+                start = {}
+                for v in self.microscope.supported_measurement_variables:
+                    start[v.unique_id] = self.microscope.getMeasurementVariableValue(v.unique_id)
                 
                 # index 0: measurement start parameters
                 # index 1: measurement series paramters
                 # index 2: configuration as a dict
                 # index 3: custom tags as a dict
                 log_debug(self._logger, ("Showing all program dialogs for the " + 
-                                        "{}th time").format(security_counter))
-                interactions = self.view.showProgramDialogs(self)
+                                        "{}th time with the start values " + 
+                                        "'{}'").format(security_counter, start))
+                interactions = self.view.showProgramDialogs(self, start=start)
 
                 log_debug(self._logger, "User entered the following values {}".format(
                                     interactions))

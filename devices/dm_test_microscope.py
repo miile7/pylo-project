@@ -7,8 +7,8 @@ DMMicroscope = loader.getDeviceClass("Digital Micrograph Microscope")
 class DMTestMicroscope(DMMicroscope):
     def __init__(self, *args, **kwargs) -> None:
         """Get the microscope instance"""
-        super().__init__(*args, **kwargs)
         self._lorentz_mode = False
+        super().__init__(*args, **kwargs)
     
     def setInLorentzMode(self, lorentz_mode: bool) -> None:
         # fake some hardware duration time

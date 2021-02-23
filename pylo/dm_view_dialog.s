@@ -12,6 +12,11 @@ class DMViewDialog : UIFrame{
     TagGroup measurement_variables;
 
     /**
+     * A `TagList` containing the series variables from the most outer one to the most inner one
+     */
+    TagGroup series_variables;
+
+    /**
      * The label that displays the error messages if there are some.
      */
     TagGroup error_display;
@@ -1191,7 +1196,18 @@ class DMViewDialog : UIFrame{
             series_select.DLGWidth(190);
             series_select.DLGAnchor("West");
             series_select.DLGSide("Left");
-            if(i > 0){
+
+            string selected_var = "";
+            number selected_index = -1;
+            if(series_variables.TagGroupIsValid()){
+                if(i < series_variables.TagGroupCountTags()){
+                    if(!series_variables.TagGroupGetIndexedTagAsString(i, selected_var)){
+                        selected_var = "";
+                    }
+                }
+            }
+
+            if(selected_var == "" && i > 0){
                 // enable only the first select box by default
                 series_select.DLGEnabled(0);
                 series_select.DLGAddChoiceItemEntry("--");
@@ -1201,10 +1217,20 @@ class DMViewDialog : UIFrame{
                 for(number j = 0; j < measurement_variables.TagGroupCountTags(); j++){
                     TagGroup var = self._DMViewDialogGetMeasurementVariableByIndex(j);
                     series_select.DLGAddChoiceItemEntry(self._DMViewDialogGetMeasurementVariableLabel(var))
+
+                    string id;
+                    if(var.TagGroupGetTagAsString("unique_id", id)){
+                        if(id == selected_var){
+                            selected_index = j;
+                        }
+                    }
                 }
             }
             series_select.DLGIdentifier("series_variable-" + i);
             series_selectboxes.TagGroupInsertTagAsTagGroup(infinity(), series_select);
+            if(selected_index >= 0){
+                series_select.DLGValue(selected_index);
+            }
             input_line.DLGAddElement(series_select);
 
             // add the (empty) limit display, value will be updated by 
@@ -1853,6 +1879,9 @@ class DMViewDialog : UIFrame{
      *      "max_value", "start", "step" and "end" indices and the optional "format", 
      *      "formatted_min_value", "formatted_max_value", "formatted_start", "formatted_step" and 
      *      "formatted_end"
+     * @param series_definition:
+     *      A `TagList` containing the series variables from the most outer one to the most inner 
+     *      one
      * @param configuration_vars
      *      A `TagGroup` where the key is the group name and the value is another `TagGroup` with
      *      the "value", "datatype", "description" and "restart_required" indices
@@ -1869,13 +1898,14 @@ class DMViewDialog : UIFrame{
      * @return
      *      The dialog
      */
-	object init(object self, string startup, string title, TagGroup measurement_vars, TagGroup configuration_vars, TagGroup ask_vals, String msg, TagGroup custom_tag_vals){
+	object init(object self, string startup, string title, TagGroup measurement_vars, TagGroup series_definition, TagGroup configuration_vars, TagGroup ask_vals, String msg, TagGroup custom_tag_vals){
         measurement_variables = measurement_vars;
         configuration = configuration_vars;
         ask_for_values = ask_vals;
         display_mode = startup;
         ask_vals_message = msg;
         custom_tag_values = custom_tag_vals;
+        series_variables = series_definition
         info_buttons = NewTagList();
         description_texts = NewTagList();
 		self.super.init(self._DMViewDialogCreateContent(title));
@@ -2307,6 +2337,8 @@ tg.TagGroupSetIndexedTagAsString(index, "hex");
 m_vars.TagGroupInsertTagAsTagGroup(infinity(), tg);
 TagGroup config_vars = NewTagGroup();
 
+TagGroup series_def = NewTagList();
+
 // number index;
 // TagGroup tg, tg2;
 TagGroup tg2;
@@ -2442,7 +2474,7 @@ string __file__ = getApplicationDirectory(0, 1);
 
 string title = "PyLo";
 
-object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, config_vars, ask_vals, message, custom_tag_vals);
+object dialog = alloc(DMViewDialog).init(dialog_startup, title, m_vars, series_def, config_vars, ask_vals, message, custom_tag_vals);
 
 TagGroup start;
 TagGroup series;

@@ -87,7 +87,7 @@ class TestAbstractView:
         if expected_dict == "same":
             expected_dict = input_dict.copy()
         
-        assert view._formatAskForInput(input_dict) == expected_dict
+        assert view._formatAskForInputs((input_dict, ))[0] == expected_dict
     
     @pytest.mark.usefixtures("view")
     @pytest.mark.parametrize("input_dict,expected_error", [
@@ -101,4 +101,4 @@ class TestAbstractView:
         """Test the format function for the askFor input"""
         
         with pytest.raises(expected_error):
-            view._formatAskForInput(input_dict)
+            view._formatAskForInputs((input_dict, ))
