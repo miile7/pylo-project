@@ -452,7 +452,7 @@ class PerformedMeasurement:
         self.formatted_names.append(self.measurement.formatName(self.name_test_format))
     
     def every_step_visited_handler(self, *args):
-        step = self.measurement.steps[self.measurement._step_index]
+        step = self.measurement.steps[self.measurement.step_index]
 
         try:
             self.unvisited_steps.remove(step)

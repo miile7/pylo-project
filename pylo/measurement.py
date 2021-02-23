@@ -75,6 +75,12 @@ class Measurement:
         immediately set this to False
     finished : bool
         Whether the measurement was completely run and finished successfully
+    step_index : int
+        The current step that is performed, if no measurement is running, the 
+        step is -1
+    current_step : dict or None
+        The current step that is used, if no measurement is running, the 
+        current step is None
         
     Listened Events
     ---------------
@@ -218,7 +224,8 @@ class Measurement:
         emergency.append(self.stop)
 
         # the index in the steps that is currently being measured
-        self._step_index = -1
+        self.step_index = -1
+        self.current_step = None
     
     def formatName(self, name_format: typing.Optional[str]=None) -> str:
         """Return the name for the current measurement step
@@ -238,10 +245,10 @@ class Measurement:
             name_format = self.name_format
         
         name, *_ = expand_vars(name_format, controller=self.controller, 
-                               step=self.steps[self._step_index], 
+                               step=self.current_step, 
                                start=self.series_start, 
                                series=self.series_definition, 
-                               tags=self.tags, counter=self._step_index)
+                               tags=self.tags, counter=self.step_index)
         log_debug(self._logger, "Formatting name to '{}'".format(name))
         return name
     
@@ -348,10 +355,10 @@ class Measurement:
             microscope_ready(self.controller)
             self.controller.view.print("Done.")
 
-            for self._step_index, step in enumerate(self.steps):
+            for self.step_index, self.current_step in enumerate(self.steps):
                 # start going through steps
                 log_debug(self._logger, "Starting step '{}': '{}'".format(
-                                       self._step_index, step))
+                                        self.step_index, self.current_step))
 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 
@@ -374,21 +381,22 @@ class Measurement:
 
                 if self.measurement_logging:
                     # add the values to reach to the current log
-                    self.addToMeasurementLog(step, "Targetting values", "", 
-                                  datetime.datetime.now().isoformat())
+                    self.addToMeasurementLog(self.current_step, 
+                        "Targetting values", "", 
+                        datetime.datetime.now().isoformat())
 
-                step_descr = ", ".join(["{}: {}".format(k, v) for k, v in step.items()])  
+                step_descr = ", ".join(["{}: {}".format(k, v) for k, v in self.current_step.items()])  
                 self.controller.view.print("Approaching step {}: {}.".format(
-                    self._step_index, step_descr
+                    self.step_index, step_descr
                 ))
 
                 # the asynchronous threads to set the values at the micrsocope
                 measurement_variable_threads = []
 
-                for variable_name in step:
+                for variable_name in self.current_step:
                     log_debug(self._logger, ("Setting variable '{}' of step to " + 
-                                            "value '{}'").format(variable_name,
-                                           step[variable_name]))
+                                             "value '{}'").format(variable_name,
+                                             self.current_step[variable_name]))
                     # set each measurement variable
                     if not self.running:
                         log_debug(self._logger, ("Stopping measurement because " + 
@@ -404,9 +412,9 @@ class Measurement:
                                                 "thread for variable"))
                         thread = ExceptionThread(
                             target=self.controller.microscope.setMeasurementVariableValue,
-                            args=(variable_name, step[variable_name]),
+                            args=(variable_name, self.current_step[variable_name]),
                             name="microscope variable {} in step {}".format(
-                                variable_name, self._step_index
+                                variable_name, self.step_index
                             )
                         )
                         log_debug(self._logger, "Starting variable setting " + 
@@ -416,9 +424,7 @@ class Measurement:
                     else:
                         # set measurement variables sequential
                         self.controller.microscope.setMeasurementVariableValue(
-                            variable_name, 
-                            step[variable_name]
-                        )
+                            variable_name, self.current_step[variable_name])
                 
                 log_debug(self._logger, ("Waiting for '{}' variable setting " + 
                                         "threads").format(len(measurement_variable_threads)))
@@ -431,11 +437,12 @@ class Measurement:
                 
                 info = "{{varname[{v}]}}: {{humanstep[{v}]}}{{varunit[{v}]}}"
                 info = human_concat_list(map(lambda v: info.format(v=v),
-                                             step.keys()), surround="",
-                                             word=" and ")
+                                             self.current_step.keys()), 
+                                             surround="", word=" and ")
                 info, *_ = expand_vars(("Reached point {counter} with values " + 
                                         info), controller=self.controller, 
-                                       step=step, counter=self._step_index)
+                                        step=self.current_step, 
+                                        counter=self.step_index)
                 log_info(self._logger, info)
                 self.controller.view.print("Done.", inset="  ")
                 
@@ -445,14 +452,14 @@ class Measurement:
                 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 
-                                            "running is now '{}'").format(self.running))
+                                             "running is now '{}'").format(self.running))
                     # stop() is called
                     return
 
                 log_debug(self._logger, "Receiving values from microscope")
                 # get the actual values
                 variable_values = {}
-                for variable_name in step:
+                for variable_name in self.current_step:
                     variable_values[variable_name] = (
                         self.controller.microscope.getMeasurementVariableValue(variable_name)
                     )
@@ -463,9 +470,9 @@ class Measurement:
                 self.controller.view.print("Recording image...", inset="  ")
                 # record measurement, add the real values to the image
                 self.current_image = self.controller.camera.recordImage(
-                    self.createTagsDict(variable_values), step=step, 
+                    self.createTagsDict(variable_values), step=self.current_step, 
                     series=self.series_definition, start=self.series_start, 
-                    counter=self._step_index)
+                    counter=self.step_index)
                 
                 name = self.formatName()
                 
@@ -512,10 +519,12 @@ class Measurement:
                 # check all thread exceptions
                 self.raiseThreadErrors()
 
-                log_debug(self._logger, "Increasing progress to '{}'".format(self._step_index + 1))
+                log_debug(self._logger, "Increasing progress to '{}'".format(self.step_index + 1))
                 
-                self.controller.view.progress = self._step_index + 1
+                self.controller.view.progress = self.step_index + 1
 
+            self.step_index = -1
+            self.current_step = None
             log_debug(self._logger, "Done with all steps")
             
             self.controller.view.print("Done with measurement.")
@@ -571,7 +580,6 @@ class Measurement:
 
             # reset everything to the state before measuring
             self.running = False
-            self._step_index = -1
 
             log_debug(self._logger, "Setting 'finished' to True")
             self.finished = True
@@ -690,7 +698,7 @@ class Measurement:
                                       controller=self.controller, step=step,
                                       start=self.series_start, 
                                       series=self.series_definition,
-                                      tags=self.tags, counter=self._step_index)
+                                      tags=self.tags, counter=self.step_index)
         beautified_step = dict(zip(beautified_step[0::2], beautified_step[1::2]))
 
         tags = {
