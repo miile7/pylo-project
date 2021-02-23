@@ -359,6 +359,9 @@ class AbstractConfiguration:
             internal default value the KeyError is raised, the `default_value`
             will be parsed with the `datatype`, if this fails the 
             `default_value` is returned as it is
+        parse_default_with_internal : bool
+            Whether to use the internal 'datatype' (if the `datatype` parameter
+            is not given) to parse the return value, default: False
         
         Returns
         -------
@@ -405,6 +408,9 @@ class AbstractConfiguration:
             internal default value the KeyError is raised, the `default_value`
             will be parsed with the `datatype`, if this fails the 
             `default_value` is returned as it is
+        parse_default_with_internal : bool
+            Whether to use the internal 'datatype' (if the `datatype` parameter
+            is not given) to parse the return value, default: False
         
         Returns
         -------
@@ -413,16 +419,23 @@ class AbstractConfiguration:
         """
         if not isinstance(configuration, dict):
             configuration = self.configuration
+        
+        if ("parse_default_with_internal" not in kwargs or 
+            not kwargs["parse_default_with_internal"]):
+            g = None,
+            k = None
+        else:
+            g = group
+            k = key
 
         if self._valueExists(group, key, configuration):
             return self._parseValue(group, key, 
                                     configuration[group][key]["value"][-1],
                                     datatype, configuration)
         elif fallback_default and "default_value" in kwargs:
-            return self._parseValue(None, None, kwargs["default_value"], 
-                                    datatype)
+            return self._parseValue(g, k, kwargs["default_value"], datatype)
         elif fallback_default and self._defaultExists(group, key, configuration):
-            return self._parseValue(None, None, 
+            return self._parseValue(g, k, 
                                     configuration[group][key]["default_value"],
                                     datatype)
         else:

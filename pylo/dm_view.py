@@ -29,6 +29,7 @@ from .logginglib import log_debug
 from .logginglib import log_error
 from .logginglib import get_logger
 from .pylolib import parse_value
+from .pylolib import format_value
 from .pylolib import get_datatype_name
 
 if DM is not None:
@@ -920,6 +921,23 @@ class DMView(AbstractView):
 
             for var in measurement_variables:
                 m_var = {}
+                    
+                if var.unique_id in series_def:
+                    i = series_def.index(var.unique_id)
+                    fake_series = series_nests[i]
+
+                    if "on-each-point" in fake_series:
+                        # not used and just more formatting overhead
+                        del fake_series["on-each-point"]
+                else:
+                    fake_series = {"variable": var.unique_id}
+                
+                if var.unique_id in start:
+                    fake_series["start"] = start[var.unique_id]
+                
+                defaults, *_ = MeasurementSteps.formatSeries(
+                    measurement_variables, fake_series, 
+                    add_default_values=True, parse=False, uncalibrate=False)
 
                 for name in var_keys:
                     val = None
@@ -928,18 +946,6 @@ class DMView(AbstractView):
                         key = "step-width"
                     else:
                         key = name
-                    
-                    if var.unique_id in series_def:
-                        i = series_def.index(var.unique_id)
-                        defaults = series_nests[i]
-                    else:
-                        fake_series = {"variable": var.unique_id}
-                        if var.unique_id in start:
-                            fake_series["start"] = start[var.unique_id]
-                        
-                        defaults, *_ = MeasurementSteps.formatSeries(
-                            measurement_variables, fake_series, 
-                            add_default_values=True, parse=False, uncalibrate=False)
                     
                     if var.has_calibration and name in cal_keys:
                         n = "calibrated_{}".format(name)
@@ -985,6 +991,7 @@ class DMView(AbstractView):
                 elif var.format is not None:
                     m_var["format"] = get_datatype_name(var.format)
                 
+                print("DMView._showDialog():", "m_var:", m_var)
                 m_vars.append(m_var)
         
         config_vars = {}
@@ -1010,7 +1017,10 @@ class DMView(AbstractView):
                     else:
                         var_type_name = get_datatype_name(var_type)
 
+                    # make sure the vaue is valid, parse it and then format it
+                    # again
                     val = parse_value(var_type, val)
+                    val = format_value(var_type, val)
                     
                     try:
                         default_value = configuration.getDefault(group, key)
