@@ -30,8 +30,8 @@ class ExceptionThread(threading.Thread):
         
         if do_log(self._logger, logging.INFO):
             self._logger.info(("Starting thread '{}' (#{}), currently {} " + 
-                            "active threads").format(self.name, self.ident, 
-                            threading.active_count() - 1))
+                               "active threads").format(self.name, self.ident, 
+                               threading.active_count()))
         
         log_debug(self._logger, ("Starting thread '{}' with args '{}' and " + 
                                  "kwargs '{}'").format(self.name, args, kwargs))
