@@ -920,6 +920,23 @@ class DMView(AbstractView):
 
             for var in measurement_variables:
                 m_var = {}
+                    
+                if var.unique_id in series_def:
+                    i = series_def.index(var.unique_id)
+                    fake_series = series_nests[i]
+
+                    if "on-each-point" in fake_series:
+                        # not used and just more formatting overhead
+                        del fake_series["on-each-point"]
+                else:
+                    fake_series = {"variable": var.unique_id}
+                
+                if var.unique_id in start:
+                    fake_series["start"] = start[var.unique_id]
+                
+                defaults, *_ = MeasurementSteps.formatSeries(
+                    measurement_variables, fake_series, 
+                    add_default_values=True, parse=False, uncalibrate=False)
 
                 for name in var_keys:
                     val = None
@@ -928,18 +945,6 @@ class DMView(AbstractView):
                         key = "step-width"
                     else:
                         key = name
-                    
-                    if var.unique_id in series_def:
-                        i = series_def.index(var.unique_id)
-                        defaults = series_nests[i]
-                    else:
-                        fake_series = {"variable": var.unique_id}
-                        if var.unique_id in start:
-                            fake_series["start"] = start[var.unique_id]
-                        
-                        defaults, *_ = MeasurementSteps.formatSeries(
-                            measurement_variables, fake_series, 
-                            add_default_values=True, parse=False, uncalibrate=False)
                     
                     if var.has_calibration and name in cal_keys:
                         n = "calibrated_{}".format(name)
