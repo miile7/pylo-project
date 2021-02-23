@@ -617,8 +617,6 @@ class DMMicroscope(MicroscopeInterface):
             The actual current of the objective lense at the microscope,
             measured in objective fine lense steps
         """
-
-        self._logger.info("objective_lense_coarse_fine_stepwidth: '{}'".format(self.objective_lense_coarse_fine_stepwidth))
         
         if "fine" not in self._ol_currents:
             ask_for = []
