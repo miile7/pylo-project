@@ -416,10 +416,10 @@ class DMCamera(CameraInterface):
         configuration.addConfigurationOption(
             config_group_name, "image-annotations", 
             datatype=str, 
-            default_value=("scalebar|{?H={humanstep[om-current]} }|" + 
-                           "{?F={humanstep[focus]} }|" + 
-                           "{?xt={humanstep[x-tilt]} }|" + 
-                           "{?yt={humanstep[y-tilt]} }"), 
+            default_value=("scalebar|{?H={humanstep[ol-current]}, }" + 
+                           "{?F={humanstep[focus]}, }" + 
+                           "{?xt={humanstep[x-tilt]}, }" + 
+                           "{?yt={humanstep[y-tilt]}}"), 
             description=("The annotations to show in the image, use the pipe " + 
                          "('|') to separate multiple annotations. Use " + 
                          "'scalebar' to add a scalebar. Anything else will " + 
