@@ -328,6 +328,23 @@ class DMCamera(CameraInterface):
             this object as a device, default: {}
         """
 
+        default_camera_settings = DM.GetActiveCamera().GetDefaultParameters()
+        # default_camera_settings[0]: exposure: Exposure time in seconds  
+        # default_camera_settings[1]: xBin: Hardware binning of pixels in x 
+        # direction  
+        # default_camera_settings[2]: yBin: Hardware binning of pixels in y 
+        # direction  
+        # default_camera_settings[3]: processing: Processing level 
+        # (unprocessed, dark subtracted, gain normalized) as number  
+        # default_camera_settings[4]: top: Top coordinate of the CCD readout 
+        # area  
+        # default_camera_settings[5]: left: Left coordinate of the CCD readout 
+        # area  
+        # default_camera_settings[6]: bottom: Bottom coordinate of the CCD 
+        # readout area  
+        # default_camera_settings[7]: right: Right coordinate of the CCD 
+        # readout area  
+
         if "show-images" not in config_defaults:
             config_defaults["show-images"] = False
         configuration.addConfigurationOption(
@@ -340,7 +357,7 @@ class DMCamera(CameraInterface):
         
         # the exposure time
         if "exposure-time" not in config_defaults:
-            config_defaults["exposure-time"] = 0.5
+            config_defaults["exposure-time"] = default_camera_settings[0]
         configuration.addConfigurationOption(
             config_group_name, "exposure-time", 
             datatype=float, 
@@ -350,7 +367,7 @@ class DMCamera(CameraInterface):
         
         # the binning
         if "binning-x" not in config_defaults:
-            config_defaults["binning-x"] = 1
+            config_defaults["binning-x"] = default_camera_settings[1]
         configuration.addConfigurationOption(
             config_group_name, "binning-x", 
             datatype=int, 
@@ -360,7 +377,7 @@ class DMCamera(CameraInterface):
         
         # the binning
         if "binning-y" not in config_defaults:
-            config_defaults["binning-y"] = 1
+            config_defaults["binning-y"] = default_camera_settings[2]
         configuration.addConfigurationOption(
             config_group_name, "binning-y", 
             datatype=int, 
@@ -370,7 +387,7 @@ class DMCamera(CameraInterface):
         
         # the process level
         if "process-level" not in config_defaults:
-            config_defaults["process-level"] = 3
+            config_defaults["process-level"] = default_camera_settings[3]
         configuration.addConfigurationOption(
             config_group_name, "process-level", 
             datatype=int, 
@@ -381,13 +398,13 @@ class DMCamera(CameraInterface):
         
         # the ccd readout area
         if "ccd-readout-area-top" not in config_defaults:
-            config_defaults["ccd-readout-area-top"] = 0
+            config_defaults["ccd-readout-area-top"] = default_camera_settings[4]
         if "ccd-readout-area-right" not in config_defaults:
-            config_defaults["ccd-readout-area-right"] = 4096
+            config_defaults["ccd-readout-area-right"] = default_camera_settings[7]
         if "ccd-readout-area-left" not in config_defaults:
-            config_defaults["ccd-readout-area-left"] = 0
+            config_defaults["ccd-readout-area-left"] = default_camera_settings[5]
         if "ccd-readout-area-bottom" not in config_defaults:
-            config_defaults["ccd-readout-area-bottom"] = 4096
+            config_defaults["ccd-readout-area-bottom"] = default_camera_settings[6]
         configuration.addConfigurationOption(
             config_group_name, "ccd-readout-area-top", 
             datatype=int, 
