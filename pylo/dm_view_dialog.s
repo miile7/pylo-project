@@ -1357,11 +1357,11 @@ class DMViewDialog : UIFrame{
         line.DLGAnchor("East");
         line.DLGFill("X");
 
-        if(type != "boolean"){
+        // if(type != "boolean"){
             TagGroup label = DLGCreateLabel(name, cw1);
             label.DLGAnchor("North");
             line.DLGAddElement(label);
-        }
+        // }
 
         if(type == "int"){
             number value;
@@ -1373,19 +1373,19 @@ class DMViewDialog : UIFrame{
             value_definition.TagGroupGetTagAsFloat("value", value);
             input = DLGCreateRealField(value, cw2, 4);
         }
-        else if(type == "boolean"){
-            number value;
-            value_definition.TagGroupGetTagAsBoolean("value", value);
-            input = DLGCreateCheckBox(name, value != 0 ? 1 : 0);
-            input.DLGAnchor("East");
+        // else if(type == "boolean"){
+        //     number value;
+        //     value_definition.TagGroupGetTagAsBoolean("value", value);
+        //     input = DLGCreateCheckBox(name, value != 0 ? 1 : 0);
+        //     input.DLGAnchor("East");
 
-            TagGroup inner_line_wrapper = DLGCreateGroup();
-            // inner_line_wrapper.DLGWidth(350);
-            inner_line_wrapper.DLGAddElement(input);
-            inner_line_wrapper.DLGAnchor("East");
-            inner_line_wrapper.DLGSide("Right");
-            line.DLGAddElement(inner_line_wrapper);
-        }
+        //     TagGroup inner_line_wrapper = DLGCreateGroup();
+        //     // inner_line_wrapper.DLGWidth(350);
+        //     inner_line_wrapper.DLGAddElement(input);
+        //     inner_line_wrapper.DLGAnchor("East");
+        //     inner_line_wrapper.DLGSide("Right");
+        //     line.DLGAddElement(inner_line_wrapper);
+        // }
         else if(type == "dirpath" || type == "filepath"){
             string value;
             value_definition.TagGroupGetTagAsString("value", value);
@@ -1424,12 +1424,22 @@ class DMViewDialog : UIFrame{
 
             line.DLGAddElement(inner_line_wrapper);
         }
-        else if(type == "options"){
-            string value;
-            number value_index;
-            value_definition.TagGroupGetTagAsString("value", value);
-
+        else if(type == "options" || type == "boolean"){
             TagGroup options;
+            number value_index;
+            string value;
+
+            if(type == "options"){
+                value_definition.TagGroupGetTagAsString("value", value);
+            }
+            else if(type == "boolean"){
+                value_definition.TagGroupGetTagAsBoolean("value", value_index);
+
+                options = NewTagList();
+                options.TagGroupInsertTagAsString(0, "No")
+                options.TagGroupInsertTagAsString(1, "Yes")
+            }
+
             value_definition.TagGroupGetTagAsTagGroup("options", options);
 
             input = DLGCreateChoice()
@@ -1439,8 +1449,10 @@ class DMViewDialog : UIFrame{
 
                 input.DLGAddChoiceItemEntry(item_text);
 
-                if(value == item_text){
-                    value_index = i;
+                if(type == "options"){
+                    if(value == item_text){
+                        value_index = i;
+                    }
                 }
             }
 
@@ -1453,7 +1465,7 @@ class DMViewDialog : UIFrame{
             input = DLGCreateStringField(value, cw2);
         }
 
-        if(type != "boolean" && type != "dirpath" && type != "filepath"){
+        if(type != "dirpath" && type != "filepath"){
             input.DLGAnchor("North");
             line.DLGAddElement(input);
         }
