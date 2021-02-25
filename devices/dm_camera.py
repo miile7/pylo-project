@@ -199,9 +199,16 @@ class DMCamera(CameraInterface):
             annotation_kwargs["tags"] = tags
             annotation_kwargs["controller"] = self.controller
 
-            annotations = list(filter(lambda a: a != "", 
-                               pylolib.expand_vars(*annotations.split("|"), 
-                                    **annotation_kwargs)))
+            try:
+                annotations = list(filter(lambda a: a != "", 
+                                pylolib.expand_vars(*annotations.split("|"), 
+                                        **annotation_kwargs)))
+            except ValueError as e:
+                err = ValueError("The annotations cannot be set because they " + 
+                                 "are not formatted properly: '{}'".format(annotations))
+                logginglib.log_debug(self._logger, err)
+                raise err from e
+            
             logginglib.log_debug(self._logger, ("Processing annotations to " + 
                                                 "'{}'").format(annotations))
         else:
