@@ -2,7 +2,7 @@ import math
 import pylo
 
 class StaticMagneticFieldForTilt(pylo.Device):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.clearEvents()
@@ -10,35 +10,85 @@ class StaticMagneticFieldForTilt(pylo.Device):
         pylo.before_approach.append(self.modifyStep)
 
         self._logger = pylo.logginglib.get_logger(self)
+        self.hint_shown = False
     
-    def __del__(self):
+    def __del__(self) -> None:
         self.clearEvents()
     
-    def clearEvents(self):
+    def clearEvents(self) -> None:
         """Clear the events from the bound functions"""
         if self.initialize in pylo.init_ready:
             pylo.init_ready.remove(self.initialize)
         if self.modifyStep in pylo.before_approach:
             pylo.before_approach.remove(self.modifyStep)
     
-    def initialize(self, controller, *args, **kwargs):
+    def initialize(self, controller, *args, **kwargs) -> None:
         """Initialize the plugin."""
         # define the configuration options again, this time the contorller
         # is known and therefore options can be generated
         StaticMagneticFieldForTilt.defineConfigurationOptions(
             controller.configuration, self.config_group_name, 
             self.config_defaults, controller=controller)
+        self.hint_shown = False
     
-    def modifyStep(self, controller, *args, **kwargs):
+    def getMeasurementVariableIdByName(self, controller: pylo.Controller, 
+                                       name: str) -> str:
+        """Get the measurement variable id from the given measurement variable
+        `name´.
+
+        Raises
+        ------
+        KeyError
+            When the `name` is not found
+
+        Parameters
+        ----------
+        controller : pylo.Controller
+            The controller
+        name : str
+            The measurement variable name
+        
+        Returns
+        -------
+        str
+            The measurement variable id
+        """
+        for var in controller.microscope.supported_measurement_variables:
+            if ((var.has_calibration and var.calibrated_name == name) or 
+                var.name == name):
+                return var.unique_id
+        
+        raise KeyError(("Could not find a measurement variable with the " + 
+                       "name '{}'.").format(name))
+    
+    def modifyStep(self, controller: pylo.Controller, *args, **kwargs):
         """Modify the step to keep a constant field."""
 
-        tilt_id = controller.configuration.getValue(self.config_group_name, 
-                                                    "correction")
-        if tilt_id == "Off":
+        if self.hint_shown:
+            return
+
+        tilt_name = controller.configuration.getValue(self.config_group_name, 
+                                                      "correct-variable")
+        
+        try:
+            tilt_id = self.getMeasurementVariableIdByName(controller, tilt_name)
+        except KeyError:
             return
         
-        field_id = controller.configuration.getValue(self.config_group_name, 
-                                                     "magnetic-field-id")
+        field_name = controller.configuration.getValue(self.config_group_name, 
+                                                       "magnetic-field")
+        try:
+            field_id = self.getMeasurementVariableIdByName(controller, field_name)
+        except KeyError:
+            if not self.hint_shown:
+                self.hint_shown = True
+                controller.view.showHint("The magnetic field cannot be kept " + 
+                                         "constant because the magnetic field " + 
+                                         "measurement variable is not set. " + 
+                                         "The tilt correction plugin is now " + 
+                                         "switched off.")
+            return
+        
         constant = controller.configuration.getValue(self.config_group_name,
                                                      "keep-constant")
         in_deg = controller.configuration.getValue(self.config_group_name,
@@ -85,9 +135,13 @@ class StaticMagneticFieldForTilt(pylo.Device):
     def defineConfigurationOptions(configuration, group, defaults, *args, **kwargs):
         if ("controller" in kwargs and 
             isinstance(kwargs["controller"], pylo.Controller)):
-            field_type = [v.unique_id for v in 
-                          kwargs["controller"].microscope.supported_measurement_variables]
+            field_type = [v.calibrated_name 
+                          if v.has_calibration and v.calibrated_name is not None 
+                          else v.name for v 
+                          in kwargs["controller"].microscope.supported_measurement_variables]
             correction_type = field_type.copy()
+
+            field_type.insert(0, "Please select...")
             correction_type.insert(0, "Off")
 
             field_type = pylo.Datatype.options(field_type)
@@ -96,25 +150,25 @@ class StaticMagneticFieldForTilt(pylo.Device):
             field_type = str
             correction_type = str
         
-        configuration.addConfigurationOption(group, "correction", 
+        configuration.addConfigurationOption(group, "correct-variable", 
             datatype=correction_type, 
             description=("The tilt measurement variable id to correct. "+ 
                          "Use 'Off' to prevent tilt correction"))
         
-        configuration.addConfigurationOption(group, "magnetic-field-id", 
+        configuration.addConfigurationOption(group, "magnetic-field", 
             datatype=field_type, 
             description=("The magnetic field measurement variable id. "+ 
-                         "If the 'correction' is 'Off', this value is " + 
+                         "If the 'correct-variable' is 'Off', this value is " + 
                          "ignored."))
         
         configuration.addConfigurationOption(group, "keep-constant", 
             datatype=pylo.Datatype.options(("In-plane", "Out-of-plane")), 
             description=("The magnetic field to keep constant. Ignored if " + 
-                         "'correction' is 'Off'."))
+                         "'correct-variable' is 'Off'."))
         
         configuration.addConfigurationOption(group, "tilt-in-degree", 
             datatype=bool, default_value=True,
             description=("Whether the tilt (the value of the measurement " + 
-                         "variable with the id of the 'correction') is " + 
+                         "variable with the id of the 'correct-variable') is " + 
                          "measured in degree (True) or in radians (False). " + 
-                         "Ignored if 'correction' is 'Off'."))
+                         "Ignored if 'correct-variable' is 'Off'."))
