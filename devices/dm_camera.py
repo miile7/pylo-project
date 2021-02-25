@@ -58,7 +58,14 @@ class DMCamera(CameraInterface):
     show_images : bool, optional
         Whether to show all recorded images in a new workspace or not, 
         default: False
+    
+    Class Attributes
+    ----------------
+    workspace_number : int
+        The number of workspaces that were created
     """
+
+    workspace_number = 0
 
     def __init__(self, *args, **kwargs) -> None:
         """Create a new dm camera object."""
@@ -85,8 +92,11 @@ class DMCamera(CameraInterface):
         else:
             self.camera = None
         
+        DMCamera.workspace_number = DMCamera.getNumberOfWorkspaces()
+        
         # the workspace id to show the images in if they should be displayed
         self._workspace_id = None
+        self._ensureWorkspace()
     
     def _loadSettings(self) -> None:
         """Load the settings from the configuration."""
@@ -218,14 +228,18 @@ class DMCamera(CameraInterface):
             logginglib.log_debug(self._logger, "Retracting camera is not " + 
                                                "allowed by this camera")
 
-    def _ensureWorkspace(self, activate_new: typing.Optional[bool]=True, 
+    def _ensureWorkspace(self, name: typing.Optional[str]=None,
+                         activate_new: typing.Optional[bool]=True, 
                          force_active: typing.Optional[bool]=False) -> None:
-        """Ensure that the DMCamera._workspace_id exists.
+        """Ensure that the `DMCamera._workspace_id` exists.
 
         If the workspace does not exist, it is created.
         
         Parameters
         ----------
+        name : str, optional
+            The workspace name, if not given the `config.PROGRAM_NAME` with a
+            trailing number is used, default: None
         activate_new : bool, optional
             Whether to set the workspace new as the active one, default: True
         force_active : bool, optional
@@ -233,15 +247,16 @@ class DMCamera(CameraInterface):
             default: False
         """
 
-        logginglib.log_debug(self._logger, "Checking if workspace id '{}' is valid".format(
-                               self._workspace_id))
+        logginglib.log_debug(self._logger, ("Checking if workspace id '{}' " + 
+                                            "is valid").format(self._workspace_id))
 
         if (not isinstance(self._workspace_id, int) or 
             DM.WorkspaceCountWindows(self._workspace_id) == 0):
             # either the workspace id does not exist or it exists but the user 
             # closed the workspace already
-            logginglib.log_debug(self._logger, ("Workspace with id '{}' does not exist, " + 
-                                    "creatinga  new one'").format(self._workspace_id))
+            logginglib.log_debug(self._logger, ("Workspace with id '{}' does " + 
+                                                "not exist, creating a new " + 
+                                                "one.").format(self._workspace_id))
 
             self._createNewWorkspace(activate_new)
 
@@ -253,41 +268,41 @@ class DMCamera(CameraInterface):
             }
             dmscript = "WorkspaceSetActive(wsid);"
 
-            logginglib.log_debug(self._logger, ("Forcing workspace to be active by " + 
-                                    "executing dmscript '{}' with setvars " + 
-                                    "'{}'").format(dmscript, setvars))
+            logginglib.log_debug(self._logger, ("Forcing workspace to be " + 
+                                                "active by executing " + 
+                                                "dmscript '{}' with setvars " + 
+                                                "'{}'").format(dmscript, setvars))
 
             with execdmscript.exec_dmscript(dmscript, setvars=setvars):
                 pass
     
-    def _createNewWorkspace(self, activate: typing.Optional[bool]=True) -> None:
+    def _createNewWorkspace(self, name: typing.Optional[str]=None,
+                            activate: typing.Optional[bool]=True) -> typing.Tuple[int, str]:
         """Create a new workspace and save the workspace id.
         
         Parameters
         ----------
+        name : str, optional
+            The workspace name, if not given the `config.PROGRAM_NAME` with a
+            trailing number is used, default: None
         activate : bool, optional
             Whether to set the new workspace as the active one, default: True
+        
+        Returns
+        -------
+        int, str
+            The id of the new workspace and the name
         """
 
         from pylo.config import PROGRAM_NAME
 
-        # try to find the workspace with the program name, if there is none 
-        # create a new one
+        if not isinstance(name, str) or name == "":
+            name = "{} {}".format(PROGRAM_NAME, DMCamera.workspace_number + 1)
+
         dmscript = [
-            "number wsid;",
-            "number found = 0;",
-            "for(number i = 0; i < WorkspaceGetCount(); i++){",
-                "wsid = WorkspaceGetFromIndex(i);",
-                "string name = WorkspaceGetName(wsid);",
-                "if(name == \"{}\"){{".format(execdmscript.escape_dm_string(PROGRAM_NAME)),
-                    "found = 1;",
-                    "break;",
-                "}",
-            "}",
-            "if(!found){",
-                "wsid = WorkspaceAdd(0);",
-                "WorkspaceSetName(wsid, \"{}\");".format(execdmscript.escape_dm_string(PROGRAM_NAME)),
-            "}",
+            "number wsid = WorkspaceAdd(0);",
+            "WorkspaceSetName(wsid, \"{}\");".format(
+                execdmscript.escape_dm_string(name)),
         ]
 
         if activate:
@@ -306,8 +321,49 @@ class DMCamera(CameraInterface):
 
         with execdmscript.exec_dmscript(dmscript, readvars=readvars) as script:
             self._workspace_id = script["wsid"]
+            DMCamera.workspace_number += 1
 
-        logginglib.log_debug(self._logger, "New workspac has id '{}'".format(self._workspace_id))
+        logginglib.log_debug(self._logger, ("New workspace with id '{}' and " + 
+                                            "name '{}'.").format(self._workspace_id,
+                                                                 name))
+
+        return self._workspace_id, name
+    
+    @staticmethod
+    def getNumberOfWorkspaces() -> int:
+        """Get the number of 'Pylo <number>' workspaces
+
+        Returns
+        -------
+        int
+            The number of workspaces whose name starts with the program name
+            and ends with a number
+        """
+
+        from pylo.config import PROGRAM_NAME
+
+        dmscript = "\n".join((
+            "number workspace_number = 0;",
+            "for(number i = 0; i < WorkspaceGetCount(); i++){",
+                "number wsid = WorkspaceGetFromIndex(i);",
+                "string name = WorkspaceGetName(wsid);",
+                "if(name.left({}) == \"{}\"){{".format(len(PROGRAM_NAME), execdmscript.escape_dm_string(PROGRAM_NAME)),
+                    "name = name.right(name.len() - 1 - {});".format(len(PROGRAM_NAME)),
+                    "if(name.val() > workspace_number){",
+                        "workspace_number = name.val()",
+                    "}",
+                "}",
+            "}",
+        ))
+
+        readvars = {
+            "workspace_number": int
+        }
+
+        with execdmscript.exec_dmscript(dmscript, readvars=readvars) as script:
+            return script["workspace_number"]
+        
+        return 0
 
     @staticmethod
     def defineConfigurationOptions(configuration: "AbstractConfiguration", 
