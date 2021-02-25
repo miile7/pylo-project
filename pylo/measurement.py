@@ -690,7 +690,7 @@ class Measurement:
             elif var.unit is not None:
                 name += " (in {})".format(var.unit)
             
-            beautified_step.append("{{varname[{id}]}}{{? (in {{varunit[{id}])}}?}}".format(
+            beautified_step.append("{{varname[{id}]}}{{? (in {{varunit[{id}]}})?}}".format(
                                    id=var.unique_id))
             beautified_step.append("{{humanstep[{}]}}".format(var.unique_id))
         
