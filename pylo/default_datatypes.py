@@ -43,7 +43,7 @@ def format_int(v: typing.Any, f: typing.Optional[str]="") -> str:
     try:
         v = parse_int(v)
     except ValueError:
-        v = ""
+        return ""
     return ("{" + f + "}").format(v)
 
 int_type = Datatype("int", format_int, parse_int)
@@ -106,7 +106,7 @@ def format_hex(v: typing.Any, f: typing.Optional[str]="") -> str:
     try:
         v = parse_int(v)
     except ValueError:
-        v = ""
+        return ""
 
     return Datatype.join_format_spec(f).format(v)
 
@@ -218,3 +218,51 @@ def format_filepath(v: typing.Any, f: typing.Optional[str]="") -> str:
 
 filepath_type = Datatype("filepath", format_filepath, parse_filepath)
 filepath_type.default_parse = ""
+
+def float_np(n: int) -> Datatype:
+    """Get a float datatype that rounds to `n` digits.
+
+    Parameters
+    ----------
+    n : int
+        The number of digits after the decimal separator
+    
+    Returns
+    -------
+    Datatype
+        The datatype
+    """
+
+    def format_float_np(v: typing.Any, f: typing.Optional[str]="") -> str:
+        """Format the given value to a float.
+
+        Parameters
+        ----------
+        v : any
+            The value to format
+        f : str
+            The format specification
+        
+        Returns
+        -------
+        str
+            The formatted value or an emtpy string if it is not formattable
+        """
+        try:
+            v = float(v)
+        except ValueError:
+            return ""
+            
+        f = list(Datatype.split_format_spec(f))
+        if f[7] == "":
+            f[7] = str(n)
+        f[8] = "f"
+
+        f = Datatype.join_format_spec(f)
+
+        return f.format(v)
+
+    dt = Datatype("float_{}p".format(n), format_float_np, float)
+    dt.default_parse = "0.00"
+
+    return dt

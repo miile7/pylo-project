@@ -7,7 +7,7 @@ Attributes
 ----------
 loader : pylo.DeviceLoader
     The loader instance to use to load devices
-GMS : bool
+GMS_MODE : bool
     Whether pylo is executed inside GMS or not (if the DigitalMicrograph module
     could be loaded or not)
 """
@@ -94,12 +94,12 @@ try:
     from .dm_view import DMView
     from .dm_image import DMImage
     from .dm_configuration import DMConfiguration
-    GMS = False
+    GMS_MODE = True
 except ExecutionOutsideEnvironmentError:
     DMView = None
     DMImage = None
     DMConfiguration = None
-    GMS = True
+    GMS_MODE = False
 
 import os
 import typing

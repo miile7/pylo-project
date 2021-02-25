@@ -89,6 +89,16 @@ class TestDatatypes:
         """Test if the int datatype works."""
 
         assert pylo.Datatype.int.format(value, "") == expected
+    
+    @pytest.mark.parametrize("value,expected", [
+        ("0.999999999999999", "1.00"),
+        ("1", "1.00"),
+        ("1.449", "1.45")
+    ])
+    def test_float_2p_format(self, value, expected):
+        """Test if the float_2p datatype works."""
+
+        assert pylo.Datatype.float_np(2).format(value, "") == expected
 
     @pytest.mark.parametrize("datatype,parse,expected", [
         (pylo.Datatype.options((1, 2, 3)), 1, 1),

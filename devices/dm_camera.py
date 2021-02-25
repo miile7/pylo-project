@@ -199,9 +199,16 @@ class DMCamera(CameraInterface):
             annotation_kwargs["tags"] = tags
             annotation_kwargs["controller"] = self.controller
 
-            annotations = list(filter(lambda a: a != "", 
-                               pylolib.expand_vars(*annotations.split("|"), 
-                                    **annotation_kwargs)))
+            try:
+                annotations = list(filter(lambda a: a != "", 
+                                pylolib.expand_vars(*annotations.split("|"), 
+                                        **annotation_kwargs)))
+            except ValueError as e:
+                err = ValueError("The annotations cannot be set because they " + 
+                                 "are not formatted properly: '{}'".format(annotations))
+                logginglib.log_debug(self._logger, err)
+                raise err from e
+            
             logginglib.log_debug(self._logger, ("Processing annotations to " + 
                                                 "'{}'").format(annotations))
         else:
@@ -489,10 +496,10 @@ class DMCamera(CameraInterface):
         configuration.addConfigurationOption(
             config_group_name, "image-annotations", 
             datatype=str, 
-            default_value=("scalebar|{?H={humanstep[ol-current]}, }" + 
-                           "{?F={humanstep[focus]}, }" + 
-                           "{?xt={humanstep[x-tilt]}, }" + 
-                           "{?yt={humanstep[y-tilt]}}"), 
+            default_value=("scalebar|{?H={humanstep[ol-current]}, ?}" + 
+                           "{?F={humanstep[focus]}, ?}" + 
+                           "{?xt={humanstep[x-tilt]}, ?}" + 
+                           "{?yt={humanstep[y-tilt]}?}"), 
             description=("The annotations to show in the image, use the pipe " + 
                          "('|') to separate multiple annotations. Use " + 
                          "'scalebar' to add a scalebar. Anything else will " + 

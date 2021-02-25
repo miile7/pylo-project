@@ -8,15 +8,23 @@ from pylo import pylolib
 class TestPylolib:
     @pytest.mark.parametrize("text,groups", [
         ("A", [("_", "A")]),
-        ("A{?B}C", [("_", "A"), ("?", "B"), ("_", "C")]),
-        ("A{{?B}C", [("_", "A{{?B}C")]),
-        ("{?B}C", [("?", "B"), ("_", "C")]),
-        ("A{?B}", [("_", "A"), ("?", "B")]),
-        ("A{!B{C}}D", [("_", "A"), ("!", "B{C}}D")]),
-        ("A{!B{C} }D", [("_", "A"), ("!", "B{C} "), ("_", "D")]),
-        ("A{_B{C}}}D", [("_", "A"), ("_", "B{C}}}D")]),
-        ("A{??B{C} }D", [("_", "A"), ("?", "?B{C} "), ("_", "D")]),
-        ("A{!{_B}{C}D}E", [("_", "A"), ("!", "{_B}{C}D"), ("_", "E")]),
+        ("A{?B?}C", [("_", "A"), ("?", "B"), ("_", "C")]),
+        ("{!B!}C", [("!", "B"), ("_", "C")]),
+        ("A{_B_}", [("_", "A"), ("_", "B")]),
+        ("A{?B}C", [("_", "A"), ("?", "B}C")]),
+        ("A{{?B?}C", [("_", "A{{?B?}C")]),
+        ("{?B?}C", [("?", "B"), ("_", "C")]),
+        ("A{?B?}", [("_", "A"), ("?", "B")]),
+        ("A{!B{C}!}D", [("_", "A"), ("!", "B{C}"), ("_", "D")]),
+        ("A{!B{C} }D", [("_", "A"), ("!", "B{C} }D")]),
+        ("A{_B{C}}_}D", [("_", "A"), ("_", "B{C}}_}D")]),
+        ("A{??B{C}??}D", [("_", "A"), ("?", "?B{C}?"), ("_", "D")]),
+        ("A{!{_B_}{C}D!}E", [("_", "A"), ("!", "{_B_}{C}D"), ("_", "E")]),
+        ("{?B_}C", [("?", "B_}C")]),
+        ("{?H={humanstep[ol-current]}, ?}{?F={humanstep[focus]}, ?}" + 
+         "{?xt={humanstep[x-tilt]}, ?}{?yt={humanstep[y-tilt]}?}", 
+         [("?", "H={humanstep[ol-current]}, "), ("?", "F={humanstep[focus]}, "),
+          ("?", "xt={humanstep[x-tilt]}, "), ("?", "yt={humanstep[y-tilt]}")])
     ])
     def test_split_expand_vars_groups(self, text, groups):
         assert pylolib._split_expand_vars_groups(text) == groups
@@ -155,19 +163,19 @@ class TestPylolib:
             assert val in formatted_text[i]
     
     @pytest.mark.parametrize("text,expected", [
-        ("A{?{keydoesnotexist} }B", "AB"),
-        ("{?{keydoesnotexist}}", ""),
-        ("{?A {keydoesnotexist} B}", ""),
-        ("{_A {keydoesnotexist} B}", "A  B"),
-        ("{_A {keydoesnotexist[index]} B}", "A  B")
+        ("A{?{keydoesnotexist}?}B", "AB"),
+        ("{?{keydoesnotexist}?}", ""),
+        ("{?A{keydoesnotexist}B?}", ""),
+        ("{_A{keydoesnotexist}B_}", "AB"),
+        ("{_A{keydoesnotexist[index]}B_}", "AB")
     ])
     def test_expand_vars_ignore_missing(self, text, expected):
         assert expected == pylolib.expand_vars(text)[0]
     
     @pytest.mark.parametrize("text", [
-        "A{!{keydoesnotexist}}B",
-        "{!{keydoesnotexist}}",
-        "{!A {keydoesnotexist} B}",
+        "A{!{keydoesnotexist}!}B",
+        "{!{keydoesnotexist}!}",
+        "{!A{keydoesnotexist}B!}",
     ])
     def test_expand_vars_raise_error(self, text):
         with pytest.raises(KeyError):
