@@ -34,6 +34,9 @@ class Datatype:
         The `OptionDatatype` class so it can be used more intuitively like the 
         other datatypes, this expresses a list of values that are valid, use 
         with `Datatype.options(("opt 1", "opt 2"))`
+    float_np : function
+        A float with the precision of `<n>`, the parsed value will always be a
+        normal float, the formatted output is rounded to the `<n>` digits
     default_parse : any
         The default parsed value for this datatype if a value is not parsable, 
         has to be anything else than None, default: None
@@ -203,7 +206,8 @@ class Datatype:
     @staticmethod
     def join_format_spec(format_tuple: typing.Tuple[str, str, str, str, str, typing.Union[str, int], str, typing.Union[str, int], str], keyname: typing.Optional[str]="") -> str:
         """Join the `format_tuple` of the form as returned by 
-        `Datatype::split_format_tuple()` to a valid format string.
+        `Datatype::split_format_tuple()` to a valid format string **including 
+        the curly brackets**.
 
         This returns the format string including the curly brackets and the 
         colon. For using a key you can set the `keyname`.
@@ -405,3 +409,6 @@ Datatype.dirpath = dirpath_type
 
 from .default_datatypes import filepath_type
 Datatype.filepath = filepath_type
+
+from .default_datatypes import float_np
+Datatype.float_np = float_np
