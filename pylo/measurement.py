@@ -435,7 +435,7 @@ class Measurement:
                 # check all thread exceptions
                 self.raiseThreadErrors(*measurement_variable_threads)
                 
-                info = "{{varname[{v}]}}: {{humanstep[{v}]}}{{varunit[{v}]}}"
+                info = "{{varname[{v}]}}: {{humanstep[{v}]}} {{varunit[{v}]}}"
                 info = human_concat_list(map(lambda v: info.format(v=v),
                                              self.current_step.keys()), 
                                              surround="", word=" and ")
@@ -690,7 +690,7 @@ class Measurement:
             elif var.unit is not None:
                 name += " (in {})".format(var.unit)
             
-            beautified_step.append("{{varname[{id}]}}{{? (in varunit[{id}])}}".format(
+            beautified_step.append("{{varname[{id}]}}{{? (in {{varunit[{id}])}}?}}".format(
                                    id=var.unique_id))
             beautified_step.append("{{humanstep[{}]}}".format(var.unique_id))
         

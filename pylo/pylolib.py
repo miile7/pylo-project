@@ -370,11 +370,22 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
     - 'time': The current time as a datetime object
 
     Additionally to the python format values, text can be grouped by using 
-    '{?<...>}', '{_<...>}' and '{!<...>}' e.g. '{?the value is {step[value]}}'. 
-    If the value `step["value"]` does not exist, the whole group is omitted if 
-    '{?<...>}' is used, if '{_<...>}'  is used, only the value is omitted. If 
-    '{!<...>}' is used, the key error of the python `format` function is 
-    raised. The default group is using the underscore.
+    '{?<...>?}', '{_<...>_}' and '{!<...>!}' e.g. 
+    '{?the value is {step[value]}?}'. If the value `step["value"]` does not 
+    exist, the whole group is omitted if '{?<...>?}' is used, if '{_<...>_}' is 
+    used, only the value is omitted. If '{!<...>!}' is used, the key error of 
+    the python `format` function is raised. The default group is using the 
+    underscore.
+
+    Example:
+    ```
+    >>> expand_vars("{?Step: {step[var]}?}", step={})
+    ("", )
+    >>> expand_vars("{_Step: {step[var]}_}", step={})
+    ("Step: ")
+    >>> expand_vars("{!Step: {step[var]}!}", step={})
+    KeyError
+    ```
 
     Curly brackets can be escaped with anoter curly bracket. Note that nested 
     groups are currently not supported.
@@ -386,8 +397,8 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
     
     Returns
     -------
-    str
-        The formatted name
+    tuple of str
+        The formatted `text`s
     """
     from .controller import Controller
     from .measurement_steps import MeasurementSteps
@@ -483,13 +494,13 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
         
         names.append("".join(name))
         
-    return names
+    return tuple(names)
 
 def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
     """Split the given `text` into groups.
 
-    A group is started with '{?' and ended with '}' while all other opening and
-    closing brackets inbetween are ignored.
+    A group is started with '{?' and ended with '?}' while all other opening 
+    and closing brackets inbetween are ignored.
 
     Parameters
     ----------
@@ -504,6 +515,11 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
         returned list
     """
 
+    # def dbg(*args, **kwargs):
+    #     pass
+    # dbg = print
+    # dbg(text)
+
     groups = []
     bc = 0 # bracket count
     ig = False # in group or not
@@ -512,7 +528,9 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
     mod = "_" # the mofifier to save
     lmod = "_" # the lastly used modifier
     for i, c in enumerate(text):
+        # dbg("{:2}: {:2} | ".format(i, c), end="")
         if i in ebp:
+            # dbg()
             continue
 
         if c == "{" or c == "}":
@@ -527,8 +545,11 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
                 # this and the next brackets are escaping characters
                 ebp.append(i)
                 ebp.append(i + 1)
+                # dbg("Ignoring, bracket is escaped")
                 continue
         
+        # dbg("ig: '{}', c: '{}', mod: '{}', text[i + 1]: '{}', bc: '{}'".format(
+        #     ig, c, mod, text[i + 1] if i + 1 < len(text) else None, bc), end=" | ")
         end_i = i
         save_group = False
         if (not ig and c in ("?", "_", "!") and i > 0 and text[i - 1] == "{" and 
@@ -540,12 +561,17 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
             end_i = i - 1
             lmod = mod
             mod = c
-        elif ig != False and c == "}" and ig == bc + 1:
+            # dbg("Opening new group with modifier '{}'".format(mod), end="")
+        elif (ig != False and c == mod and i + 1 < len(text) and 
+              text[i + 1] == "}" and ig == bc):
             ig = False
             save_group = True
             # group is closed, reset the modifier to the last modifier and the 
             # last modifier to the current modifier
             mod, lmod = lmod, mod
+            i += 1
+            bc -= 1
+            # dbg("Closing group with modifier '{}'".format(mod), end="")
         
         if save_group:
             t = text[lo:end_i]
@@ -556,10 +582,15 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
             # set the start of the coming group to the character after the 
             # current character
             lo = i + 1
+        #     dbg("Saving group '{}' with modifier '{}'".format(t, lmod))
+        # else:
+        #     dbg()
     
     # add remaining text to the groups
     if lo < len(text):
         groups.append((mod, text[lo:]))
+    
+    # dbg(groups)
     
     return groups
 
@@ -585,6 +616,12 @@ def get_expand_vars_text(controller_given: typing.Optional[bool]=True,
     """
 
     placeholder_texts = []
+    placeholder_texts.append("To group texts with values use " + 
+                             "{?value is <placeholder>?} to omit the whole " + 
+                             "group if the placeholder is not present. Use " + 
+                             "{_value is <placeholder>_} to to omit the " + 
+                             "placeholder only.")
+
     if step_given:
         placeholder_texts.append("Use {step[<variable-id>]} to access the " + 
                                  "current measurement step as uncalibrated " + 
@@ -626,7 +663,7 @@ def get_expand_vars_text(controller_given: typing.Optional[bool]=True,
                              "expression after the colon. Use python date " + 
                              "format for formatting.")
 
-    return "Some placeholders can be used. " + (" ".join(placeholder_texts))
+    return "Some placeholders can be used. " + ("\n- ".join(placeholder_texts))
 
 def getDeviceText(additional_paths: typing.Optional[typing.Iterable]=None,
                   additional_device_files: typing.Optional[typing.Iterable]=None) -> str:
