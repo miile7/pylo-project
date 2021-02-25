@@ -991,7 +991,6 @@ class DMView(AbstractView):
                 elif var.format is not None:
                     m_var["format"] = get_datatype_name(var.format)
                 
-                print("DMView._showDialog():", "m_var:", m_var)
                 m_vars.append(m_var)
         
         config_vars = {}
