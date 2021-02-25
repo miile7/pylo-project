@@ -307,22 +307,48 @@ def human_concat_list(x: typing.Sequence, surround: typing.Optional[str]="'",
         return ""
     else:
         return surround * 2
+        
+class DefaultWrapper:
+    """A wrapper around the `container` to allow accessing with a default value."""
+    ignore_str_format_errors = True
 
-class _ExpandVarsDefaultValue:
-    """The default value for the `pylolib.expand_vars()` function if keys do 
-    not exist"""
-    
+    def __init__(self, container="", **kwargs):
+        self.container = container
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        return "DefaultWrapper around '{}'".format(repr(self.container))
+
     def __str__(self):
-        return ""
+        return str(self.container)
     
+    def __format__(self, format_spec):
+        try:
+            return self.container.__format__(format_spec)
+        except TypeError as e:
+            if DefaultWrapper.ignore_str_format_errors or self.container == "":
+                return str(self)
+            else:
+                raise e
+
     def __getattr__(self, name):
-        return self
-    
+        try:
+            return DefaultWrapper(getattr(self.container, name))
+        except AttributeError:
+            return DefaultWrapper()
+
     def __getitem__(self, name):
-        return self
-    
+        try:
+            return DefaultWrapper(self.container[name])
+        except (TypeError, LookupError):
+            try:
+                return DefaultWrapper(self.kwargs[name])
+            except (TypeError, LookupError):
+                return DefaultWrapper()
+        
     def __contains__(self, name):
         return True
+
     
 def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
                 step: typing.Optional[dict]=None, 
@@ -481,7 +507,7 @@ def expand_vars(*text: str, controller: typing.Optional["Controller"]=None,
         name = []
         for modifier, t in groups:
             if modifier == "_":
-                t = t.format_map(defaultdict(_ExpandVarsDefaultValue, **format_kwargs))
+                t = t.format_map(DefaultWrapper(format_kwargs))
             else:
                 try:
                     t = t.format(**format_kwargs)
@@ -570,7 +596,6 @@ def _split_expand_vars_groups(text: str) -> typing.List[typing.Tuple[str, str]]:
             # last modifier to the current modifier
             mod, lmod = lmod, mod
             i += 1
-            bc -= 1
             # dbg("Closing group with modifier '{}'".format(mod), end="")
         
         if save_group:

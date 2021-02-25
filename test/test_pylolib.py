@@ -21,6 +21,10 @@ class TestPylolib:
         ("A{??B{C}??}D", [("_", "A"), ("?", "?B{C}?"), ("_", "D")]),
         ("A{!{_B_}{C}D!}E", [("_", "A"), ("!", "{_B_}{C}D"), ("_", "E")]),
         ("{?B_}C", [("?", "B_}C")]),
+        ("{?H={humanstep[ol-current]}, ?}{?F={humanstep[focus]}, ?}" + 
+         "{?xt={humanstep[x-tilt]}, ?}{?yt={humanstep[y-tilt]}?}", 
+         [("?", "H={humanstep[ol-current]}, "), ("?", "F={humanstep[focus]}, "),
+          ("?", "xt={humanstep[x-tilt]}, "), ("?", "yt={humanstep[y-tilt]}")])
     ])
     def test_split_expand_vars_groups(self, text, groups):
         assert pylolib._split_expand_vars_groups(text) == groups
