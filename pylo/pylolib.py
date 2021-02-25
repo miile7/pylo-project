@@ -63,6 +63,8 @@ def format_value(datatype: typing.Union[type, Datatype], value: typing.Any,
         except ValueError as e:
             if not suppress_errors:
                 raise e
+    elif isinstance(datatype, type):
+        value = datatype(value)
     
     return "{}".format(value)
 
@@ -181,12 +183,13 @@ def human_value(var: "MeasurementVariable", val: typing.Any) -> typing.Any:
     any
         The formatted and calibrated value
     """
+    
     if var.has_calibration:
         val = var.ensureCalibratedValue(val)
     
-    if var.has_calibration and isinstance(var.calibrated_format, Datatype):
+    if var.has_calibration and isinstance(var.calibrated_format, (type, Datatype)):
         val = format_value(var.calibrated_format, val)
-    elif isinstance(var.format, Datatype):
+    elif isinstance(var.format, (type, Datatype)):
         val = format_value(var.format, val)
     
     return val
