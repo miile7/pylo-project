@@ -23,6 +23,7 @@ from .datatype import Datatype
 from .datatype import OptionDatatype
 from .logginglib import log_debug
 from .logginglib import log_error
+from .measurement_variable import MeasurementVariable
 
 
 # allow to check if a variable is a path
@@ -37,14 +38,17 @@ if hasattr(os, "PathLike"):
 
 path_like = tuple(path_like)
 
-def format_value(datatype: typing.Union[type, Datatype], value: typing.Any,
-                suppress_errors: typing.Optional[bool]=False) -> str:
+def format_value(datatype: typing.Union[type, Datatype, MeasurementVariable, None], 
+                value: typing.Any, suppress_errors: typing.Optional[bool]=False) -> str:
     """Get the `value` correctly formatted as a string.
 
     Parameters
     ----------
-    datatype : type, Datatype
-        The datatype
+    datatype : type, Datatype, MeasurementVariable or None
+        The datatype, if a `MeasurementVariable` is given, the 
+        `calibrated_format` is used if it is valid and the variabel has a 
+        calibration, the `format` otherwise if it is given, if None is given 
+        the `value` is not converted
     value : any
         The value to format
     suppress_errors : bool, optional
@@ -57,6 +61,13 @@ def format_value(datatype: typing.Union[type, Datatype], value: typing.Any,
         The `value` as a string
     """
 
+    if isinstance(datatype, MeasurementVariable):
+        if (datatype.has_calibration and 
+            isinstance(datatype.calibrated_format, (Datatype, type))):
+            datatype = datatype.calibrated_format
+        elif (isinstance(datatype.format, (Datatype, type))):
+            datatype = datatype.format
+
     if isinstance(datatype, Datatype):
         try:
             return datatype.format(value)
@@ -68,8 +79,8 @@ def format_value(datatype: typing.Union[type, Datatype], value: typing.Any,
     
     return "{}".format(value)
 
-def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
-                suppress_errors: typing.Optional[bool]=True) -> typing.Any:
+def parse_value(datatype: typing.Union[type, Datatype, None, MeasurementVariable], 
+                value: typing.Any, suppress_errors: typing.Optional[bool]=True) -> typing.Any:
     """Parse the given `value` for the given `datatype`.
 
     Raises
@@ -82,8 +93,11 @@ def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
 
     Parameters
     ----------
-    datatype : type, Datatype or None
-        The datatype, if None is given the `value` is not converted
+    datatype : type, Datatype, MeasurementVariable or None
+        The datatype, if a `MeasurementVariable` is given, the 
+        `calibrated_format` is used if it is valid and the variabel has a 
+        calibration, the `format` otherwise if it is given, if None is given 
+        the `value` is not converted
     value : any
         The value to parse
     suppress_errors : bool, optional
@@ -95,6 +109,13 @@ def parse_value(datatype: typing.Union[type, Datatype, None], value: typing.Any,
     any
         The `value` as the type of `datatype`
     """
+
+    if isinstance(datatype, MeasurementVariable):
+        if (datatype.has_calibration and 
+            isinstance(datatype.calibrated_format, (Datatype, type))):
+            datatype = datatype.calibrated_format
+        elif (isinstance(datatype.format, (Datatype, type))):
+            datatype = datatype.format
         
     if datatype == bool:
         if isinstance(value, str):
