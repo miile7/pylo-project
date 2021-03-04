@@ -12,6 +12,8 @@ import random
 import pytest
 
 import pylo
+# disable logging for tests
+pylo.config.ENABLED_PROGRAM_LOG_LEVELS = []
 
 class DummyMicroscope1(pylo.MicroscopeInterface):
     def __init__(self, controller):
@@ -104,11 +106,14 @@ values = {
                           #             the test series is initialized wrong)
 }
 
-@pytest.fixture()
-def controller():
+def get_controller():
     controller = pylo.Controller(pylo.AbstractView(), pylo.AbstractConfiguration())
     controller.microscope = DummyMicroscope2(controller)
     return controller
+
+@pytest.fixture()
+def controller():
+    return get_controller()
 
 @pytest.fixture()
 @pytest.mark.usefixtures("controller")
@@ -144,10 +149,99 @@ def measurement_steps(controller):
     }
     return pylo.MeasurementSteps(controller, start, series)
 
+def default_series_combinations():
+    combinations = (
+        ("end", ), # 001
+        ("step-width", ), #010
+        ("step-width", "end"), #011
+        ("start", ), #100
+        ("start", "end"), #101
+        ("start", "step-width"), #110
+        ("start", "step-width", "end"), #111
+    )
+    controller = get_controller()
+
+    for v in controller.microscope.supported_measurement_variables:
+        # this series is the same as the default series (if no defaults are 
+        # given as a parameter and no defaults are present in the 
+        # MeasurementVariable)
+        template_series = {"variable": v.unique_id, "start": v.min_value,
+                           "end": v.max_value, 
+                           "step-width": (v.max_value - v.min_value) / 5}
+
+        for deletes in combinations:
+            for i in range(2):
+                for j in range(4):
+                    # create the expected series
+                    expected = copy.deepcopy(template_series)
+                    start = None
+                    defaults = None
+                    series = {"variable": template_series["variable"]}
+
+                    if i % 2 == 1:
+                        # test negative step widths
+                        expected["step-width"] *= -1
+                        expected["end"], expected["start"] = expected["start"], expected["end"]
+
+                        if "step-width" in deletes:
+                            # not possible to get negative steps if the step
+                            # width is not included and there is only one
+                            # (or less) other elemenets
+                            continue
+                    
+                    mvars = copy.deepcopy(controller.microscope.supported_measurement_variables)
+                    if j == 0:
+                        # get values from defaults in measurement 
+                        # variables
+                        for mv in mvars:
+                            mv.default_start_value = expected["start"]
+                            mv.default_end_value = expected["end"]
+                            mv.default_step_width_value = expected["step-width"]
+                        
+                            for key in deletes:
+                                if key == "step-width":
+                                    key = "step_width"
+                                
+                                setattr(mv, "default_{}_value".format(key), None)
+                    else:
+                        for mv in mvars:
+                            mv.default_start_value = None
+                            mv.default_end_value = None
+                            mv.default_step_width_value = None
+                    
+                        if j == 1:
+                            # get values from defaults dict
+                            defaults = {
+                                v.unique_id: {
+                                    "start": expected["start"],
+                                    "end": expected["end"],
+                                    "step-width": expected["step-width"]
+                                }
+                            }
+
+                            for key in deletes:
+                                if key in defaults[v.unique_id]:
+                                    del defaults[v.unique_id][key]
+                        else:
+                            series = copy.deepcopy(expected)
+
+                            if j == 2:
+                                # set start dict, delete series start to use start dict
+                                start = {v.unique_id: expected["start"]}
+                                del series["start"]
+                    
+                            for key in deletes:
+                                if key in series:
+                                    # delete some values to get the defaults
+                                    del series[key]
+                    
+                    yield start, series, expected, mvars, defaults
+
 class TestMeasurementSteps:
     @pytest.mark.usefixtures("measurement_steps")
     def test_count(self, measurement_steps):
         """Test the length of the measurement steps"""
+        print(measurement_steps.series)
         assert len(measurement_steps) == (len(values["a"]) * 
                                           len(values["b"]) * 
                                           len(values["c"]) *
@@ -427,6 +521,54 @@ class TestMeasurementSteps:
         assert steps.start["lense-current"] == 1
         assert steps.start["x-tilt"] == 10
     
+    # pylo.MeasurementVariable("focus", "Focus", 0, 10, "mA"),
+    # pylo.MeasurementVariable("lense-current", "OM Current", 0, 3, 
+    #                             format=pylo.Datatype.hex_int,
+    #                             calibration=2, calibrated_unit="T",
+    #                             calibrated_name="Magnetic Field"),
+    # pylo.MeasurementVariable("x-tilt", "Tilt (x direction)", -35, 35, "deg")
+    @pytest.mark.usefixtures("controller")
+    @pytest.mark.parametrize("start,series,expected", [
+        ({"focus": 2}, {"variable": "focus"}, 
+         {"variable": "focus", "start": 2, "end": 10, "step-width": (10-2)/5})
+    ])
+    def test_parse_series_defaults_with_start(self, controller, start, series, expected):
+        """Test the formatSeries function"""
+        mvars = copy.deepcopy(controller.microscope.supported_measurement_variables)
+        for v in mvars:
+            v.default_start_value = 0
+            v.default_step_width_value = 0
+            v.default_end_value = 0
+        
+        result_series, _ =  pylo.MeasurementSteps.formatSeries(mvars, series, 
+                                                               add_default_values=True, 
+                                                               start=start)
+        
+        assert result_series == expected
+    
+    @pytest.mark.usefixtures("controller")
+    @pytest.mark.parametrize("start,series,expected,mvars,defaults", 
+        list(default_series_combinations())
+    )
+    def test_parse_series_defaults(self, controller, start, series, expected, mvars, defaults):
+        """Test the formatSeries function"""
+        print("start:", start)
+        print("series:", series)
+        print("defaults:", defaults)
+        print("mvar defaults:")
+        for v in mvars:
+            print("  ", v.name, {"start": v.default_start_value, 
+                           "step-width": v.default_step_width_value, 
+                           "end": v.default_end_value})
+        result_series, _ = pylo.MeasurementSteps.formatSeries(mvars,
+            series, add_default_values=True, start=start, 
+            default_values=defaults)
+        
+        print("= = =")
+        print("r:", result_series, "e:", expected)
+        
+        assert result_series == expected
+    
     @pytest.mark.usefixtures("controller")
     def test_parse_series_wrong_variable_raises_exception(self, controller):
         """Test if an invalid variable id raises an exception."""
@@ -446,8 +588,11 @@ class TestMeasurementSteps:
             invalid_series = copy.deepcopy(series)
             del invalid_series[key]
 
-            with pytest.raises(KeyError):
+            if key == "start":
                 pylo.MeasurementSteps(controller, start, invalid_series)
+            else:
+                with pytest.raises(KeyError):
+                    pylo.MeasurementSteps(controller, start, invalid_series)
     
     @pytest.mark.usefixtures("controller")
     def test_parse_series_missing_key_in_subseries_raises_exception(self, controller):
@@ -461,15 +606,17 @@ class TestMeasurementSteps:
             invalid_series = copy.deepcopy(series)
             del invalid_series["on-each-point"][key]
 
-            with pytest.raises(KeyError):
+            if key == "start":
                 pylo.MeasurementSteps(controller, start, invalid_series)
+            else:
+                with pytest.raises(KeyError):
+                    pylo.MeasurementSteps(controller, start, invalid_series)
 
-    @pytest.mark.parametrize("step_width", (-1, 0))
     @pytest.mark.usefixtures("controller")
-    def test_parse_series_step_width_smaller_than_zero(self, step_width, controller):
-        """Test if a step with smaller or equal to zero raises an exception."""
+    def test_parse_series_step_width_zero(self, controller):
+        """Test if a step withequal to zero raises an exception."""
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
-        series = {"variable": "focus", "start": 0, "end": 10, "step-width": step_width}
+        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 0}
 
         with pytest.raises(ValueError):
             pylo.MeasurementSteps(controller, start, series)
