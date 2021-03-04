@@ -110,7 +110,7 @@ class MeasurementSteps(collections.abc.Sequence):
                      start: typing.Optional[dict]=None,
                      default_values: typing.Optional[dict]=None,
                      logger: typing.Optional[logging.Logger]=None, *args,
-                     parse_measurement_variable_default: typing.Optional[bool]=True) -> dict:
+                     parse_measurement_variable_default: typing.Optional[bool]=False) -> dict:
         """Format the given `series` to contain valid values only.
 
         If an invalid value is found and `add_default_values` is True, the 
@@ -200,7 +200,7 @@ class MeasurementSteps(collections.abc.Sequence):
             The logger object to log to, if not given no logs are made
         parse_measurement_variable_default : bool, optional
             Whether to parse the default values if the series variables defines
-            default values, default: True
+            default values, default: False
         
         Returns
         -------
