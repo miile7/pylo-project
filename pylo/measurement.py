@@ -62,8 +62,8 @@ class Measurement:
         Whether to set the camera in its safe mode if the measurememt is 
         finished
     relaxation_time : float
-        The relaxation time in seconds to wait after the microscope has been 
-        set to lorentz mode
+        The relaxation time in seconds to wait after the microscope has reached 
+        the measurement variable values after approaching each step
     name_format : str
         The file name how to save the images (including the extension, 
         supported are all the extensions provided by the `CameraInterface`),
@@ -201,7 +201,7 @@ class Measurement:
         try:
             self.relaxation_time = self.controller.configuration.getValue(
                 CONFIG_MEASUREMENT_GROUP,
-                "relaxation-time-lorentz-mode"
+                "relaxation-time"
             )
         except KeyError:
             self.relaxation_time = None
@@ -210,7 +210,8 @@ class Measurement:
             self.relaxation_time < 0):
             self.relaxation_time = 0
         
-        log_debug(self._logger, "Setting relaxation time to '{}'".format(self.relaxation_time))
+        log_debug(self._logger, ("Setting relaxation time to " + 
+                                 "'{}'").format(self.relaxation_time))
 
         self.current_image = None
         self.running = False
@@ -220,7 +221,7 @@ class Measurement:
 
         # stop the measurement when the emergency event is fired
         log_debug(self._logger, "Adding stop() function call to emergency " + 
-                               "event")
+                                "event")
         emergency.append(self.stop)
 
         # the index in the steps that is currently being measured
@@ -324,29 +325,10 @@ class Measurement:
             # set to lorentz mode
             self.controller.view.print("Setting to lorentz mode...")
             self.controller.microscope.setInLorentzMode(True)
-        
-            if (isinstance(self.relaxation_time, (int, float)) and 
-                self.relaxation_time > 0):
-                log_debug(self._logger, ("Waiting relaxation time of '{}' " + 
-                                        "seconds").format(self.relaxation_time))
-                self.controller.view.print(("Waiting relaxation time of {} " + 
-                                            "seconds").format(self.relaxation_time))
-                start_time = time.time()
-
-                while time.time() - start_time < self.relaxation_time:
-                    # allow calling stop() function while waiting
-                    time.sleep(0.01)
-
-                    if not self.running:
-                        # stop() is called
-                        return
-                
-                log_debug(self._logger, "Continuing with measurement")
-                self.controller.view.print("Done with waiting, continuing...")
 
             if not self.running:
                 log_debug(self._logger, ("Stopping measurement because running " + 
-                                        "is now '{}'").format(self.running))
+                                         "is now '{}'").format(self.running))
                 # stop() is called
                 return
             
@@ -427,10 +409,29 @@ class Measurement:
                             variable_name, self.current_step[variable_name])
                 
                 log_debug(self._logger, ("Waiting for '{}' variable setting " + 
-                                        "threads").format(len(measurement_variable_threads)))
+                                         "threads").format(len(measurement_variable_threads)))
                 # Wait for all measurement variable threads to finish
                 for thread in measurement_variable_threads:
                     thread.join()
+        
+                if (isinstance(self.relaxation_time, (int, float)) and 
+                    self.relaxation_time > 0):
+                    log_info(self._logger, ("Waiting relaxation time of '{}' " + 
+                                            "seconds").format(self.relaxation_time))
+                    self.controller.view.print(("Waiting relaxation time of {} " + 
+                                                "seconds").format(self.relaxation_time))
+                    start_time = time.time()
+
+                    while time.time() - start_time < self.relaxation_time:
+                        # allow calling stop() function while waiting
+                        time.sleep(0.01)
+
+                        if not self.running:
+                            # stop() is called
+                            return
+                    
+                    log_debug(self._logger, ("Continuing with measurement at " + 
+                                             "time '{:%Y-%m-%d %H:%M:%S,%f}'").format(datetime.datetime.now()))
                 
                 # check all thread exceptions
                 self.raiseThreadErrors(*measurement_variable_threads)
@@ -917,12 +918,11 @@ class Measurement:
         
         # add whether a relaxation time after the lornez mode is activated
         configuration.addConfigurationOption(
-            CONFIG_MEASUREMENT_GROUP, "relaxation-time-lorentz-mode", 
+            CONFIG_MEASUREMENT_GROUP, "relaxation-time", 
             datatype=float, 
             default_value=DEFAULT_RELAXATION_TIME, 
             description="The relaxation time in seconds to wait after the " + 
-            "microscope is switched to lorentz mode. Use 0 or negative values " + 
-            "to ignore."
+            "microscope has reached all the measurement variable values."
         )
         
         # add whether to set the microscope to the safe state after the 
