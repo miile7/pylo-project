@@ -433,6 +433,17 @@ class Measurement:
                     log_debug(self._logger, ("Continuing with measurement at " + 
                                              "time '{:%Y-%m-%d %H:%M:%S,%f}'").format(datetime.datetime.now()))
                 
+                log_debug(self._logger, "Receiving values from microscope and " + 
+                                        "writing it to the current_step")
+                # get the actual values
+                for variable_name in self.current_step:
+                    self.current_step[variable_name] = (
+                        self.controller.microscope.getMeasurementVariableValue(variable_name)
+                    )
+                
+                log_debug(self._logger, "Got values '{}' from microscope".format(
+                                        self.current_step))
+                
                 # check all thread exceptions
                 self.raiseThreadErrors(*measurement_variable_threads)
                 
@@ -457,21 +468,13 @@ class Measurement:
                     # stop() is called
                     return
 
-                log_debug(self._logger, "Receiving values from microscope")
-                # get the actual values
-                variable_values = {}
-                for variable_name in self.current_step:
-                    variable_values[variable_name] = (
-                        self.controller.microscope.getMeasurementVariableValue(variable_name)
-                    )
-                log_debug(self._logger, "Got values '{}' from microscope".format(
-                                        variable_values))
                 log_debug(self._logger, "Recording image")
                 
                 self.controller.view.print("Recording image...", inset="  ")
                 # record measurement, add the real values to the image
                 self.current_image = self.controller.camera.recordImage(
-                    self.createTagsDict(variable_values), step=self.current_step, 
+                    self.createTagsDict(self.current_step), 
+                    step=self.current_step, 
                     series=self.series_definition, start=self.series_start, 
                     counter=self.step_index)
                 
@@ -485,8 +488,9 @@ class Measurement:
                 
                 if self.measurement_logging:
                     # add the real values to the log
-                    self.addToMeasurementLog(variable_values, "Recording image", name, 
-                                  datetime.datetime.now().isoformat())
+                    self.addToMeasurementLog(self.current_step, 
+                                             "Recording image", name, 
+                                             datetime.datetime.now().isoformat())
                 
                 if not self.running:
                     log_debug(self._logger, ("Stopping measurement because " + 

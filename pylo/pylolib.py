@@ -70,12 +70,16 @@ def format_value(datatype: typing.Union[type, Datatype, MeasurementVariable, Non
 
     if isinstance(datatype, Datatype):
         try:
-            return datatype.format(value)
+            value = datatype.format(value)
         except ValueError as e:
             if not suppress_errors:
                 raise e
     elif isinstance(datatype, type):
-        value = datatype(value)
+        try:
+            value = datatype(value)
+        except ValueError as e:
+            if not suppress_errors:
+                raise e
     
     return "{}".format(value)
 
