@@ -150,11 +150,11 @@ Default: False
 DEFAULT_CAMERA_TO_SAFE_STATE_AFTER_MEASUREMENT = False
 
 __config_docs__("DEFAULT_RELAXATION_TIME",
-"""The time in seconds to wait after the microscope has been set to the 
-lorentz mode and before starting the measurement.
-Default: 10
+"""The time in seconds to wait after the microscope has reached the measurement
+variables values
+Default: 1
 """)
-DEFAULT_RELAXATION_TIME = 0
+DEFAULT_RELAXATION_TIME = 1
 
 __config_docs__("DM_CONFIGURATION_PERSISTENT_TAG_NAME",
 """The tag name in the persistent tags to use to save all the settings in.
