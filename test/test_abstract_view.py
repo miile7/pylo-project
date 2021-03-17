@@ -77,9 +77,9 @@ class TestAbstractView:
           "description": "Test description"}, "same"),
         ({"name": "Test 2", "datatype": pylo.Datatype.options((1.2, 1.3)), 
           "description": "Test description"}, "same"),
-        ({"name": "Test 4"}, "same"),
+        ({"name": "Test 4", "datatype": str}, "same"),
         ({"name": "Test 5", "datatype": None, "description": None}, 
-         {"name": "Test 5"})
+         {"name": "Test 5", "datatype": str})
     ])
     def test_format_ask_for(self, view, input_dict, expected_dict):
         """Test the format function for the askFor input"""

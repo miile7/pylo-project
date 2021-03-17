@@ -67,16 +67,22 @@ class StaticMagneticFieldForTilt(pylo.Device):
         if self.hint_shown:
             return
 
-        tilt_name = controller.configuration.getValue(self.config_group_name, 
-                                                      "correct-variable")
+        try:
+            tilt_name = controller.configuration.getValue(self.config_group_name, 
+                                                        "correct-variable")
+        except KeyError:
+            return
         
         try:
             tilt_id = self.getMeasurementVariableIdByName(controller, tilt_name)
         except KeyError:
             return
         
-        field_name = controller.configuration.getValue(self.config_group_name, 
-                                                       "magnetic-field")
+        try:
+            field_name = controller.configuration.getValue(self.config_group_name, 
+                                                        "magnetic-field")
+        except KeyError:
+            return
         try:
             field_id = self.getMeasurementVariableIdByName(controller, field_name)
         except KeyError:
