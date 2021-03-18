@@ -80,3 +80,144 @@ def get_additional_device_files() -> typing.Set[str]:
                 additional_device_files.add(ini_path)
     
     return additional_device_files
+
+def _gettag(name: str, datatype: typing.Optional[type]=str, 
+            base: typing.Optional[str]="Private:Save Numbered") -> typing.Any:
+    """Get the tag value from the persistent tags.
+
+    Raises
+    ------
+    RuntimeError
+        When the tag does not exist
+
+    Parameters
+    ----------
+    name : str
+        The tag name
+    datatype : type
+        The datatype, only str and bool are currently supported
+    base : str
+        The base path without the trailing colon to add in front of the name
+    
+    Returns
+    -------
+    any
+        The value of the given `datatype`
+    """
+    tag = "{}:{}".format(base, name)
+
+    if datatype == str:
+        s, v = DM.GetPersistentTagGroup().GetTagAsString(tag)
+    elif datatype == bool:
+        s, v = DM.GetPersistentTagGroup().GetTagAsBoolean(tag)
+
+    if not s:
+        raise RuntimeError("Could not find the tag '{}'".format(tag))
+    
+    return v
+
+def get_savedir() -> str:
+    """Get the save directory from the persistent tags from the save numbered
+    settings.
+
+    Raises
+    ------
+    RuntimeError
+        When the persistent tag does not exist
+
+    Returns
+    -------
+    str
+        The directory name to save the images to
+    """
+    return _gettag("File Directory")
+
+def get_savetype() -> str:
+    """Get the save format as the extension.
+
+    Raises
+    ------
+    RuntimeError
+        When the options are not found
+    ValueError
+        When the format is not supported
+
+    Returns
+    -------
+    str
+        The file extension to use
+    """
+    
+    save_format = _gettag("File Save Option")
+    if save_format == "Save Image":
+        save_format = _gettag("Save Image Format")
+    else:
+        save_format = _gettag("Save Display Format")
+
+    if save_format == "Gatan Format":
+        return "dm4"
+    elif save_format == "Gatan 3 Format":
+        return "dm3"
+    elif save_format == "TIFF Format":
+        return "tif"
+    elif save_format == "BMP Format":
+        return "bmp"
+    elif save_format == "GIF Format":
+        return "gif"
+    elif save_format == "JPEG/JFIF Format":
+        return "jpg"
+    elif save_format == "Text Format":
+        return "txt"
+    else:
+        raise ValueError("The format '{}' is not supported.".format(save_format))
+
+def get_savename() -> str:
+    """Get the savename from the persistent tags from the save numbered 
+    settings
+
+    Raises
+    ------
+    RuntimeError
+        When the persistent tags do not exists
+
+    Returns
+    -------
+    str
+        The save numbered settings filename (without extension) with eventual 
+        placeholders for the `pylolib.expand_vars()` function
+    """
+    
+    kind = _gettag("File Name Option")
+    
+    if kind == "Build":
+        # build from values
+        use_detector = _gettag("Build Name:Detector", datatype=bool)
+        use_magnification = _gettag("Build Name:Magnification", datatype=bool)
+        use_operator = _gettag("Build Name:Operator", datatype=bool)
+        use_specimen = _gettag("Build Name:Specimen", datatype=bool)
+        use_voltage = _gettag("Build Name:Voltage", datatype=bool)
+
+        texts = []
+        if use_detector:
+            texts.append("{tags[detector]}")
+        if use_magnification:
+            texts.append("{tags[magnification]}")
+        if use_operator:
+            texts.append("{tags[operator]}")
+        if use_specimen:
+            texts.append("{tags[specimen]}")
+        if use_voltage:
+            texts.append(_gettag("Voltage", base="Microscope Info"))
+
+        sep = _gettag("Build Name:Separator")
+
+        return sep.join(texts)
+
+    elif kind == "Type":
+        # create text
+        name = _gettag("Name")
+        sep = _gettag("Index Separator")
+        num = _gettag("Number")
+
+        return "{}{}{{counter}}".format(name, sep, num)
+        
