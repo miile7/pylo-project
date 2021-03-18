@@ -138,15 +138,24 @@ class DummyView(pylo.AbstractView):
         else:
             return tags
 
+
 class DummyConfiguration(pylo.AbstractConfiguration):
     def __init__(self):
         super().__init__()
     
     def loadConfiguration(self):
-        pass
+        self.reset()
     
     def saveConfiguration(self):
         pass
+    
+    def getValue(self, group, key, *args, **kwargs):
+        self.request_log.append((group, key, time.time()))
+        return super().getValue(group, key, *args, **kwargs)
+    
+    def reset(self):
+        self.request_log = []
+        self.configuration = {}
 
 def get_equality(v1: typing.Any, v2: typing.Any, 
                  rel_tol: typing.Optional[typing.Union[int, float]]=0, 

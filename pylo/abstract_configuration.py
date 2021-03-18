@@ -3,10 +3,11 @@ import copy
 import typing
 import logging
 
-from .logginglib import log_debug
-from .logginglib import get_logger
-from .pylolib import parse_value
 from .datatype import Datatype
+from .pylolib import parse_value
+from .logginglib import get_logger
+from .logginglib import log_debug
+from .pylolib import human_concat_list
 
 Savable = typing.Union[str, int, float, bool, None]
 
@@ -336,6 +337,8 @@ class AbstractConfiguration:
         KeyError
             When the group and key are not found and either there is no default
             or the fallback_default is False
+        NameError 
+            When invalid keyword arguments are given
 
         Parameters
         ----------
@@ -382,6 +385,8 @@ class AbstractConfiguration:
         KeyError
             When the group and key are not found and either there is no default
             or the fallback_default is False
+        NameError 
+            When invalid keyword arguments are given
 
         Parameters
         ----------
@@ -417,6 +422,13 @@ class AbstractConfiguration:
         any
             The value
         """
+        allowed_kwargs = set(("default_value", "parse_default_with_internal"))
+        invalid_keys = set(kwargs.keys()) - allowed_kwargs
+
+        if len(invalid_keys) > 0:
+            raise NameError(("The kwarg(s) {} is/are not " + 
+                             "supported.").format(human_concat_list(invalid_keys)))
+
         if not isinstance(configuration, dict):
             configuration = self.configuration
         

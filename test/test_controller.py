@@ -53,23 +53,7 @@ pylo.config.DEFAULT_SAVE_FILE_NAME = "{counter}-test-measurement.tif"
 pylo.config.DEFAULT_LOG_PATH = os.path.join(controller_tmp_path, "measurement.log")
 pylo.config.DEFAULT_INI_PATH = os.path.join(controller_tmp_path, "configuration.ini")
 
-class DummyConfiguration(pylo.AbstractConfiguration):
-    def __init__(self):
-        super().__init__()
-    
-    def getValue(self, group, key, fallback_default=True):
-        self.request_log.append((group, key, time.time()))
-        return super().getValue(group, key, fallback_default)
-    
-    def loadConfiguration(self):
-        self.reset()
-    
-    def saveConfiguration(self):
-        pass
-    
-    def reset(self):
-        self.request_log = []
-        self.configuration = {}
+from pylotestlib import DummyConfiguration
 
 class DummyImage(pylo.Image):
     def saveTo(self, *args, **kwargs):

@@ -119,7 +119,7 @@ class Measurement:
         self.steps = steps
 
         self.substep_count = controller.configuration.getValue(
-            CONFIG_MEASUREMENT_GROUP, "substeps", default=1)
+            CONFIG_MEASUREMENT_GROUP, "substeps", default_value=1)
         
         if not isinstance(self.substep_count, int) or self.substep_count == 0:
             self.substep_count = 1
