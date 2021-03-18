@@ -18,6 +18,7 @@ import csv
 import re
 
 import pylo
+pylo.config.ENABLED_PROGRAM_LOG_LEVELS = []
 
 from pylotestlib import DummyView
 from pylotestlib import DummyConfiguration
@@ -90,13 +91,15 @@ class DummyMicroscope(pylo.MicroscopeInterface):
 
         self.supported_measurement_variables = [
             pylo.MeasurementVariable("focus", "Focus", 0, 10, "mA"),
-            pylo.MeasurementVariable("lense-current", "OM Current", 0, 3, 
+            pylo.MeasurementVariable("lens-current", "OM Current", 0, 3, 
                                      format=pylo.Datatype.hex_int,
                                      calibration=2, calibrated_unit="T",
                                      calibrated_name="Magnetic Field"),
             pylo.MeasurementVariable("x-tilt", "Tilt (x direction)", -35, 35, "deg")
         ]
 
+        self.measurement_variable_set_log = []
+        
         self.is_in_lorentz_mode = False
         self.is_in_safe_state = False
 
@@ -128,12 +131,17 @@ class DummyMicroscope(pylo.MicroscopeInterface):
 
         if id_ == "focus":
             self.focus = value
-        elif id_ == "lense-current":
+        elif id_ == "lens-current":
             self.magnetic_field = value
         elif id_ == "x-tilt":
             self.x_tilt = value
         else:
             raise KeyError("The measurement variable {} does not exist.".format(id_))
+        
+        self.measurement_variable_set_log.append(({"focus": self.focus,
+                                                   "lens-current": self.magnetic_field,
+                                                   "x-tilt": self.x_tilt},
+                                                   time.time()))
             
         self.currently_setting_measurement_variable = None
         self.currently_setting_lorentz_mode = False
@@ -143,7 +151,7 @@ class DummyMicroscope(pylo.MicroscopeInterface):
 
         if id_ == "focus":
             return self.focus
-        elif id_ == "lense-current":
+        elif id_ == "lens-current":
             return self.magnetic_field
         elif id_ == "x-tilt":
             return self.x_tilt
@@ -208,7 +216,7 @@ class DummyCamera(pylo.CameraInterface):
                                 f_var, self.microscope.focus)
 
         # save the magnetic field
-        m_var = self.microscope.getMeasurementVariableById("lense-current")
+        m_var = self.microscope.getMeasurementVariableById("lens-current")
         image_data[2][0] = convertMeasurementVariableToImageSave(
                                 m_var, self.microscope.magnetic_field)
 
@@ -266,12 +274,13 @@ class PerformedMeasurement:
 
         Parameters
         ----------
-        num : int, optional
+        num : int or list of dicts, optional
             - 0: Measure 2 images: x-tilt -10deg and 10deg
             - 1: Measure 12 images: focus 0 and 5, field 0, 1 and 2 and x-tilt
                  -10deg and 10dev
             - 2: Measure 18 images: focus 0 and 5, field 0, 1, and 2 and x-tilt
                  -10deg, 0deg and 10deg
+            - the list of steps
         before_start : callable, optional
             A callback that is executed before the measurement is started
         auto_start : bool, optional
@@ -292,27 +301,30 @@ class PerformedMeasurement:
         self.controller = DummyController()
         self.measurement_steps = []
 
-        if num == 2:
-            foci = (0, 5)
-            fields = (0, 1, 2)
-            tilts = (-10, 0, 10)
-        elif num == 1:
-            foci = (0, 5)
-            fields = (0, 1, 2)
-            tilts = (-10, 10)
+        if isinstance(num, (list, tuple, pylo.MeasurementSteps)):
+            self.measurement_steps = num
         else:
-            foci = (0, )
-            fields = (0,)
-            tilts = (-10, 10)
+            if num == 2:
+                foci = (0, 5)
+                fields = (0, 1, 2)
+                tilts = (-10, 0, 10)
+            elif num == 1:
+                foci = (0, 5)
+                fields = (0, 1, 2)
+                tilts = (-10, 10)
+            else:
+                foci = (0, )
+                fields = (0,)
+                tilts = (-10, 10)
 
-        for f in foci:
-            for m in fields:
-                for t in tilts:
-                    self.measurement_steps.append({
-                        "focus": f, 
-                        "lense-current": m, 
-                        "x-tilt": t
-                    })
+            for f in foci:
+                for m in fields:
+                    for t in tilts:
+                        self.measurement_steps.append({
+                            "focus": f, 
+                            "lens-current": m, 
+                            "x-tilt": t
+                        })
 
         pylo.Measurement.defineConfigurationOptions(self.controller.configuration)
         self.controller.configuration.setValue(
@@ -400,6 +412,9 @@ class PerformedMeasurement:
             thread.start()
             thread.join()
 
+            for e in thread.exceptions:
+                raise e
+
             self.measurement.waitForAllImageSavings()
 
             if collect_file_m_times:
@@ -463,6 +478,7 @@ class PerformedMeasurement:
         assert self.controller.microscope.is_in_lorentz_mode
     
 performed_measurement_obj = None
+performed_measurement_substeps = None
 
 @pytest.fixture
 def performed_measurement(performed_measurement_cache=True):
@@ -513,7 +529,7 @@ class TestMeasurement:
 
         f_var = performed_measurement.controller.microscope.getMeasurementVariableById("focus")
         f_prec = (f_var.max_value - f_var.min_value) / 255
-        m_var = performed_measurement.controller.microscope.getMeasurementVariableById("lense-current")
+        m_var = performed_measurement.controller.microscope.getMeasurementVariableById("lens-current")
         m_prec = (m_var.max_value - m_var.min_value) / 255
         t_var = performed_measurement.controller.microscope.getMeasurementVariableById("x-tilt")
         t_prec = (t_var.max_value - t_var.min_value) / 255
@@ -535,7 +551,7 @@ class TestMeasurement:
                                 performed_measurement.measurement_steps[i]["focus"], 
                                 abs_tol=f_prec)
             assert math.isclose(magnetic_field, 
-                                performed_measurement.measurement_steps[i]["lense-current"], 
+                                performed_measurement.measurement_steps[i]["lens-current"], 
                                 abs_tol=m_prec)
             assert math.isclose(x_tilt, 
                                 performed_measurement.measurement_steps[i]["x-tilt"], 
@@ -1185,6 +1201,144 @@ class TestMeasurement:
         """Test if an exception at a random time stops the measurement."""
         with pytest.raises(DummyException):
             self.check_events(self.throw_exception)
+    
+    def prepare_substeps(self, cache=True):
+        global performed_measurement_substeps
+        
+        steps = []
+        for field in (0, 2):
+            for tilt in (-10, 10):
+                steps.append({
+                    "focus": 0,
+                    "lens-current": field,
+                    "x-tilt": tilt
+                })
+        
+        step_count = len(steps)
+        substep_count = 10
+
+        if performed_measurement_substeps is None or not cache:
+            performed_measurement_substeps = PerformedMeasurement(num=steps, 
+                auto_start=False, collect_file_m_times=False)
+
+            setSleepTime(0.01)
+
+            performed_measurement_substeps.measurement.substep_count = substep_count
+
+            thread = pylo.ExceptionThread(target=performed_measurement_substeps.measurement.start())
+            thread.start()
+            thread.join()
+
+            for e in thread.exceptions:
+                raise e
+            
+            setSleepTime("random")
+
+        return performed_measurement_substeps, step_count, substep_count, steps
+    
+    @pytest.mark.slow()
+    def test_substeps_steps(self):
+        """Test if every single step is reached in the correct order."""
+        perf_m, step_number, substep_count, steps = self.prepare_substeps()
+        
+        last_time = None
+        for step in steps:
+            found_steps = []
+
+            for log_step, log_time in perf_m.controller.microscope.measurement_variable_set_log:
+                matches = True
+                for id_ in step:
+                    if not math.isclose(step[id_], log_step[id_]):
+                        matches = False
+                        break
+                
+                if matches:
+                    found_steps.append((log_step, log_time))
+            
+            assert len(log_step) > 0
+
+            found_steps.sort(key=lambda s: s[1])
+            
+            if last_time is None:
+                last_time = found_steps[0][1]
+            else:
+                found = False
+                for log_step, log_time in found_steps:
+                    if log_time > last_time:
+                        found = True
+                        last_time = log_time
+                        break
+                
+                assert found
+    
+    @pytest.mark.slow()
+    def test_substeps_steps_2(self):
+        """Test if the substeps work."""
+        perf_m, step_number, substep_count, steps = self.prepare_substeps()
+
+        # remove setting of zero to all values
+        log = copy.deepcopy(perf_m.controller.microscope.measurement_variable_set_log)
+        offset = None
+        for offset, (step, time) in enumerate(log):
+            only_zero = True
+            for id_ in step:
+                if step[id_] != 0:
+                    only_zero = False
+                    break
+            
+            if not only_zero:
+                break
+        
+        if offset > 0:
+            log = log[offset:]
+        
+        log.sort(key=lambda x: x[1])
+        
+        d = {"focus": 0,
+             "lens-current": (2 - 0) / 10,
+             "x-tilt": (10 + 10) / 10}
+
+        prev_step = None
+        for step, time in log:
+            if prev_step is not None:
+                for k in step:
+                    # either no change in the variable or a change that is 
+                    # equal to a substep stepwidth
+                    ds = abs(step[k] - prev_step[k])
+
+                    assert math.isclose(ds, 0) or math.isclose(ds, d[k])
+
+            prev_step = copy.deepcopy(step)
+    
+    @pytest.mark.slow()
+    def test_substeps_time(self):
+        """Test if the substeps work."""
+        # the time setting a measurement variable takes (thread is sleeping
+        # this time to fake i/o operations)
+        sleep_time = 0.01
+        start_time = time.time()
+
+        perf_m, step_number, substep_count, steps = self.prepare_substeps(cache=False)
+
+        end_time = time.time()
+        total_duration = (step_number * substep_count * sleep_time + 
+                          perf_m.measurement.relaxation_time * 2 * step_number + 
+                          # set to lorentz mode
+                          sleep_time)
+        
+        print("Expected duration:", total_duration, 
+              "Actual duration:", end_time - start_time)
+
+        assert math.isclose(end_time - start_time - total_duration, 0, abs_tol=0.2)
+
+        lt = None
+        for step, t in perf_m.controller.microscope.measurement_variable_set_log:
+            assert ((start_time <= t and t < end_time) or 
+                    (start_time < t and t <= end_time))
+                    
+            if lt is not None:
+                assert t >= lt
+            lt = t
 
 if __name__ == "__main__":
     pass

@@ -1,6 +1,7 @@
 import io
 import os
 import copy
+import math
 import time
 import typing
 import logging
@@ -81,6 +82,11 @@ class Measurement:
     current_step : dict or None
         The current step that is used, if no measurement is running, the 
         current step is None
+    substep_count : int, read-only
+        The number of sub steps to perform, each step will be divided into 
+        this number of steps to allow "continously" and "parallel" setting of 
+        the measurement variables, note that this is read-only since changing
+        this value does not have any effect
         
     Listened Events
     ---------------
@@ -111,6 +117,14 @@ class Measurement:
         self.controller = controller
         self.tags = {}
         self.steps = steps
+
+        self.substep_count = controller.configuration.getValue(
+            CONFIG_MEASUREMENT_GROUP, "substeps", default=1)
+        
+        if not isinstance(self.substep_count, int) or self.substep_count == 0:
+            self.substep_count = 1
+        elif self.substep_count < 1:
+            self.substep_count = abs(self.substep_count)
 
         if isinstance(steps, MeasurementSteps):
             self.series_start = self.steps.start
@@ -337,6 +351,7 @@ class Measurement:
             microscope_ready(self.controller)
             self.controller.view.print("Done.")
 
+            last_step = None
             for self.step_index, self.current_step in enumerate(self.steps):
                 # start going through steps
                 log_debug(self._logger, "Starting step '{}': '{}'".format(
@@ -372,54 +387,102 @@ class Measurement:
                     self.step_index, step_descr
                 ))
 
-                # the asynchronous threads to set the values at the micrsocope
-                measurement_variable_threads = []
+                for i in range(self.substep_count):
+                    # the asynchronous threads to set the values at the micrsocope
+                    measurement_variable_threads = []
 
-                for variable_name in self.current_step:
-                    log_debug(self._logger, ("Setting variable '{}' of step to " + 
-                                             "value '{}'").format(variable_name,
-                                             self.current_step[variable_name]))
-                    # set each measurement variable
-                    if not self.running:
-                        log_debug(self._logger, ("Stopping measurement because " + 
-                                                "running is now '{}'").format(self.running))
-                        # stop() is called
-                        return
-                    
-                    if self.controller.microscope.supports_parallel_measurement_variable_setting:
-                        # MicroscopeInterface.setMeasurementVariableValue() can
-                        # set parallel
-                        log_debug(self._logger, ("Microscope can set variables " + 
-                                                "parallely, creating new " + 
-                                                "thread for variable"))
-                        thread = ExceptionThread(
-                            target=self.controller.microscope.setMeasurementVariableValue,
-                            args=(variable_name, self.current_step[variable_name]),
-                            name="microscope variable {} in step {}".format(
-                                variable_name, self.step_index
+                    for variable_name in self.current_step:
+                        if (isinstance(last_step, dict) and
+                            variable_name in last_step):
+                            if (last_step[variable_name] == self.current_step[variable_name] or
+                                (isinstance(last_step[variable_name], float) and
+                                 isinstance(self.current_step[variable_name], float) and
+                                 math.isclose(last_step[variable_name], 
+                                              self.current_step[variable_name]))):
+                                log_debug(self._logger, ("Skipping '{}', the " + 
+                                                         "last value is the " + 
+                                                         "same as the current " + 
+                                                         "one.").format(
+                                                            variable_name))
+                                continue
+                                
+                            approach_value = (last_step[variable_name] + 
+                                              (self.current_step[variable_name] - 
+                                              last_step[variable_name]) / 
+                                              self.substep_count * (i + 1))
+                        else:
+                            approach_value = self.current_step[variable_name]
+                        
+                        log_debug(self._logger, ("Setting variable '{}' of " + 
+                                                 "step to value '{}'").format(
+                                                    variable_name,
+                                                    approach_value))
+                        # set each measurement variable
+                        if not self.running:
+                            log_debug(self._logger, ("Stopping measurement " + 
+                                                     "because running is " + 
+                                                     "now '{}'").format(self.running))
+                            # stop() is called
+                            return
+                        
+                        if self.controller.microscope.supports_parallel_measurement_variable_setting:
+                            # MicroscopeInterface.setMeasurementVariableValue() can
+                            # set parallel
+                            log_debug(self._logger, ("Microscope can set variables " + 
+                                                    "parallely, creating new " + 
+                                                    "thread for variable"))
+                            thread = ExceptionThread(
+                                target=self.controller.microscope.setMeasurementVariableValue,
+                                args=(variable_name, approach_value),
+                                name="microscope variable {} in step {}".format(
+                                    variable_name, self.step_index
+                                )
                             )
-                        )
-                        log_debug(self._logger, "Starting variable setting " + 
-                                               "thread")
-                        thread.start()
-                        measurement_variable_threads.append(thread)
-                    else:
-                        # set measurement variables sequential
-                        self.controller.microscope.setMeasurementVariableValue(
-                            variable_name, self.current_step[variable_name])
+                            log_debug(self._logger, "Starting variable setting " + 
+                                                "thread")
+                            thread.start()
+                            measurement_variable_threads.append(thread)
+                        else:
+                            # set measurement variables sequential
+                            self.controller.microscope.setMeasurementVariableValue(
+                                variable_name, approach_value)
                 
-                log_debug(self._logger, ("Waiting for '{}' variable setting " + 
-                                         "threads").format(len(measurement_variable_threads)))
-                # Wait for all measurement variable threads to finish
-                for thread in measurement_variable_threads:
-                    thread.join()
+                    log_debug(self._logger, ("Waiting for '{}' variable setting " + 
+                                            "threads").format(len(measurement_variable_threads)))
+                    # Wait for all measurement variable threads to finish
+                    for thread in measurement_variable_threads:
+                        thread.join()
+                    
+                    if not isinstance(last_step, dict):
+                        break
+                        
+                    if (isinstance(self.relaxation_time, (int, float)) and 
+                        self.relaxation_time > 0):
+                        wait_time = self.relaxation_time / self.substep_count
+                        text = ("Waiting relaxation time of '{}'/'{}'='{}' " + 
+                                "seconds").format(self.relaxation_time, 
+                                                  self.substep_count, 
+                                                  wait_time)
+                        log_info(self._logger, text)
+                        self.controller.view.print(text)
+                        start_time = time.time()
+
+                        while time.time() - start_time < wait_time:
+                            # allow calling stop() function while waiting
+                            time.sleep(0.01)
+
+                            if not self.running:
+                                # stop() is called
+                                return
+                        
+                        log_debug(self._logger, ("Continuing with measurement at " + 
+                                                 "time '{:%Y-%m-%d %H:%M:%S,%f}'").format(datetime.datetime.now()))
         
                 if (isinstance(self.relaxation_time, (int, float)) and 
                     self.relaxation_time > 0):
-                    log_info(self._logger, ("Waiting relaxation time of '{}' " + 
-                                            "seconds").format(self.relaxation_time))
-                    self.controller.view.print(("Waiting relaxation time of {} " + 
-                                                "seconds").format(self.relaxation_time))
+                    text = "Waiting relaxation time of '{}' seconds".format(self.relaxation_time)
+                    log_info(self._logger, text)
+                    self.controller.view.print(text)
                     start_time = time.time()
 
                     while time.time() - start_time < self.relaxation_time:
@@ -527,6 +590,7 @@ class Measurement:
                 log_debug(self._logger, "Increasing progress to '{}'".format(self.step_index + 1))
                 
                 self.controller.view.progress = self.step_index + 1
+                last_step = copy.deepcopy(self.current_step)
 
             self.step_index = -1
             self.current_step = None
@@ -927,6 +991,21 @@ class Measurement:
             default_value=DEFAULT_RELAXATION_TIME, 
             description="The relaxation time in seconds to wait after the " + 
             "microscope has reached all the measurement variable values."
+        )
+        
+        # break steps into sub steps
+        configuration.addConfigurationOption(
+            CONFIG_MEASUREMENT_GROUP, "substeps", 
+            datatype=Datatype.int, 
+            default_value=1, 
+            description="For setting values 'parallel' and 'continously' the " + 
+                        "step width of each step can be divided by the number " + 
+                        "of 'supsteps'. This means that if two measurement " + 
+                        "variables should be set, each of their step widths " + 
+                        "are divided by this number. Then both alternating are " + 
+                        "increased or decreased by this small step width " + 
+                        "value. This way this emulates continously and " + 
+                        "parallel setting of the measurement values."
         )
         
         # add whether to set the microscope to the safe state after the 
