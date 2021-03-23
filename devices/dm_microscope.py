@@ -533,6 +533,64 @@ class DMMicroscope(MicroscopeInterface):
             err = IOError("Cannot get the optics mode.")
             logginglib.log_error(self._logger, err)
             raise err
+    
+    def _splitObjectiveLensCurrent(self, value: float) -> typing.Tuple[float, float]:
+        """Split the objectiv lens current `value` in the fine and coarse value.
+
+        If the calibration is not given, the `value` is returned as the fine
+        value.
+
+        See also
+        --------
+        DMMicroscope._joinObjectiveLensCurrent()
+        
+        Parameters
+        ----------
+        value : int or float
+            The value to set the objective lense current to in objective fine
+            lense steps
+        
+        Returns
+        -------
+        float, float
+            The fine and the coarse value
+        """
+
+        # calculate the values if the coarse lens and the fine lens can be 
+        # converted into eachother
+        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
+            return (value % self.objective_lense_coarse_fine_stepwidth,
+                    value // self.objective_lense_coarse_fine_stepwidth)
+        else:
+            return (value, 0)
+    
+    def _joinObjectiveLensCurrent(self, fine_value: float, coarse_value: typing.Union[float, None]) -> float:
+        """Get the objectiv lens current value as a float from the `fine_value`
+        and the `coarse_value`.
+
+        See also
+        --------
+        DMMicroscope._splitObjectiveLensCurrent()
+        
+        Parameters
+        ----------
+        fine_value : int or float
+            The value of the fine objective lens
+        coarse_value : int, float or None
+            The value of the coarse value or None to ignore it
+        
+        Returns
+        -------
+        float
+            The total objectiv lens current
+        """
+        if (isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) and
+            isinstance(coarse_value, (int, float)) and 
+            self.objective_lense_coarse_fine_stepwidth > 0):
+            return (coarse_value * self.objective_lense_coarse_fine_stepwidth + 
+                    fine_value)
+        else:
+            return fine_value
 
     def _setObjectiveLensCurrent(self, value: float) -> None:
         """Set the objective lense current.
@@ -563,13 +621,8 @@ class DMMicroscope(MicroscopeInterface):
         else:
             self._ol_currents["value"] = value
 
-        # calculate the values if the coarse lens and the fine lens can be 
-        # converted into eachother
-        if isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)):
-            self._ol_currents["coarse"] = value // self.objective_lense_coarse_fine_stepwidth
-            self._ol_currents["fine"] = value % self.objective_lense_coarse_fine_stepwidth
-        else:
-            self._ol_currents["fine"] = value
+        self._ol_currents = dict(zip(("fine", "coarse"), 
+                                     self._splitObjectiveLensCurrent(value)))
         
         var = self.getMeasurementVariableById("ol-current")
         if var.has_calibration:
@@ -672,22 +725,12 @@ class DMMicroscope(MicroscopeInterface):
             else:
                 self._ol_currents["fine"] = values[0]
         
-        fine_value = self._ol_currents["fine"]
+        if "coarse" not in self._ol_currents:
+            self._ol_currents["coarse"] = None
 
-        coarse_value = None
-        if "coarse" in self._ol_currents:
-            coarse_value = self._ol_currents["coarse"]
-
-        if (isinstance(self.objective_lense_coarse_fine_stepwidth, (int, float)) and
-            isinstance(coarse_value, (int, float)) and 
-            self.objective_lense_coarse_fine_stepwidth > 0):
-            value = (coarse_value * self.objective_lense_coarse_fine_stepwidth + 
-                     fine_value)
-        else:
-            value = fine_value
-
-        return value
-    
+        return self._joinObjectiveLensCurrent(self._ol_currents["fine"], 
+                                              self._ol_currents["coarse"])
+        
     def _setXTilt(self, value: float) -> None:
         """Set the x tilt in degrees.
 

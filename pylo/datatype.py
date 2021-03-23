@@ -1,6 +1,8 @@
 import re
+import os
 import math
 import typing
+import pathlib
 import logging
 
 from .logginglib import log_debug
@@ -27,9 +29,12 @@ class Datatype:
         will be a hexadecimal number (with leading "0x")
     dirpath : Datatype
         A directory path that will format to an absolute path of a directory 
-        always, if possible
-    dirpath : Datatype
-        A directory path that will format to an absolute path always
+        always, to set the base path for relative paths use 
+        `Datatype.dirpath.withbase("<base>")`
+    filepath : Datatype
+        A path that will format to an absolute path always, GUIs will show a 
+        file, to set the base path for relative paths use 
+        `Datatype.dirpath.withbase("<base>")`
     options : class
         The `OptionDatatype` class so it can be used more intuitively like the 
         other datatypes, this expresses a list of values that are valid, use 
@@ -44,7 +49,8 @@ class Datatype:
 
     def __init__(self, name: str, 
                  format: typing.Callable[[typing.Union[int, float, str], str], typing.Union[int, float, str]], 
-                 parse: typing.Optional[typing.Callable[[typing.Union[int, float, str]], typing.Union[int, float, str]]]=None) -> None:
+                 parse: typing.Optional[typing.Callable[[typing.Union[int, float, str]], typing.Union[int, float, str]]]=None, 
+                 **kwargs) -> None:
         """Create a new datatype.
 
         The `format` callback gets two arguments. The first one is the value, 
@@ -89,6 +95,11 @@ class Datatype:
             A function that will get the value (can be any type) as the 
             parameter and has to return the parsed value in the datatype this
             object is representing
+
+        Keyword Arguments
+        -----------------
+        Any keyword arguments are stored in the `Datatype.data` attribute which
+        is used by some datatypes.
         """
 
         self.name = name
@@ -96,6 +107,7 @@ class Datatype:
         self._parse = parse
         self.default_parse = None
         self._logger = get_logger(self)
+        self.data = kwargs
     
     def parse(self, value: typing.Any) -> typing.Any:
         """Parse the `value`.
@@ -398,17 +410,146 @@ class OptionDatatype(Datatype):
 
 Datatype.options = OptionDatatype
 
+class PathDatatype(Datatype):
+    def __init__(self, kind: str, base: typing.Optional[str]=None) -> None:
+        """Get a path datatype of the given `kind`.
+
+        Parameters
+        ----------
+        kind : str
+            The kind, use 'file' for files only and 'dir' for directories only
+        base : path-like, optional
+            The base path to format the path to if a relative path is given
+        """
+
+        self.kind = kind
+        if self.kind == "file":
+            name = "filepath"
+        elif self.kind == "dir":
+            name = "dirpath"
+        else:
+            raise ValueError(("The `kind` '{}' is not supported for the " + 
+                              "PathDatatype. Use 'file' or 'dir'.").format(kind))
+
+        super().__init__(name, self.format_path, self.parse_path)
+        self.default_parse = ""
+        self.data["base"] = base
+    
+    @property
+    def base(self):
+        try:
+            return self.data["base"]
+        except (TypeError, KeyError):
+            return None
+    
+    @base.setter
+    def base(self, base):
+        self.data["base"] = base
+    
+    def withbase(self, base: str) -> "PathDatatype":
+        """Return a new `PathDatatype` object of the same `kind` but with the 
+        given `base`.
+
+        This function is used for a better usage within the `Datatype` class
+        attribute.
+
+        Parameters
+        ----------
+        base : path-like, optional
+            The base path to format the path to if a relative path is given
+
+        Returns
+        -------
+        PathDatatype
+            The new datatype object
+        """
+        return PathDatatype(self.kind, base)
+    
+    def parse_path(self, v: typing.Any) -> str:
+        """Parse the given value to be the absolute path of the directory.
+
+        If a file is given, the directory name (the containing directory) is 
+        returned, the absolute path of the `v` otherwise.
+
+        Raises
+        ------
+        ValueError
+            When the value `v` could not be parsed
+
+        Parameters
+        ----------
+        v : any
+            The path expression to parse
+        
+        Returns
+        -------
+        str
+            The directory path
+        """
+        try:
+            try:
+                base = self.data["base"]
+            except (TypeError, KeyError):
+                base = None
+            
+            path_like = [str, pathlib.PurePath]
+            if hasattr(os, "PathLike"):
+                # keep support for python 3.5.6, os.PathLike is invented in python 3.6
+                path_like.append(os.PathLike)
+
+            if not isinstance(base, tuple(path_like)):
+                base = os.getcwd()
+                
+            v = os.path.abspath(os.path.normpath(
+                                    os.path.join(base, os.path.expandvars(
+                                        os.path.expanduser(v)))))
+            v = str(v)
+            
+            # if self.kind == "dir" and os.path.isfile(v):
+            #     v = os.path.dirname(v)
+            # elif self.kind == "file" and not os.path.isfile(v):
+            #     raise ValueError()
+
+            if self.kind == "dir" and (not v.endswith("/") and not v.endswith("\\")):
+                v += os.path.sep
+            
+            return v
+        except (TypeError, ValueError) as e:
+            print(e)
+            raise ValueError(("The value '{}' could not be parsed to a directory " + 
+                            "path").format(v)) from e
+
+    def format_path(self, v: typing.Any, f: typing.Optional[str]="") -> str:
+        """Format the given value to an absolute directory path.
+
+        If the value is a plain string, it will be relative to the current working
+        directory.
+
+        Parameters
+        ----------
+        v : any
+            The value to format
+        f : str
+            The format specification
+        
+        Returns
+        -------
+        str
+            The formatted value or an empty string if it is not formattable
+        """
+        try:
+            return str(self.parse_path(v))
+        except ValueError:
+            return ""
+
+Datatype.dirpath = PathDatatype("dir")
+Datatype.filepath = PathDatatype("file")
+
 from .default_datatypes import int_type
 Datatype.int = int_type
 
 from .default_datatypes import hex_int_type
 Datatype.hex_int = hex_int_type
-
-from .default_datatypes import dirpath_type
-Datatype.dirpath = dirpath_type
-
-from .default_datatypes import filepath_type
-Datatype.filepath = filepath_type
 
 from .default_datatypes import float_np
 Datatype.float_np = float_np

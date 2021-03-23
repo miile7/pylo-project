@@ -1,8 +1,8 @@
 import os
+import sys
 
 if __name__ == "__main__":
     # For direct call only
-    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import random
@@ -126,4 +126,17 @@ class TestDatatypes:
     def test_options_format(self, datatype, value, expected):
         """Test if the options datatype works."""
 
+        assert datatype.format(value, "") == expected
+    
+    @pytest.mark.skipif(not sys.platform.startswith("win"), reason="Windows paths only")
+    @pytest.mark.parametrize("datatype,value,expected", [
+        (pylo.Datatype.filepath, r"C:\path\to\file.py", r"C:\path\to\file.py"),
+        (pylo.Datatype.dirpath, "C:\\path\\to\\dir\\", "C:\\path\\to\\dir\\"),
+        (pylo.Datatype.filepath, r"C:/path///to\\file.py", r"C:\path\to\file.py"),
+        (pylo.Datatype.dirpath, r"C:/path///to\\dir", "C:\\path\\to\\dir\\"),
+        (pylo.Datatype.dirpath, r".\path\.\to\dir", os.path.abspath(".\\path\\to\\dir\\") + "\\"),
+        (pylo.Datatype.filepath, r"%PROGRAMDATA%/file.py", os.path.expandvars(r"%PROGRAMDATA%\file.py")),
+    ])
+    def test_path_parse_win(self, datatype, value, expected):
+        """Test if the parsing of datatypes works correctly."""
         assert datatype.format(value, "") == expected
