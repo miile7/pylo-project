@@ -29,16 +29,12 @@ class Datatype:
         will be a hexadecimal number (with leading "0x")
     dirpath : Datatype
         A directory path that will format to an absolute path of a directory 
-        always, if possible, use `Datatype.dirpath.base = "<...>"` or 
-        `Datatype.dirpath("<base>")` to set the base path that is used as the 
-        parent for relative paths, if not given, the `os.getcwd()` is used as
-        the base
+        always, to set the base path for relative paths use 
+        `Datatype.dirpath.withbase("<base>")`
     filepath : Datatype
         A path that will format to an absolute path always, GUIs will show a 
-        file selection option, use `Datatype.filepath.base = "<...>"` or 
-        `Datatype.filepath("<base>")`to set the base path that is used as the 
-        parent for relative paths, if not given, the `os.getcwd()` is used as
-        the base
+        file, to set the base path for relative paths use 
+        `Datatype.dirpath.withbase("<base>")`
     options : class
         The `OptionDatatype` class so it can be used more intuitively like the 
         other datatypes, this expresses a list of values that are valid, use 
@@ -426,9 +422,17 @@ class PathDatatype(Datatype):
             The base path to format the path to if a relative path is given
         """
 
-        super().__init__("dirpath", self.format_path, self.parse_path)
-        self.default_parse = ""
         self.kind = kind
+        if self.kind == "file":
+            name = "filepath"
+        elif self.kind == "dir":
+            name = "dirpath"
+        else:
+            raise ValueError(("The `kind` '{}' is not supported for the " + 
+                              "PathDatatype. Use 'file' or 'dir'.").format(kind))
+
+        super().__init__(name, self.format_path, self.parse_path)
+        self.default_parse = ""
         self.data["base"] = base
     
     @property
@@ -441,6 +445,25 @@ class PathDatatype(Datatype):
     @base.setter
     def base(self, base):
         self.data["base"] = base
+    
+    def withbase(self, base: str) -> "PathDatatype":
+        """Return a new `PathDatatype` object of the same `kind` but with the 
+        given `base`.
+
+        This function is used for a better usage within the `Datatype` class
+        attribute.
+
+        Parameters
+        ----------
+        base : path-like, optional
+            The base path to format the path to if a relative path is given
+
+        Returns
+        -------
+        PathDatatype
+            The new datatype object
+        """
+        return PathDatatype(self.kind, base)
     
     def parse_path(self, v: typing.Any) -> str:
         """Parse the given value to be the absolute path of the directory.
@@ -518,21 +541,6 @@ class PathDatatype(Datatype):
             return str(self.parse_path(v))
         except ValueError:
             return ""
-    
-    def __call__(self, base: typing.Optional[str]=None) -> Datatype:
-        """Get a new `_DirPathDatatype` with the given `base`.
-
-        Parameters
-        ----------
-        base : path-like, optional
-            The base path to format the path to if a relative path is given
-        
-        Returns
-        -------
-        PathDatatype
-            Another `PathDatatype` instance with the same `PathDatatype.kind`
-        """
-        return PathDatatype(self.kind, base)
 
 Datatype.dirpath = PathDatatype("dir")
 Datatype.filepath = PathDatatype("file")
