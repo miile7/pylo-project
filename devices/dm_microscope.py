@@ -93,15 +93,32 @@ class DMMicroscope(MicroscopeInterface):
         # the user entered values will be divided by this factor and then 
         # passed to the PyJEM functions
         focus_calibration_factor = self.controller.configuration.getValue(
-            self.config_group_name, "focus-calibration", datatype=float,
+            self.config_group_name, "focus-calibration-factor", datatype=float,
+            default_value=None)
+        focus_calibration_offset = self.controller.configuration.getValue(
+            self.config_group_name, "focus-calibration-offset", datatype=float,
             default_value=None)
 
         if (not isinstance(focus_calibration_factor, (int, float)) or 
             math.isclose(focus_calibration_factor, 0)):
             focus_calibration_factor = None
+        if not isinstance(focus_calibration_offset, (int, float)):
+            focus_calibration_offset = None
         
-        logginglib.log_debug(self._logger, "Focus calibration is '{}'".format(
-                             focus_calibration_factor))
+        logginglib.log_debug(self._logger, ("Focus calibration is " + 
+                                            "f = '{}'*x + '{}'").format(
+                                            focus_calibration_factor,
+                                            focus_calibration_offset))
+        
+        if (focus_calibration_factor is not None and 
+            focus_calibration_offset is not None):
+            focus_calibration = (lambda x: focus_calibration_factor * x + 
+                                           focus_calibration_offset)
+            focus_uncalibration = (lambda f: (f - focus_calibration_offset) / 
+                                             focus_calibration_factor)
+        else:
+            focus_calibration = None
+            focus_uncalibration = None
         
         # load the tolerance for the objective mini lens
         objective_mini_lens_tolerance = self.controller.configuration.getValue(
@@ -124,7 +141,8 @@ class DMMicroscope(MicroscopeInterface):
                 max_value=0xFFFF, 
                 unit="hex",
                 format=Datatype.hex_int,
-                calibration=focus_calibration_factor,
+                calibration=focus_calibration,
+                uncalibration=focus_uncalibration,
                 calibrated_name="Focus",
                 calibrated_unit="um", # micrometer
                 calibrated_format=Datatype.int
@@ -976,18 +994,31 @@ class DMMicroscope(MicroscopeInterface):
         """
         
         # add the option for the calibration factor for the focus
-        if not "focus-calibration" in config_defaults:
-            config_defaults["focus-calibration"] = 0
+        if not "focus-calibration-factor" in config_defaults:
+            config_defaults["focus-calibration-factor"] = 0
         configuration.addConfigurationOption(
             config_group_name, 
-            "focus-calibration", 
+            "focus-calibration-factor", 
             datatype=float, 
-            description=("The calibration factor for the focus. The " + 
-            "focus set in the GUI will be divided by this factor to pass " + 
-            "it to the PyJEM functions. The focus received by the PyJEM " + 
-            "functions will be multiplied with this factor and then shown."), 
+            description=("The calibration factor `m` for the focus f = mx + t. " + 
+                         "The focus value received from the microscope is " + 
+                         "plugged in the stated formula to display it."), 
             restart_required=True,
-            default_value=config_defaults["focus-calibration"]
+            default_value=config_defaults["focus-calibration-factor"]
+        )
+        
+        # add the option for the calibration offset for the focus
+        if not "focus-calibration-offset" in config_defaults:
+            config_defaults["focus-calibration-offset"] = 0
+        configuration.addConfigurationOption(
+            config_group_name, 
+            "focus-calibration-offset", 
+            datatype=float, 
+            description=("The calibration offset `t` for the focus f = mx + t. " + 
+                         "The focus value received from the microscope is " + 
+                         "plugged in the stated formula to display it."), 
+            restart_required=True,
+            default_value=config_defaults["focus-calibration-offset"]
         )
         
         # add the stepwidth of the objective coarse lense in objective fine 
