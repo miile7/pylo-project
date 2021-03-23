@@ -595,6 +595,28 @@ class AbstractConfiguration:
         except KeyError:
             raise
     
+    def setDefault(self, group: str, key: str, default_value: Savable) -> None:
+        """Set the default value for the group and key.
+
+        Raises
+        ------
+        KeyError
+            When the group and key are not found or there is no default for it.
+
+        Parameters
+        ----------
+        group : str
+            The name of the group
+        key : str
+            The key name for the value
+        default_value : Savable
+            The default value
+        """
+        try:
+            self._getIndexValue(group, key, "default_value")
+        except KeyError:
+            raise
+    
     def getDatatype(self, group: str, key: str) -> typing.Union[type, Datatype]:
         """Get the datatype for the group and key.
 

@@ -155,3 +155,6 @@ dm_script_main.s
 
 # some constants that should only be known while development
 dev_constants.py
+
+# session file for the debug pyjem_olcurrent.py
+devices/*.session
