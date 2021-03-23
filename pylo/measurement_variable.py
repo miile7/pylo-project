@@ -50,9 +50,11 @@ class MeasurementVariable:
     name : str
         The name of the value the microscope modifies
     min_value : float or None
-        The minimum value that is allowed or None to allow any value
+        The minimum (uncalibrated) value that is allowed or None to allow any 
+        value
     max_value : float or None
-        The maximum value that is allowed or None to allow any value
+        The maximum (uncalibrated) value that is allowed or None to allow any 
+        value
     unit : str or None
         The unit this measurement variable is expressed in, None for no unit
     format : Datatype or type
@@ -67,11 +69,14 @@ class MeasurementVariable:
     calibration_format : type, Datatype or None
         A Datatype or type to format the input and output
     default_start : float or None
-        The default start value when a new series is created
+        The default start value when a new series is created as the 
+        uncalibrated value
     default_step_width : float or None
-        The default step width value when a new series is created
+        The default step width value when a new series is created as the 
+        uncalibrated value
     default_end : float or None
-        The default end value when a new series is created
+        The default end value when a new series is created as the uncalibrated
+        value
     """
 
     def __init__(self, unique_id: str, name: str, 

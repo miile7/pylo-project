@@ -3,6 +3,7 @@ import math
 import typing
 import logging
 import functools
+import collections
 import collections.abc
 
 from .datatype import Datatype
@@ -90,7 +91,7 @@ class MeasurementSteps(collections.abc.Sequence):
         self.series = MeasurementSteps.formatSeries(
             controller.microscope.supported_measurement_variables, 
             series, self.series_variables, add_default_values=False,
-            logger=self._logger)
+            logger=self._logger, start=start)
         self.series_variables = set(self.series_variables)
 
         self.start = MeasurementSteps.formatStart(
@@ -108,7 +109,8 @@ class MeasurementSteps(collections.abc.Sequence):
                      uncalibrate: typing.Optional[bool]=False,
                      start: typing.Optional[dict]=None,
                      default_values: typing.Optional[dict]=None,
-                     logger: typing.Optional[logging.Logger]=None) -> dict:
+                     logger: typing.Optional[logging.Logger]=None, *args,
+                     parse_measurement_variable_default: typing.Optional[bool]=False) -> dict:
         """Format the given `series` to contain valid values only.
 
         If an invalid value is found and `add_default_values` is True, the 
@@ -117,6 +119,25 @@ class MeasurementSteps(collections.abc.Sequence):
 
         If an invalid value is found and `add_default_values` is False, an 
         Error is raised.
+
+        The default series creation is rather complicated. At first the 
+        `default_values` are added if they are given and valid. Valid means 
+        that the type and the value is correct, also concerning the present 
+        `series` values. E.g. the default value `end=10` is valid if no 
+        `series` is given, but not if the series contains `{"start": 20}`.
+        
+        If the value is not found in the `default_values`, the default values 
+        of the `MeasurementVariable` are used, again if they are given and 
+        valid in the context. If not, the value is calculated. If two values
+        are given, the third one is calculated to perform 5 steps.
+
+        This process is performed for each, the "step-width", the "start" and 
+        the "end" value in this order. This means, that the context changes by
+        the proceeding. 
+        
+        The "step-width" calculation is skipped if not at least two values are 
+        given and no defaults can be found. In this case the "start" and "end"
+        defaults are retrieved. Then the "step-width" is calculated in the end.
 
         Raises
         ------
@@ -177,6 +198,9 @@ class MeasurementSteps(collections.abc.Sequence):
             to continue and return all errors, default: False
         logger : logging.Logger, optional
             The logger object to log to, if not given no logs are made
+        parse_measurement_variable_default : bool, optional
+            Whether to parse the default values if the series variables defines
+            default values, default: False
         
         Returns
         -------
@@ -185,6 +209,12 @@ class MeasurementSteps(collections.abc.Sequence):
             index 1 if `add_default_values` is True, otherwise the valid 
             `series` dict at index 0
         """
+        
+        # ultimate fallback values if there is nothing given at all
+        default_steps = 5
+        default_min = 0
+        default_max = 10
+        default_step_width = 1
 
         log_debug(logger, "Formatting series '{}'".format(series))
         errors = []
@@ -240,13 +270,14 @@ class MeasurementSteps(collections.abc.Sequence):
                 log_error(logger, err)
                 raise err
         
+        id_ = series_variable.unique_id
+
         # prevent recursive series, the series variable must not be in one of 
         # the parent series (if there are parent series)
-        if series_variable.unique_id in series_path:
+        if id_ in series_path:
             err = ValueError(("The variable '{}' in the series{} is " + 
                               "already measured in one of the parent " +
-                              "series.").format(series_variable.unique_id, 
-                                                error_str))
+                              "series.").format(id_, error_str))
 
             if add_default_values:
                 errors.append(err)
@@ -254,40 +285,6 @@ class MeasurementSteps(collections.abc.Sequence):
             else:
                 log_error(logger, err)
                 raise err
-        
-        if not isinstance(default_values, dict):
-            default_values = {}
-        
-        if not series_variable.unique_id in default_values:
-            default_values[series_variable.unique_id] = {}
-        
-        if not "start" in default_values[series_variable.unique_id]:
-            if series_variable.default_start_value is not None:
-                default_values[series_variable.unique_id]["start"] = series_variable.default_start_value 
-            elif series_variable.min_value is not None:
-                default_values[series_variable.unique_id]["start"] = series_variable.min_value
-            else:
-                default_values[series_variable.unique_id]["start"] = 0
-        
-        if not "end" in default_values[series_variable.unique_id]:
-            if series_variable.default_end_value is not None:
-                default_values[series_variable.unique_id]["end"] = series_variable.default_end_value 
-            elif series_variable.max_value is not None:
-                default_values[series_variable.unique_id]["end"] = series_variable.max_value
-            else:
-                default_values[series_variable.unique_id]["end"] = 10
-        
-        if not "step-width" in default_values[series_variable.unique_id]:
-            if series_variable.default_step_width_value is not None:
-                default_values[series_variable.unique_id]["step-width"] = series_variable.default_step_width_value 
-            else:
-                try:
-                    default_values[series_variable.unique_id]["step-width"] = ((
-                            default_values[series_variable.unique_id]["end"] - 
-                            default_values[series_variable.unique_id]["start"]
-                        ) / 5)
-                except TypeError:
-                    default_values[series_variable.unique_id]["step-width"] = 1
 
         series_definition = {
             "start": (int, float), 
@@ -295,12 +292,45 @@ class MeasurementSteps(collections.abc.Sequence):
             "step-width": (int, float), 
         }
 
-        # check if all required indices are present and if their type is 
-        # correct
+        def in_bounds(value: typing.Any, series_variable: "MeasurementVariable") -> bool:
+            """Whether the `value` is inside of the bounds given by the 
+            `series_variable`, if one of the parameters doesn't support 
+            comparisms, True is returned
+
+            Parameters
+            ----------
+            value : any
+                The value to test
+            series_variable : MeasurementVariable
+                The measurement variable
+            
+            Returns
+            -------
+            bool
+                Whether the `value` is inside the bounds or not testable
+            """
+
+            _in_bounds = True
+
+            try:
+                _in_bounds = (value >= series_variable.min_value)
+            except TypeError:
+                pass
+            
+            if _in_bounds:
+                try:
+                    _in_bounds = (value <= series_variable.max_value)
+                except TypeError:
+                    pass
+        
+            return _in_bounds
+
+        # format the known/given series, if defaults are not added, errors are
+        # raised if an error is found
         for key, datatype in series_definition.items():
             if (key not in series and key == "start" and 
-                isinstance(start, dict) and series_variable.unique_id in start):
-                series[key] = start[series_variable.unique_id]
+                isinstance(start, dict) and id_ in start):
+                series[key] = start[id_]
             
             if key not in series:
                 err = KeyError(("The series{} does not have a '{}' " + 
@@ -308,19 +338,12 @@ class MeasurementSteps(collections.abc.Sequence):
                 
                 if add_default_values:
                     errors.append(err)
-                    series[key] = default_values[series_variable.unique_id][key]
                 else:
                     log_error(logger, err)
                     raise err
             else:
                 if parse:
-                    if (series_variable.has_calibration and 
-                        isinstance(series_variable.calibrated_format, (type, Datatype))):
-                        series[key] = parse_value(series_variable.calibrated_format, 
-                                                  series[key])
-                    else:
-                        series[key] = parse_value(series_variable.format, 
-                                                  series[key])
+                    series[key] = parse_value(series_variable, series[key])
 
                 if uncalibrate:
                     series[key] = series_variable.ensureUncalibratedValue(series[key])
@@ -335,59 +358,217 @@ class MeasurementSteps(collections.abc.Sequence):
 
                     if add_default_values:
                         errors.append(err)
-                        series[key] = default_values[series_variable.unique_id][key]
+                        del series[key]
                     else:
                         log_error(logger, err)
                         raise err
+                elif key in ("start", "end"):
+                    if not in_bounds(series[key], series_variable):
+                        err = ValueError(("The '{key}' key in the series{path} " + 
+                                        "is out of bounds. The {key} has to be " + 
+                                        "{min} <= {key} <= {max} but it is " + 
+                                        "{val}.").format(
+                                            path=error_str,
+                                            key=key, 
+                                            min=series_variable.min_value,
+                                            max=series_variable.max_value,
+                                            val=series[key]
+                                        ))
+                        
+                        if add_default_values:
+                            errors.append(err)
+                            del series[key]
+                        else:
+                            log_error(logger, err)
+                            raise err
+                elif key == "step-width":
+                    if math.isclose(series[key], 0):
+                        err = ValueError(("The 'step-width' in the series{} " + 
+                                          "must not be 0.").format(error_str))
+
+                        if add_default_values:
+                            errors.append(err)
+                            del series[key]
+                        else:
+                            log_error(logger, err)
+                            raise err
         
-        # test if step is > 0
-        if series["step-width"] <= 0:
-            err = ValueError(("The 'step-width' in the series{} must be "+ 
-                              "greater than 0.").format(error_str))
-
-            if add_default_values:
-                errors.append(err)
-                series["step-width"] = default_values[series_variable.unique_id]["step-width"]
-            else:
-                log_error(logger, err)
-                raise err
+        if not isinstance(default_values, dict):
+            default_values = {}
         
-        # test if the start and end values are in the boundaries
-        for index in ("start", "end"):
-            in_bounds = True
+        if (not id_ in default_values or 
+            not isinstance(default_values[id_], dict)):
+            default_values[id_] = {}
+        
+        if "step-width" not in series:
+            log_debug(logger, "Trying to find a default value for the step " + 
+                              "width")
 
-            try:
-                in_bounds = (in_bounds and 
-                             series[index] >= series_variable.min_value)
-            except TypeError:
-                pass
-
-            try:
-                in_bounds = (in_bounds and 
-                             series[index] <= series_variable.max_value)
-            except TypeError:
-                pass
-
-            if not in_bounds:
-                err = ValueError(("The '{index}' index in the series{path} " + 
-                                "is out of bounds. The {index} has to be " + 
-                                "{min} <= {index} <= {max} but it is " + 
-                                "{val}.").format(
-                                    path=error_str,
-                                    index=index, 
-                                    min=series_variable.min_value,
-                                    max=series_variable.max_value,
-                                    val=series[index]
-                                ))
-                
-                if add_default_values:
-                    errors.append(err)
-                    series[index] = default_values[series_variable.unique_id][index]
+            # set step-width default values
+            defaults = collections.OrderedDict()
+            # try to use parameter
+            if "step-width" in default_values[id_]:
+                defaults["default_values"] = default_values[id_]["step-width"]
+            
+            # try to use series variable default value
+            if series_variable.default_step_width_value is not None:
+                if parse_measurement_variable_default:
+                    defaults["measurement variable default value"] = (
+                        parse_value(series_variable, 
+                                    series_variable.default_step_width_value))
                 else:
-                    log_error(logger, err)
-                    raise err
+                    defaults["measurement variable default value"] = (
+                        series_variable.default_step_width_value)
+            
+            # try to use value depending on current series
+            if "start" in series and "end" in series:
+                defaults["(end-start)/n"] = ((series["end"] - series["start"]) / 
+                                           default_steps)
+            
+            # find first valid default
+            if len(defaults) > 0:
+                for name, value in defaults.items():
+                    if isinstance(value, (int, float)) and not math.isclose(value, 0):
+                        series["step-width"] = value
+                        log_debug(logger, "Using step width from '{}'".format(name))
+                        break
+            
+            if not "step-width" in series:
+                log_debug(logger, "Did not find a default value for the step " +  
+                                  "width, this is added in the end")
         
-        series_path.append(series_variable.unique_id)
+        if "start" not in series:
+            # set start default values
+            defaults = collections.OrderedDict()
+            # try to use parameter
+            if "start" in default_values[id_]:
+                defaults["default_values"] = default_values[id_]["start"]
+            
+            # try to use series variable default value
+            if series_variable.default_start_value is not None:
+                if parse_measurement_variable_default:
+                    defaults["measurement variable default value"] = (
+                        parse_value(series_variable, 
+                                    series_variable.default_start_value))
+                else:
+                    defaults["measurement variable default value"] = (
+                        series_variable.default_start_value)
+            
+            # try to use value depending on current series
+            if "step-width" in series and "end" in series:
+                defaults["end-(step*n)"] = (series["end"] - 
+                                            series["step-width"] * default_steps)
+            
+            # try to use the limit value
+            if "step-width" in series and series["step-width"] < 0:
+                if series_variable.max_value is not None:
+                    defaults["series variable max value"] = series_variable.max_value
+                else:
+                    defaults["fallback max value"] = default_max
+            else:
+                if series_variable.min_value is not None:
+                    defaults["series variable min value"] = series_variable.min_value
+                else:
+                    defaults["fallback min value"] = default_min
+            
+            if "end" in series:
+                defaults["end-default_step"] = series["end"] - default_step_width
+                defaults["end+default_step"] = series["end"] + default_step_width
+                defaults["end"] = series["end"]
+            
+            # find first valid default
+            # This does terminate and does find a value. The following cases 
+            # are possible.
+            #
+            # The end value is in the bounds, so it is always valid, otherwise
+            # it is removed before this if block
+            #
+            # min_value: yes, "end":  yes -> "end" is valid and in the defaults
+            #                                -> matches boundaries and <= "end" 
+            #                                   criteria
+            # min_value: no,  "end":  yes -> "end" is valid and in the defaults
+            #                                -> boundaries not checkable, 
+            #                                   matches <= "end" criteria, 
+            # min_value: yes, "end":  no  -> min_value is in the defaults
+            #                                -> matches boundaries, <= "end"
+            #                                   not checkable
+            # min_value: no,  "end":  no  -> default_min is in the defaults
+            #                               -> no criterias possible
+            if len(defaults) > 0:
+                for name, value in defaults.items():
+                    if (isinstance(value, (int, float)) and 
+                        in_bounds(value, series_variable) and 
+                        ("end" not in series or 
+                        ((("step-width" not in series or 
+                           series["step-width"] >= 0) and value <= series["end"]) or
+                        ("step-width" in series and 
+                         series["step-width"] < 0 and value >= series["end"])))):
+                        series["start"] = value
+                        log_debug(logger, "Using start from '{}'".format(name))
+                        break
+        
+        if "end" not in series:
+            # set end default values
+            defaults = collections.OrderedDict()
+            # try to use parameter
+            if "end" in default_values[id_]:
+                defaults["default_values"] = default_values[id_]["end"]
+            
+            # try to use series variable default value
+            if series_variable.default_end_value is not None:
+                if parse_measurement_variable_default:
+                    defaults["measurement variable default value"] = (
+                        parse_value(series_variable, 
+                                    series_variable.default_end_value))
+                else:
+                    defaults["measurement variable default value"] = (
+                        series_variable.default_end_value)
+            
+            # try to use value depending on current series
+            if "step-width" in series and "start" in series:
+                defaults["start+(step*n)"] = (series["start"] + 
+                                              series["step-width"] * default_steps)
+            
+            # try to use the limit value
+            if "step-width" in series and series["step-width"] < 0:
+                if series_variable.min_value is not None:
+                    defaults["series variable min value"] = series_variable.min_value
+                else:
+                    defaults["fallback min value"] = default_min
+            else:
+                if series_variable.max_value is not None:
+                    defaults["series variable max value"] = series_variable.max_value
+                else:
+                    defaults["fallback max value"] = default_max
+            
+            if "start" in series:
+                defaults["start+default_step"] = series["start"] + default_step_width
+                defaults["start-default_step"] = series["start"] - default_step_width
+                defaults["start"] = series["start"]
+                
+            # find first valid default
+            # this terminates and finds a value, check out the comment for 
+            # the start
+            if len(defaults) > 0:
+                for name, value in defaults.items():
+                    if (isinstance(value, (int, float)) and 
+                        in_bounds(value, series_variable) and 
+                        ("start" not in series or 
+                        ((("step-width" not in series or 
+                           series["step-width"] >= 0) and value >= series["start"]) or
+                        ("step-width" in series and 
+                         series["step-width"] < 0 and value <= series["start"])))):
+                        series["end"] = value
+                        log_debug(logger, "Using end from '{}'".format(name))
+                        break
+        
+        if "step-width" not in series:
+            series["step-width"] = (series["end"] - series["start"]) / default_steps
+            log_debug(logger, "Using step width from '{}'".format("(end-start)/n"))
+        
+        log_debug(logger, "Created series '{}', checking sub series".format(series))
+
+        series_path.append(id_)
 
         if "on-each-point" in series:
             if isinstance(series["on-each-point"], dict):
