@@ -116,7 +116,7 @@ class DMMicroscope(MicroscopeInterface):
                                               if k == "step-width" else 
                                               focus_calibration_factor * x + 
                                               focus_calibration_offset)
-            focus_uncalibration = (lambda f, k: x / focus_calibration_factor
+            focus_uncalibration = (lambda f, k: f / focus_calibration_factor
                                                 if k == "step-width" else 
                                                 (f - focus_calibration_offset) / 
                                                 focus_calibration_factor)

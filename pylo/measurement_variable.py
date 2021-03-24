@@ -244,7 +244,8 @@ class MeasurementVariable:
             self.calibrated_unit = None
             self.calibrated_format = None
         
-    def convertToCalibrated(self, uncalibrated_value: typing.Union[int, float]) -> typing.Union[int, float]:
+    def convertToCalibrated(self, uncalibrated_value: typing.Union[int, float],
+                            key: typing.Optional[str]=None) -> typing.Union[int, float]:
         """Convert the `uncalibrated_value` to a calibrated value.
 
         If there is no calibration given, the same value is returned.
@@ -262,7 +263,7 @@ class MeasurementVariable:
 
         if self.has_calibration:
             if callable(self._calibration):
-                return self._calibration(uncalibrated_value)
+                return self._calibration(uncalibrated_value, key)
             elif isinstance(self._calibration, (int, float)):
                 return uncalibrated_value * self._calibration
         
@@ -318,7 +319,8 @@ class MeasurementVariable:
         else:
             return value
     
-    def ensureUncalibratedValue(self, value: typing.Union[int, float, None]) -> typing.Union[int, float, None]:
+    def ensureUncalibratedValue(self, value: typing.Union[int, float, None],
+                                key: typing.Optional[str]=None) -> typing.Union[int, float, None]:
         """Return the uncalibrated `value` if there is a calibration, otherwise
         return the `value`.
 
@@ -338,6 +340,6 @@ class MeasurementVariable:
             return value
 
         if self.has_calibration:
-            return self.convertToUncalibrated(value)
+            return self.convertToUncalibrated(value, key)
         else:
             return value
