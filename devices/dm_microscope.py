@@ -112,10 +112,14 @@ class DMMicroscope(MicroscopeInterface):
         
         if (focus_calibration_factor is not None and 
             focus_calibration_offset is not None):
-            focus_calibration = (lambda x: focus_calibration_factor * x + 
-                                           focus_calibration_offset)
-            focus_uncalibration = (lambda f: (f - focus_calibration_offset) / 
-                                             focus_calibration_factor)
+            focus_calibration = (lambda x, k: x * focus_calibration_factor
+                                              if k == "step-width" else 
+                                              focus_calibration_factor * x + 
+                                              focus_calibration_offset)
+            focus_uncalibration = (lambda f, k: x / focus_calibration_factor
+                                                if k == "step-width" else 
+                                                (f - focus_calibration_offset) / 
+                                                focus_calibration_factor)
         else:
             focus_calibration = None
             focus_uncalibration = None
