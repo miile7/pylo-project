@@ -108,7 +108,8 @@ if __name__ == "__main__":
 
             def GetOLf(self):
                 return self.values["getf"]
-            
+        
+        print("Faking some random text", file=old_stdout)
         lens_control = FakeLens3()
     else:
         if args.offline:
