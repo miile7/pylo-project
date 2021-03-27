@@ -346,7 +346,7 @@ class MeasurementSteps(collections.abc.Sequence):
                     series[key] = parse_value(series_variable, series[key])
 
                 if uncalibrate:
-                    series[key] = series_variable.ensureUncalibratedValue(series[key])
+                    series[key] = series_variable.ensureUncalibratedValue(series[key], key)
                 
                 if not isinstance(series[key], datatype):
                     err = TypeError(("The series{} '{}' key has to be of type {} " + 
