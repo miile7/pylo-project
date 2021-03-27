@@ -184,10 +184,13 @@ class DMPyJEMMicroscope(DMMicroscope):
                 raise err from e
         
         response = result.stdout.decode('utf-8').strip()
+        
         if not response.startswith("{") and "{" in response:
             response = response[response.index("{"):]
         if not response.endswith("}") and "}" in response:
             response = response[:response.rindex("}")+1]
+        
+        response = response.strip()
 
         try:
             response = json.loads(response)
