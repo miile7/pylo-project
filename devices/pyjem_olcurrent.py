@@ -19,6 +19,7 @@ if __name__ == "__main__":
             return self.buffer
 
     old_stdout = sys.stdout
+    old_stderr = sys.stderr
     buffer = IOBuffer()
 
     parser = argparse.ArgumentParser("olcurrent", add_help=True,
@@ -72,6 +73,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    sys.stderr = buffer
     sys.stdout = buffer
     if args.debug:
         class FakeLens3:
@@ -124,17 +126,17 @@ if __name__ == "__main__":
     output = {}
     error = None
     
-    if args.setc:
+    if args.setc is not None:
         lens_control.SetOLc(int(args.setc))
-    if args.setf:
+    if args.setf is not None:
         lens_control.SetOLf(int(args.setf))
     
-    if args.setc or args.getc:
+    if args.setc is not None or args.getc:
         output["getc"] = lens_control.GetOLc()
-    if args.setf or args.getf:
+    if args.setf is not None or args.getf:
         output["getf"] = lens_control.GetOLf()
     
-    if not args.setc and not args.getc and not args.setf and not args.setc:
+    if args.setc is None and not args.getc and args.setf is None and not args.setc:
         error = "Nothing to do"
         
     if args.offline:
@@ -143,6 +145,7 @@ if __name__ == "__main__":
             if isinstance(val, (list, tuple)):
                 output[key] = val[-1]
 
+    sys.stderro = old_stderr
     sys.stdout = old_stdout
 
     if args.output == "plain":
