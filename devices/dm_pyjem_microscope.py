@@ -183,8 +183,14 @@ class DMPyJEMMicroscope(DMMicroscope):
             else:
                 raise err from e
         
+        response = result.stdout.decode('utf-8').strip()
+        if not response.startswith("{") and "{" in response:
+            response = response[response.index("{"):]
+        if not response.endswith("}") and "}" in response:
+            response = response[:response.rindex("}")+1]
+
         try:
-            response = json.loads(result.stdout.decode('utf-8'))
+            response = json.loads(response)
         except json.decoder.JSONDecodeError as e:
             err = IOError("Could not read the response of the " + 
                           "'pyjem_olcurrent.py' program")
