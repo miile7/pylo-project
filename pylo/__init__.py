@@ -51,6 +51,11 @@ can add any kind of callable which will be executed when the event is fired.\n\n
 from .events import __event_docs__
 __doc__ += str(__event_docs__)
 
+# make sure that all events are new clean objects
+# from .events import del_events
+# from .events import redefine_events
+# events.redefine_events()
+
 from .errors import DeviceImportError
 from .errors import DeviceCreationError
 from .errors import BlockedFunctionError

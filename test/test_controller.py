@@ -362,10 +362,10 @@ class TestController:
         pylo.series_ready.clear()
 
         # add event handlers
-        pylo.before_init.append(self.before_init_handler)
-        pylo.init_ready.append(self.init_ready_handler)
-        pylo.user_ready.append(self.user_ready_handler)
-        pylo.series_ready.append(self.series_ready_handler)
+        pylo.before_init["test_controller_handler"] = self.before_init_handler
+        pylo.init_ready["test_controller_handler"] = self.init_ready_handler
+        pylo.user_ready["test_controller_handler"] = self.user_ready_handler
+        pylo.series_ready["test_controller_handler"] = self.series_ready_handler
 
         if change_microscope:
             # define the microscope to use
@@ -590,10 +590,10 @@ class TestController:
         self.measurement_ready_times = []
 
         # bind handler
-        pylo.microscope_ready.append(self.microscope_ready_handler)
-        pylo.before_record.append(self.before_record_handler)
-        pylo.after_record.append(self.after_record_handler)
-        pylo.measurement_ready.append(self.measurement_ready_handler)
+        pylo.microscope_ready["test_controller_handler"] = self.microscope_ready_handler
+        pylo.before_record["test_controller_handler"] = self.before_record_handler
+        pylo.after_record["test_controller_handler"] = self.after_record_handler
+        pylo.measurement_ready["test_controller_handler"] = self.measurement_ready_handler
 
         self.init_start_program_test(controller, tmp_path)
 
@@ -812,7 +812,8 @@ class TestController:
             self.init_start_program_test(
                 controller, 
                 tmp_path, 
-                before_start=lambda: pylo.init_ready.append(self.raise_test_exception)
+                before_start=lambda: pylo.init_ready.__setitem__("test_controller_raise_exc", 
+                                                                 self.raise_test_exception)
             )
 
         found = False
@@ -833,7 +834,8 @@ class TestController:
             self.init_start_program_test(
                 controller, 
                 tmp_path, 
-                before_start=lambda: pylo.after_record.append(self.raise_test_exception)
+                before_start=lambda: pylo.after_record.__setitem__("test_controller_raise_exc", 
+                                                                   self.raise_test_exception)
             )
 
         found = False
@@ -928,8 +930,8 @@ class TestController:
         self.microscope_ready_times = []
         self.measurement_ready_times = []
 
-        pylo.microscope_ready.append(self.microscope_ready_handler)
-        pylo.measurement_ready.append(self.measurement_ready_handler)
+        pylo.microscope_ready["test_controller_handler"] = self.microscope_ready_handler
+        pylo.measurement_ready["test_controller_handler"] = self.measurement_ready_handler
 
         # let the microscope take one second to arrange the measuremnet 
         # variable
@@ -973,8 +975,8 @@ class TestController:
         self.microscope_ready_times = []
         self.measurement_ready_times = []
 
-        pylo.microscope_ready.append(self.microscope_ready_handler)
-        pylo.measurement_ready.append(self.measurement_ready_handler)
+        pylo.microscope_ready["test_controller_times"] = self.microscope_ready_handler
+        pylo.measurement_ready["test_controller_times"] = self.measurement_ready_handler
 
         # let the microscope take one second to arrange the measuremnet 
         # variable

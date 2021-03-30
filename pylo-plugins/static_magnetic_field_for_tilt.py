@@ -5,9 +5,11 @@ class StaticMagneticFieldForTilt(pylo.Device):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
+        self.init_event_id = "static_magnetic_field_init"
+        self.modify_step_event_id = "static_magnetic_field_modify_step"
         self.clearEvents()
-        pylo.init_ready.append(self.initialize)
-        pylo.before_approach.append(self.modifyStep)
+        pylo.init_ready[self.init_event_id] = self.initialize
+        pylo.before_approach[self.modify_step_event_id] = self.modifyStep
 
         self._logger = pylo.logginglib.get_logger(self)
         self.hint_shown = False
@@ -17,10 +19,10 @@ class StaticMagneticFieldForTilt(pylo.Device):
     
     def clearEvents(self) -> None:
         """Clear the events from the bound functions"""
-        if self.initialize in pylo.init_ready:
-            pylo.init_ready.remove(self.initialize)
-        if self.modifyStep in pylo.before_approach:
-            pylo.before_approach.remove(self.modifyStep)
+        if self.init_event_id in pylo.init_ready:
+            del pylo.init_ready[self.init_event_id]
+        if self.modify_step_event_id in pylo.before_approach:
+            del pylo.before_approach[self.modify_step_event_id]
     
     def initialize(self, controller, *args, **kwargs) -> None:
         """Initialize the plugin."""

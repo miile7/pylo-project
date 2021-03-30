@@ -32,8 +32,8 @@ class TestEvent:
         self.reset_triggered_handler()
 
         # add handlers
-        self.event.append(self.handler1)
-        self.event.append(self.handler2)
+        self.event["handler_1"] = self.handler1
+        self.event["handler_2"] = self.handler2
 
         # trigger event
         self.event()
@@ -50,11 +50,11 @@ class TestEvent:
         self.reset_triggered_handler()
 
         # add handlers
-        self.event.append(self.handler1)
-        self.event.append(self.handler2)
+        self.event["handler_1"] = self.handler1
+        self.event["handler_2"] = self.handler2
 
         # remove handler again
-        self.event.remove(self.handler1)
+        del self.event["handler_1"]
 
         # trigger event
         self.event()
@@ -70,8 +70,8 @@ class TestEvent:
         self.reset_triggered_handler()
 
         # add handlers
-        self.event.append(self.handler1)
-        self.event.append(self.handler2)
+        self.event["handler_1"] = self.handler1
+        self.event["handler_2"] = self.handler2
 
         # trigger event
         self.event()

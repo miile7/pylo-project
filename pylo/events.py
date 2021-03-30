@@ -70,3 +70,41 @@ __event_docs__("measurement_ready",
 """Fired when the measurement has fully finished. The current `controller` 
 will be the first argument.""")
 measurement_ready = Event()
+
+def redefine_events():
+    """Redefine all events."""
+    global after_stop, emergency, before_start, before_init, init_ready
+    global user_ready, series_ready, microscope_ready, before_approach
+    global before_record, after_record, measurement_ready
+
+    after_stop = Event()
+    emergency = Event()
+    before_start = Event()
+    before_init = Event()
+    init_ready = Event()
+    user_ready = Event()
+    series_ready = Event()
+    microscope_ready = Event()
+    before_approach = Event()
+    before_record = Event()
+    after_record = Event()
+    measurement_ready = Event()
+
+def del_events():
+    """Delete all events."""
+    global after_stop, emergency, before_start, before_init, init_ready
+    global user_ready, series_ready, microscope_ready, before_approach
+    global before_record, after_record, measurement_ready
+
+    del after_stop
+    del emergency
+    del before_start
+    del before_init
+    del init_ready
+    del user_ready
+    del series_ready
+    del microscope_ready
+    del before_approach
+    del before_record
+    del after_record
+    del measurement_ready

@@ -236,7 +236,8 @@ class Measurement:
         # stop the measurement when the emergency event is fired
         log_debug(self._logger, "Adding stop() function call to emergency " + 
                                 "event")
-        emergency.append(self.stop)
+        self.stop_event_id = "measurement_stop"
+        emergency[self.stop_event_id] = self.stop
 
         # the index in the steps that is currently being measured
         self.step_index = -1

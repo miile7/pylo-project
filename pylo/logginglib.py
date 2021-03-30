@@ -92,7 +92,7 @@ def record_factory(name, level, fn, lno, msg, args, exc_info, func=None,
         The logging record
     """
 
-    frames = traceback.extract_stack(limit=6)
+    frames = traceback.extract_stack(limit=7)
     frame = frames[0]
     return logging.LogRecord(name, level, frame.filename, frame.lineno,
                              msg, args, exc_info, frame.name, sinfo)
