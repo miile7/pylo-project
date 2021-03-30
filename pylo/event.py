@@ -1,35 +1,36 @@
-class Event(list):
+import collections
+
+class Event(collections.OrderedDict):
     """Event subscription.
 
-    A list of callable objects. Calling an instance of this will cause a
-    call to each item in the list in ascending order by index.
+    A dict of callable objects. Calling an instance of this will cause a
+    call to each item in the dict in ascending order by index.
 
     Example Usage:
+    ```python
     >>> def f(x):
-    ...     print 'f(%s)' % x
+    ...     print("f({})".format(x))
     >>> def g(x):
-    ...     print 'g(%s)' % x
+    ...     print("g({})".format(x))
     >>> e = Event()
     >>> e()
-    >>> e.append(f)
+    >>> e["print"] = f
     >>> e(123)
     f(123)
-    >>> e.remove(f)
+    >>> del["print"]
     >>> e()
-    >>> e += (f, g)
+    >>> e["f"] = f
+    >>> e["g"] = g
     >>> e(10)
     f(10)
     g(10)
-    >>> del e[0]
-    >>> e(2)
-    g(2)
-
-    Taken from https://stackoverflow.com/a/2022629/5934316
-
+    ```
     """
     def __call__(self, *args, **kwargs) -> None:
-        for f in self:
-            f(*args, **kwargs)
+        for f in self.values():
+            if callable(f):
+                f(*args, **kwargs)
 
     def __repr__(self) -> str:
-        return "Event({})".format(list.__repr__(self))
+        return "Event({})".format(dict.__repr__(self))
+    

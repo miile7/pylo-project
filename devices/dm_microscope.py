@@ -390,7 +390,8 @@ class DMMicroscope(MicroscopeInterface):
             # extra ask for the user if the tilt holder really is installed, 
             # just to be extra sure
             self.holder_confirmed = False
-        microscope_ready.append(self._confirmHolder)
+        self.holder_event_id = "dm_microscope_confirm_holder"
+        microscope_ready[self.holder_event_id] = self._confirmHolder
         
         # variable = self.registerMeasurementVariable(
         #     MeasurementVariable(
@@ -428,8 +429,8 @@ class DMMicroscope(MicroscopeInterface):
         """Delete the microscope."""
 
         # prevent asking multiple times for the holder
-        if self._confirmHolder in microscope_ready:
-            microscope_ready.remove(self._confirmHolder)
+        if self.holder_event_id in microscope_ready:
+            del microscope_ready[self.holder_event_id]
     
     def _confirmHolder(self, *args) -> None:
         """Show a confirm dialog with the view if the holder is not yet

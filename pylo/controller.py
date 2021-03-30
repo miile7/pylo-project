@@ -99,6 +99,8 @@ class Controller:
         self._logger = get_logger(self)
 
         loader.importPlugins(self)
+        
+        log_debug(self._logger, "Firing 'before_start' event")
         before_start(self)
         
     def getConfigurationValuesOrAsk(self, *config_lookup: typing.List[typing.Union[typing.Tuple[str, str], typing.Tuple[str, str, typing.Iterable]]],

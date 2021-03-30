@@ -84,7 +84,7 @@ class TestMeasurementVariable:
         # ignore uncalibration if calibration is given
         (2, 100, 10, 5),
         # test callable
-        (lambda x: x**2 + 1, lambda x: math.sqrt(x - 1), 26, 5)
+        (lambda x, k: x**2 + 1, lambda x, k: math.sqrt(x - 1), 26, 5)
     ])
     def test_valid_calibration(self, calibration, uncalibration, test_calibrated, test_uncalibrated):
         """Test if the calibration works for valid calibrations."""
@@ -105,8 +105,8 @@ class TestMeasurementVariable:
         assert var.convertToUncalibrated(test_calibrated) == test_uncalibrated
     
     @pytest.mark.parametrize("calibration,uncalibration", [
-        (26, lambda x: math.sqrt(x - 1)),
-        (lambda x: x**2 + 1, 5),
+        (26, lambda x, k: math.sqrt(x - 1)),
+        (lambda x, k: x**2 + 1, 5),
         ("invalid", "invalid")
     ])
     def test_invalid_calibration(self, calibration, uncalibration):
@@ -127,7 +127,7 @@ class TestMeasurementVariable:
         (3, None, 3, None, None, 18, 3, 6),
         (None, 6, None, 1/3, 9, None, 3, 6),
         # only uncalibrated
-        (None, None, lambda x: x**2, lambda x: math.sqrt(x), 4, 25, 2, 5)
+        (None, None, lambda x, k: x**2, lambda x, k: math.sqrt(x), 4, 25, 2, 5)
     ])
     def test_calibrated_min_max(self, min_value, max_value, calibration, uncalibration, calibrated_min, calibrated_max, expected_min, expected_max):
         """Test the calibrated_min and calibrated_max values."""

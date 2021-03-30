@@ -389,15 +389,15 @@ class PerformedMeasurement:
         pylo.measurement_ready.clear()
 
         # register events
-        pylo.microscope_ready.append(self.microscope_ready_handler)
-        pylo.before_approach.append(self.before_approach_handler)
-        pylo.before_record.append(self.before_record_handler)
-        pylo.after_record.append(self.after_record_handler)
-        pylo.measurement_ready.append(self.measurement_ready_handler)
+        pylo.microscope_ready["performed_measurement_handler"] = self.microscope_ready_handler
+        pylo.before_approach["performed_measurement_handler"] = self.before_approach_handler
+        pylo.before_record["performed_measurement_handler"] = self.before_record_handler
+        pylo.after_record["performed_measurement_handler"] = self.after_record_handler
+        pylo.measurement_ready["performed_measurement_handler"] = self.measurement_ready_handler
 
-        pylo.microscope_ready.append(self.check_if_microscope_in_lorentz_mode)
-        pylo.after_record.append(self.prepare_names_handler)
-        pylo.after_record.append(self.every_step_visited_handler)
+        pylo.microscope_ready["performed_measurement_check_lorentz"] = self.check_if_microscope_in_lorentz_mode
+        pylo.after_record["performed_measurement_prepare_names"] = self.prepare_names_handler
+        pylo.after_record["performed_measurement_step_visited"] = self.every_step_visited_handler
 
         if callable(before_start):
             before_start(self)
@@ -874,7 +874,8 @@ class TestMeasurement:
         """Test if firing the stop event in the microscope_ready event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.microscope_ready.append(m.measurement.stop),
+            lambda m: pylo.microscope_ready.__setitem__("test_measurement_stop", 
+                                                        m.measurement.stop),
             collect_file_m_times=False
         )
 
@@ -899,7 +900,8 @@ class TestMeasurement:
         """Test if firing the stop event in the before_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.before_record.append(m.measurement.stop),
+            lambda m: pylo.before_record.__setitem__("test_measurement_stop", 
+                                                     m.measurement.stop),
             collect_file_m_times=False
         )
 
@@ -924,7 +926,8 @@ class TestMeasurement:
         """Test if firing the stop event in the after_record event callback 
         cancels the execution of the measurement."""
         performed_measurement = PerformedMeasurement(0, 
-            lambda m: pylo.after_record.append(m.measurement.stop),
+            lambda m: pylo.after_record.__setitem__("test_measurement_stop", 
+                                                    m.measurement.stop),
             collect_file_m_times=False
         )
 
@@ -1102,7 +1105,7 @@ class TestMeasurement:
 
         self.after_stop_times = []
         pylo.after_stop.clear()
-        pylo.after_stop.append(self.after_stop_handler)
+        pylo.after_stop["test_measurement_stop"] = self.after_stop_handler
 
         performed_measurement = PerformedMeasurement(0, auto_start=False)
 
@@ -1151,7 +1154,8 @@ class TestMeasurement:
         measurement."""
         with pytest.raises(DummyException):
             performed_measurement = PerformedMeasurement(0, 
-                lambda m: pylo.microscope_ready.append(self.throw_exception)
+                lambda m: pylo.microscope_ready.__setitem__("test_measurement_exception", 
+                                                            self.throw_exception)
             )
 
             self.check_measurement_is_stopped(performed_measurement)
@@ -1168,7 +1172,8 @@ class TestMeasurement:
         measurement."""
         with pytest.raises(DummyException):
             performed_measurement = PerformedMeasurement(0, 
-                lambda m: pylo.before_record.append(self.throw_exception)
+                lambda m: pylo.before_record.__setitem__("test_measurement_exception", 
+                                                         self.throw_exception)
             )
 
             self.check_measurement_is_stopped(performed_measurement)
@@ -1185,7 +1190,8 @@ class TestMeasurement:
         measurement."""
         with pytest.raises(DummyException):
             performed_measurement = PerformedMeasurement(0, 
-                lambda m: pylo.after_record.append(self.throw_exception)
+                lambda m: pylo.after_record.__setitem__("test_measurement_exception", 
+                                                        self.throw_exception)
             )
 
             self.check_measurement_is_stopped(performed_measurement)

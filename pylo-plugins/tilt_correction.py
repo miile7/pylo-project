@@ -4,18 +4,22 @@ import logging
 import pylo
 
 tilt_corrector = None
+tilt_corrector_reset_event_id = "tilt_corrector_reset"
+tilt_corrector_correct_tilt_event_id = "tilt_corrector_correct_tilt"
+tilt_corrector_create_event_id = "tilt_corrector_create"
+
 def create_tilt_corrector(controller):
-    global tilt_corrector
+    global tilt_corrector, tilt_corrector_reset_event_id, tilt_corrector_correct_tilt_event_id
     tilt_corrector = TiltCorrection(controller)
 
-    if tilt_corrector.reset not in pylo.events.series_ready:
-        pylo.events.series_ready.append(tilt_corrector.reset)
+    if tilt_corrector_reset_event_id not in pylo.events.series_ready:
+        pylo.events.series_ready[tilt_corrector_reset_event_id] = tilt_corrector.reset
 
-    if tilt_corrector.correctTilts not in pylo.events.before_record:
-        pylo.events.before_record.append(tilt_corrector.correctTilts)
+    if tilt_corrector_correct_tilt_event_id not in pylo.events.before_record:
+        pylo.events.before_record[tilt_corrector_correct_tilt_event_id] = tilt_corrector.correctTilts
     
-if create_tilt_corrector not in pylo.events.init_ready:
-    pylo.events.init_ready.append(create_tilt_corrector)
+if tilt_corrector_create_event_id not in pylo.events.init_ready:
+    pylo.events.init_ready[tilt_corrector_create_event_id] = create_tilt_corrector
 
 class TiltCorrection:
     def __init__(self, controller):
