@@ -553,8 +553,10 @@ class DMViewDialog : UIFrame{
                 else{
                     string start_value;
                     string end_value;
+                    string step_value;
                     number start_num;
                     number end_num;
+                    number step_num;
 
                     if(index >= 0 && (is_step_width == 1 || check_series_start == 1)){
                         // get the start input of this row
@@ -592,14 +594,38 @@ class DMViewDialog : UIFrame{
                             }
                         }
                     }
+                    if(index >= 0 && (check_series_start || check_series_end) && !is_step_width){
+                        TagGroup step_input;
+                        step_inputboxes.TagGroupGetIndexedTagAsTagGroup(index, step_input);
+
+                        // get value and convert to number
+                        step_value = step_input.DLGGetStringValue();
+
+                        if(step_value != ""){
+                            number step_parsable;
+                            step_num = self.DMViewDialogGetNumericValue(var, step_value, step_parsable);
+
+                            if(step_parsable == 0){
+                                step_value = "";
+                                step_num = 0;
+                            }
+                        }
+                    }
 
                     if(is_step_width){
-                        if(value_num <= 0){
-                            errors += error_start_template + " is less or equal to 0 which is not allowed (" + value_num + "<=0).\n";
+                        if(value_num == 0){
+                            errors += error_start_template + " is equal to 0 which is not allowed (" + value_num + "!=0).\n";
                             valid = 0;
                         }
-                        if(start_value != "" && end_value != "" && value_num > end_num - start_num){
-                            errors += error_start_template + " greater than the difference between the start and end value, so there is only the start value in the series (the next step is outside the end already) (" + value_num + ">" + (end_num - start_num) + ").\n";
+                        if(start_value != "" && end_value != "" && ((value_num > 0 && value_num > end_num - start_num) || (value_num < 0 && value_num < end_num - start_num))){
+                            string condition;
+                            if(value_num >= 0){
+                                condition = value_num + ">" + end_num + "-" + start_num;
+                            }
+                            else{
+                                condition = value_num + "<" + end_num + "-" + start_num;
+                            }
+                            errors += error_start_template + " greater than the difference between the start and end value, so there is only the start value in the series (the next step is outside the end already) (" + condition + ")\n";
                             valid = 0;
                         }
                     }
@@ -621,12 +647,20 @@ class DMViewDialog : UIFrame{
                             }
                         }
 
-                        if(check_series_start && value_num <= start_num){
+                        if(check_series_start && step_num > 0 && value_num <= start_num){
                             errors += error_start_template + " is less or equal to the start value (" + value_num + "<=" + start_num + ").\n"
                             valid = 0;
                         }
-                        if(check_series_end && value_num >= end_num){
+                        else if(check_series_start && step_num < 0 && value_num >= start_num){
+                            errors += error_start_template + " is greater or equal to the start value (" + value_num + ">=" + start_num + ").\n"
+                            valid = 0;
+                        }
+                        if(check_series_end && step_num > 0 && value_num >= end_num){
                             errors += error_start_template + " is greater or equal to the end value (" + value_num + ">=" + end_num + ").\n"
+                            valid = 0;
+                        }
+                        else if(check_series_end && step_num < 0 && value_num <= end_num){
+                            errors += error_start_template + " is greater or equal to the end value (" + value_num + "<=" + end_num + ").\n"
                             valid = 0;
                         }
                     }
