@@ -330,7 +330,9 @@ class DMMicroscope(MicroscopeInterface):
         variable = self.registerMeasurementVariable(
             MeasurementVariable("x-tilt", "X Tilt", 
                                 self.installed_holder.min_x_tilt, 
-                                self.installed_holder.max_x_tilt, "deg"),
+                                self.installed_holder.max_x_tilt, 
+                                "deg",
+                                format=Datatype.float_np(1)),
             self._getXTilt,
             self._setXTilt
         )
@@ -374,7 +376,9 @@ class DMMicroscope(MicroscopeInterface):
             variable = self.registerMeasurementVariable(
                 MeasurementVariable("y-tilt", "Y Tilt", 
                                     self.installed_holder.min_y_tilt, 
-                                    self.installed_holder.max_y_tilt, "deg"),
+                                    self.installed_holder.max_y_tilt, 
+                                    "deg",
+                                    format=Datatype.float_np(1)),
                 self._getYTilt,
                 self._setYTilt
             )
