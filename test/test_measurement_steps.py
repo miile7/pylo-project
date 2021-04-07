@@ -99,7 +99,8 @@ class DummyMicroscope2(pylo.MicroscopeInterface):
 
 values = {
     "a": range(1, 4, 1), # [1, 2, 3]
-    "b": range(4, 8, 1), # [4, 5, 6, 7]
+    # "b": range(4, 8, 1), # [4, 5, 6, 7]
+    "b": range(7, 3, -1), # [7, 6, 5, 4]
     "c": range(2, 10, 2), # [2, 4, 6, 8] (make sure to stop at 10, otherwise 
                           #               the test series is initialized wrong)
     "d": range(-5, 10, 5) # [-5, 0, 5] (make sure to stop at 10, otherwise 
@@ -279,6 +280,8 @@ class TestMeasurementSteps:
                     for d in values["d"]:
                         step = measurement_steps.__getitem__(index)
 
+                        print("Step:   ", step)
+                        print("assumed:", {"a": a, "b": b, "c": c, "d": d})
                         assert isinstance(step, dict)
                         assert step["a"] == a
                         assert step["b"] == b
@@ -306,6 +309,9 @@ class TestMeasurementSteps:
                 for c in values["c"]:
                     for d in values["d"]:
                         step = steps[index]
+
+                        print("Step:   ", step)
+                        print("assumed:", {"a": a, "b": b, "c": c, "d": d})
 
                         assert isinstance(step, dict)
                         assert step["a"] == a
@@ -370,11 +376,13 @@ class TestMeasurementSteps:
             i += 1
     
     @pytest.mark.usefixtures("controller")
-    def test_parse_series(self, controller):
+    @pytest.mark.parametrize("sgn1", (+1, -1))
+    def test_parse_series(self, controller, sgn1):
         """Test if the Measurement::_parseSeries() is correct for a single 
         series."""
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
-        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1}
+        series = {"variable": "focus", "start": 0 if sgn1 > 0 else 10, 
+                  "end": 10 if sgn1 > 0 else 0, "step-width": 1 * sgn1}
 
         steps = pylo.MeasurementSteps(controller, start, series)
 
@@ -394,18 +402,32 @@ class TestMeasurementSteps:
             assert step["x-tilt"] == 0
             
             if i == 0:
-                assert step["focus"] == 0
+                if sgn1 > 0:
+                    assert step["focus"] == 0
+                else:
+                    assert step["focus"] == 10
             else:
-                assert step["focus"] == steps[i - 1]["focus"] + 1
+                assert math.isclose(step["focus"],
+                                    steps[i - 1]["focus"] + (1 * sgn1),
+                                    abs_tol=1e-10)
     
     @pytest.mark.usefixtures("controller")
-    def test_parse_single_nested_series(self, controller):
+    @pytest.mark.parametrize("sgn1,sgn2", [
+        (+1, +1),
+        (+1, -1),
+        (-1, +1),
+        (-1, -1),
+    ])
+    def test_parse_single_nested_series(self, controller, sgn1, sgn2):
         """Test if the Measurement::_parseSeries() is correct for a series 
         that contains another series."""
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
-        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-point": {"variable": "lense-current", "start": 0, 
-                                   "end": 3, "step-width": 0.1}}
+        series = {"variable": "focus", "start": 0 if sgn1 > 0 else 10, 
+                  "end": 10 if sgn1 > 0 else 0, "step-width": 1 * sgn1,
+                  "on-each-point": {"variable": "lense-current", 
+                                    "start": 0 if sgn2 > 0 else 3, 
+                                    "end": 3 if sgn2 > 0 else 0, 
+                                    "step-width": 0.1 * sgn2}}
 
         steps = pylo.MeasurementSteps(controller, start, series)
 
@@ -413,7 +435,7 @@ class TestMeasurementSteps:
 
         for i, step in enumerate(steps):
             getitem_step = steps[i]
-            print(i, step, getitem_step)
+            print(i, getitem_step, step)
 
             # make sure that the MeasurementSteps.__next__() function returns 
             # the same as the MeasurementSteps.__getitem__()
@@ -432,31 +454,52 @@ class TestMeasurementSteps:
             assert step["x-tilt"] == 0
             
             if i % 31 == 0:
-                assert step["lense-current"] == 0
+                if sgn2 > 0:
+                    assert step["lense-current"] == 0
+                else:
+                    assert step["lense-current"] == 3
             else:
                 # having problems with float rounding
                 assert math.isclose(step["lense-current"], 
-                                    steps[i - 1]["lense-current"] + 0.1)
+                                    steps[i - 1]["lense-current"] + (0.1 * sgn2),
+                                    abs_tol=1e-10)
             
             if i // 31 == 0:
-                assert step["focus"] == 0
+                if sgn1 > 0:
+                    assert step["focus"] == 0
+                else:
+                    assert step["focus"] == 10
             else:
                 assert math.isclose(step["focus"], 
-                                    steps[(i // 31) * 31 - 1]["focus"] + 1)
+                                    steps[(i // 31) * 31 - 1]["focus"] + (1 * sgn1),
+                                    abs_tol=1e-10)
     
     @pytest.mark.usefixtures("controller")
-    def test_parse_double_nested_series(self, controller):
+    @pytest.mark.parametrize("sgn1,sgn2,sgn3", [
+        (+1, +1, +1),
+        (+1, +1, -1),
+        (+1, -1, +1),
+        (+1, -1, -1),
+        (-1, +1, +1),
+        (-1, +1, -1),
+        (-1, -1, +1),
+        (-1, -1, -1),
+    ])
+    def test_parse_double_nested_series(self, controller, sgn1, sgn2, sgn3):
         """Test if the Measurement::_parseSeries() is correct for a series 
         that contains another series and that contains another series."""
 
         start = {"focus": 0, "lense-current": 0, "x-tilt": 0}
-        series = {"variable": "focus", "start": 0, "end": 10, "step-width": 1, 
-                  "on-each-point": {"variable": "lense-current", "start": 0, 
-                                   "end": 3, "step-width": 0.1, 
-                                   "on-each-point": {"variable": "x-tilt", 
-                                                     "start": -20, 
-                                                     "end": 20, 
-                                                     "step-width": 5}}}
+        series = {"variable": "focus", "start": 0 if sgn1 > 0 else 10, 
+                  "end": 10 if sgn1 > 0 else 0, "step-width": 1 * sgn1,
+                  "on-each-point": {"variable": "lense-current", 
+                                    "start": 0 if sgn2 > 0 else 3, 
+                                    "end": 3 if sgn2 > 0 else 0, 
+                                    "step-width": 0.1 * sgn2,
+                                    "on-each-point": {"variable": "x-tilt", 
+                                                      "start": -20 * sgn3, 
+                                                      "end": 20 * sgn3, 
+                                                      "step-width": 5 * sgn3}}}
 
         steps = pylo.MeasurementSteps(controller, start, series)
 
@@ -482,24 +525,33 @@ class TestMeasurementSteps:
                 assert measurement_var.unique_id in step
             
             if i % 9 == 0:
-                assert step["x-tilt"] == -20
+                assert step["x-tilt"] == -20 * sgn3
             else:
                 # having problems with float rounding
                 assert math.isclose(step["x-tilt"], 
-                                    steps[i - 1]["x-tilt"] + 5)
+                                    steps[i - 1]["x-tilt"] + (5 * sgn3),
+                                    abs_tol=1e-10)
             
             if (i // 9) % 31 == 0:
-                assert step["lense-current"] == 0
+                if sgn2 > 0:
+                    assert step["lense-current"] == 0
+                else:
+                    assert step["lense-current"] == 3
             else:
                 # having problems with float rounding
                 assert math.isclose(step["lense-current"], 
-                                    steps[(i // 9) * 9 - 1]["lense-current"] + 0.1)
+                                    steps[(i // 9) * 9 - 1]["lense-current"] + (0.1 * sgn2),
+                                    abs_tol=1e-10)
             
             if i // (31 * 9) == 0:
-                assert step["focus"] == 0
+                if sgn1 > 0:
+                    assert step["focus"] == 0
+                else:
+                    assert step["focus"] == 10
             else:
                 assert math.isclose(step["focus"], 
-                                    steps[(i // 31 // 9) * 31 * 9 - 1]["focus"] + 1)
+                                    steps[(i // 31 // 9) * 31 * 9 - 1]["focus"] + (1 * sgn1),
+                                    abs_tol=1e-10)
     
     @pytest.mark.usefixtures("controller")
     def test_parse_change_start_parameters(self, controller):
