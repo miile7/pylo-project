@@ -268,25 +268,62 @@ class Measurement:
         log_debug(self._logger, "Formatting name to '{}'".format(name))
         return name
     
-    def _setSafe(self) -> None:
-        """Set the microscope and the camera to be in safe state."""
+    def _setSafe(self, force: typing.Optional[bool]=True, 
+                 output: typing.Optional[bool]=False) -> typing.List[ExceptionThread]:
+        """Set the microscope and the camera to be in safe state.
+        
+        Parameters
+        ----------
+        force : bool, optional
+            Whether to force setting to the safe state (True) or to check, if 
+            the microscope and/or camera should be set to the safe state after
+            the measurement (False)
+        output : bool, optional
+            Whether to print a message to the view when the resetting process
+            is running
+        
+        Returns
+        -------
+        list of ExceptionThreads
+            The list of started threads that are currently setting the hardware
+            devices to the safe state or an empty list if there is nothing to 
+            do
+        """
 
         log_debug(self._logger, "Setting micorsocpe and camera to safe state",
                                exc_info=True)
+        
+        reset_threads = []
 
-        try:
-            self.controller.microscope.resetToSafeState()
-        except BlockedFunctionError:
-            # emergency event is called, microscope goes in emergency state by 
-            # itself
-            pass
+        if force or self.microscope_safe_after:
+            thread_name = "reset microscope to safe state"
+            log_debug(self._logger, ("Setting microscope to safe state " + 
+                                     "in thread '{}'").format(thread_name))
+            thread = ExceptionThread(
+                target=self.controller.microscope.resetToSafeState,
+                name=thread_name
+            )
+            thread.start()
+            reset_threads.append(thread)
 
-        try:
-            self.controller.camera.resetToSafeState()
-        except BlockedFunctionError:
-            # emergency event is called, camera goes in emergency state by 
-            # itself
-            pass
+            if output:
+                self.controller.view.print("Setting microscope to safe state...")
+        
+        if force or self.camera_safe_after:
+            thread_name = "reset camera to safe state"
+            log_debug(self._logger, ("Setting microscope to safe state " + 
+                                     "in thread '{}'").format(thread_name))
+            thread = ExceptionThread(
+                target=self.controller.camera.resetToSafeState,
+                name=thread_name
+            )
+            thread.start()
+            reset_threads.append(thread)
+
+            if output:
+                self.controller.view.print("Setting camera to safe state...")
+        
+        return reset_threads
     
     def start(self) -> None:
         """Start the measurement.
@@ -599,32 +636,10 @@ class Measurement:
             
             self.controller.view.print("Done with measurement.")
 
-            reset_threads = []
             # reset microscope and camera to a safe state so there is no need
             # for the operator to come back very quickly, do this while waiting
             # for the save threads to finish
-            if self.microscope_safe_after:
-                log_debug(self._logger, "Setting microscope to safe state " + 
-                                       "in other thread because settings " + 
-                                       "told so")
-                thread = ExceptionThread(
-                    target=self.controller.microscope.resetToSafeState,
-                    name="reset microscope to safe state"
-                )
-                thread.start()
-                reset_threads.append(thread)
-                self.controller.view.print("Setting microscope to safe state...")
-            if self.camera_safe_after:
-                log_debug(self._logger, "Setting camera to safe state " + 
-                                       "in other thread because settings " + 
-                                       "told so")
-                thread = ExceptionThread(
-                    target=self.controller.camera.resetToSafeState,
-                    name="reset camera to safe state"
-                )
-                thread.start()
-                reset_threads.append(thread)
-                self.controller.view.print("Setting camera to safe state...")
+            reset_threads = self._setSafe(False, True)
 
             # stop log thread
             if isinstance(self._measurement_log_thread, LogThread):
@@ -660,6 +675,10 @@ class Measurement:
             log_debug(self._logger, "Stopping program", exc_info=e)
             self.stop()
             raise e
+        except BlockedFunctionError as e:
+            # stop if any error occurres, just to be sure
+            log_error(self._logger, e)
+            self.stop()
         except Exception as e:
             # stop if any error occurres, just to be sure
             log_error(self._logger, e)
@@ -698,11 +717,18 @@ class Measurement:
         log_debug(self._logger, "Stopping measurement")
         
         self.running = False
-        self._setSafe()
+        reset_threads = self._setSafe(False, True)
 
         if isinstance(self._measurement_log_thread, LogThread):
             log_debug(self._logger, "Stopping measurement log thread")
             self._measurement_log_thread.stop()
+        
+        # wait for reset threads if there are threads to wait for
+        for thread in reset_threads:
+            thread.join()
+        
+        # raise error if there occurred some
+        self.raiseThreadErrors(*reset_threads)
 
         # fire stop event
         log_debug(self._logger, "Firing 'after_stop' event")
@@ -727,7 +753,9 @@ class Measurement:
             if (isinstance(thread, ExceptionThread) and len(thread.exceptions) > 0):
                 for error in thread.exceptions:
                     log_error(self._logger, error)
-                    raise error
+
+                    if not isinstance(error, BlockedFunctionError):
+                        raise error
     
     def createTagsDict(self, step: dict) -> dict:
         """Get the tags dictionary by the given step.

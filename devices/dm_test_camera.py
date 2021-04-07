@@ -35,6 +35,18 @@ class _DMDummyCamera:
     
     def SetInserted(self, inserted):
         self.inserted = inserted
+        
+        if not inserted:
+            try:
+                import DigitalMicrograph as DM
+            except Exception:
+                DM = None
+            
+            text = "Camera {} is now retracted!".format(self.__class__.__name__)
+            if DM is not None:
+                DM.OkDialog(text)
+            else:
+                print(text)
 
 class DMTestCamera(DMCamera):
     def __init__(self, *args, **kwargs) -> None:
