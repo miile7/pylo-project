@@ -33,11 +33,11 @@ class DMPyJEMTestMicroscope(DMPyJEMMicroscope):
         else:
             print(text)
     
-    def _setXTilt(self, angle, *args, **kwargs):
-        if angle > 10:
-            raise AssertionError("This is a test error caused by an x angle > 10 deg")
+    # def _setXTilt(self, angle, *args, **kwargs):
+    #     if angle > 10:
+    #         raise AssertionError("This is a test error caused by an x angle > 10 deg")
         
-        super()._setXTilt(angle, *args, **kwargs)
+    #     super()._setXTilt(angle, *args, **kwargs)
     
     @staticmethod
     def defineConfigurationOptions(*args, **kwargs) -> None:

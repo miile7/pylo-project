@@ -27,6 +27,9 @@ class MeasurementSteps(collections.abc.Sequence):
         when performing all the steps
     """
 
+    abs_tol = 1e-10
+    rel_tol = 0
+
     def __init__(self, controller: "Controller", start: dict, series: dict):
         """Create the steps for the measurement by the given `start` conditions
         and the `series`.
@@ -382,7 +385,9 @@ class MeasurementSteps(collections.abc.Sequence):
                             log_error(logger, err)
                             raise err
                 elif key == "step-width":
-                    if math.isclose(series[key], 0):
+                    if math.isclose(series[key], 0, 
+                                    abs_tol=MeasurementSteps.abs_tol, 
+                                    rel_tol=MeasurementSteps.rel_tol):
                         err = ValueError(("The 'step-width' in the series{} " + 
                                           "must not be 0.").format(error_str))
 
@@ -428,7 +433,9 @@ class MeasurementSteps(collections.abc.Sequence):
             # find first valid default
             if len(defaults) > 0:
                 for name, value in defaults.items():
-                    if isinstance(value, (int, float)) and not math.isclose(value, 0):
+                    if (isinstance(value, (int, float)) and 
+                        not math.isclose(value, 0, abs_tol=MeasurementSteps.abs_tol, 
+                                         rel_tol=MeasurementSteps.rel_tol)):
                         series["step-width"] = value
                         log_debug(logger, "Using step width from '{}'".format(name))
                         break
@@ -1057,13 +1064,12 @@ class MeasurementSteps(collections.abc.Sequence):
 
             # print("   -> value is {}".format(series["start"] + value_index * series["step-width"]))
 
-            step[series["variable"]] = max(
-                series["start"], 
-                min(
-                    series["start"] + value_index * series["step-width"],
-                    series["end"]
-                )
-            )
+            step[series["variable"]] = series["start"] + value_index * series["step-width"]
+
+            # if step[series["variable"]] < min(series["start"], series["end"]):
+            #     step[series["variable"]] = min(series["start"], series["end"])
+            # if step[series["variable"]] > max(series["start"], series["end"]):
+            #     step[series["variable"]] = max(series["start"], series["end"])
 
             log_debug(self._logger, ("Setting '{}' of step to start value " + 
                                     "'{}' plus '{}' times the step width "+ 
@@ -1124,34 +1130,73 @@ class MeasurementSteps(collections.abc.Sequence):
             # set it to the start and add the next value, if all values have 
             # reached their end value, the iteration is over
             for series in self._r_nest_series:
-                if (math.isclose(self._current_step[series["variable"]] + series["step-width"], series["end"]) or
-                    self._current_step[series["variable"]] + series["step-width"] < series["end"]):
+                # print("  var id {}".format(series["variable"]))
+                # print("    var {} + step width {} = {} is close to end: {} => {}".format(
+                #     self._current_step[series["variable"]], series["step-width"],
+                #     self._current_step[series["variable"]] + series["step-width"],
+                #     series["end"],
+                #     math.isclose(self._current_step[series["variable"]] + series["step-width"], series["end"], 
+                #                     abs_tol=MeasurementSteps.abs_tol, 
+                #                     rel_tol=MeasurementSteps.rel_tol)
+                # ))
+                # print("    step-width >= 0: {} and var + step-width {} < end: {} => {} and {}".format(
+                #     series["step-width"], 
+                #     self._current_step[series["variable"]] + series["step-width"],
+                #     series["end"],
+                #     series["step-width"] >= 0,
+                #     self._current_step[series["variable"]] + series["step-width"] < series["end"]
+                # ))
+                # print("    step-width < 0: {} and var + step-width {} > end: {} => {} and {}".format(
+                #     series["step-width"], 
+                #     self._current_step[series["variable"]] + series["step-width"],
+                #     series["end"],
+                #     series["step-width"] < 0,
+                #     self._current_step[series["variable"]] + series["step-width"] > series["end"]
+                # ))
+
+                if math.isclose(self._current_step[series["variable"]] + series["step-width"], series["end"], 
+                                 abs_tol=MeasurementSteps.abs_tol, 
+                                 rel_tol=MeasurementSteps.rel_tol):
                     log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
-                                            "to current step is still " + 
-                                            "smaller or equal than the end " + 
-                                            "value '{}'").format(
+                                            "to current step is close to end, " + 
+                                            "returning end value").format(
+                                            series["step-width"], 
+                                            series["variable"], series["end"]))
+                    self._current_step[series["variable"]] = series["end"]
+                    self._carry = False
+                    break
+                    # print("  -> Using series end value, then ending")
+                elif ((series["step-width"] >= 0 and 
+                       self._current_step[series["variable"]] + series["step-width"] < series["end"]) or
+                      (series["step-width"] < 0 and 
+                       self._current_step[series["variable"]] + series["step-width"] > series["end"])):
+                    log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
+                                            "to current step, did not reach " + 
+                                            "the end of '{}'").format(
                                             series["step-width"], 
                                             series["variable"], series["end"]))
                     self._current_step[series["variable"]] += series["step-width"]
                     self._carry = False
+                    # print("  -> Counting up, then ending")
                     break
                 else:
                     log_debug(self._logger, ("Adding step width '{}' of '{}' " + 
-                                            "to current step is greater " + 
-                                            " than the end value '{}', " + 
-                                            "resetting value to start value " + 
-                                            "and setting carry to True").format(
-                                            series["step-width"], 
-                                            series["variable"], series["end"]))
+                                             "to current step will reach " + 
+                                             "end value '{}', " + 
+                                             "resetting value to start value " + 
+                                             "and setting carry to True").format(
+                                             series["step-width"], 
+                                             series["variable"], series["end"]))
                     self._current_step[series["variable"]] = series["start"]
                     self._carry = True
+                    # print("  -> Resetting and calculating next 'digit'")
             
             if self._carry:
                 log_debug(self._logger, "Carry is true but all series are " + 
-                                       "visited, that means that all steps " + 
-                                       "are visited which means the " + 
-                                       "measurement is done. Stopping " + 
-                                       "iteration")
+                                        "visited, that means that all steps " + 
+                                        "are visited which means the " + 
+                                        "measurement is done. Stopping " + 
+                                        "iteration")
                 raise StopIteration()
         
         log_debug(self._logger, "Returning step '{}'".format(self._current_step))

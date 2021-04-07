@@ -423,8 +423,8 @@ class CLIView(AbstractView):
                     "id": "series-{}-step-width".format(depth),
                     "label": "Step width",
                     "datatype": var.calibrated_format if var.has_calibration else var.format,
-                    "min_value": var.ensureCalibratedValue(0),
-                    "max_value": var.ensureCalibratedValue(step_width),
+                    # "min_value": var.ensureCalibratedValue(0),
+                    # "max_value": var.ensureCalibratedValue(step_width),
                     "required": True,
                     "value": var.ensureCalibratedValue(s["step-width"]),
                     "inset": depth * "  "
