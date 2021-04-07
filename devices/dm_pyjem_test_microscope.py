@@ -22,7 +22,22 @@ class DMPyJEMTestMicroscope(DMPyJEMMicroscope):
         return self._lorentz_mode
     
     def resetToSafeState(self) -> None:
-        pass
+        try:
+            import DigitalMicrograph as DM
+        except Exception:
+            DM = None
+        
+        text = "Setting {} to safe state!".format(self.__class__.__name__)
+        if DM is not None:
+            DM.OkDialog(text)
+        else:
+            print(text)
+    
+    def _setXTilt(self, angle, *args, **kwargs):
+        if angle > 10:
+            raise AssertionError("This is a test error caused by an x angle > 10 deg")
+        
+        super()._setXTilt(angle, *args, **kwargs)
     
     @staticmethod
     def defineConfigurationOptions(*args, **kwargs) -> None:

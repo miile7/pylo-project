@@ -20,7 +20,16 @@ class DMTestMicroscope(DMMicroscope):
         return self._lorentz_mode
     
     def resetToSafeState(self) -> None:
-        pass
+        try:
+            import DigitalMicrograph as DM
+        except Exception:
+            DM = None
+        
+        text = "Setting {} to safe state!".format(self.__class__.__name__)
+        if DM is not None:
+            DM.OkDialog(text)
+        else:
+            print(text)
     
     @staticmethod
     def defineConfigurationOptions(*args, **kwargs) -> None:
