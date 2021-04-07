@@ -96,7 +96,7 @@ class DMCamera(CameraInterface):
         
         # the workspace id to show the images in if they should be displayed
         self._workspace_id = None
-        self._ensureWorkspace()
+        # self._ensureWorkspace()
     
     def _loadSettings(self) -> None:
         """Load the settings from the configuration."""
