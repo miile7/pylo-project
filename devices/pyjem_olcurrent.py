@@ -63,6 +63,17 @@ if __name__ == "__main__":
 
     parser.add_argument("--output", "-o", help="The output format", 
                         choices=("json", "plain"), default="plain")
+    
+    parser.add_argument("--keepflc", action="store_true",
+                        help=("For controlling the objectiv lens current, the " + 
+                              "free lens control must be switched off. If you " + 
+                              "do not want this program to switch off the " + 
+                              "free lens control automatically, add this switch."))
+    parser.add_argument("--restoreflc", action="store_true",
+                        help=("If the free lens control is changed, use this " + 
+                              "switch to make sure it is changed back to the " + 
+                              "original switch state after the program has " + 
+                              "executed."))
                         
     debug_group = parser.add_mutually_exclusive_group()
     debug_group.add_argument("--offline", help=("Use the PyJEM offline module " + 
@@ -129,13 +140,14 @@ if __name__ == "__main__":
                     return self.values["getf"]
                 
                 def GetFLCInfo(self, lens_id):
-                    if not lens_id in self.values["flc_info"]:
+                    if not str(lens_id) in self.values["flc_info"]:
                         return 0
                     else:
-                        return self.values["flc_info"][lens_id]
+                        return self.values["flc_info"][str(lens_id)]
                     
                 def SetFLCSw(self, lens_id, switch):
-                    self.values["flc_info"][lens_id] = switch
+                    self.values["flc_info"][str(lens_id)] = switch
+                    self.save()
 
             print("Faking some random text", file=old_stdout)
             lens_control = FakeLens3()
@@ -180,19 +192,20 @@ if __name__ == "__main__":
         # free lens control status for each lens
         lens_flc_status_changes = []
         needed_lens_ids = [6, 7]
-        
-        for lens_id in needed_lens_ids:
-            flc_is_on = lens_control.GetFLCInfo(lens_id)
-            if (args.debug or args.offline) and isinstance(flc_is_on, (tuple, list)):
-                # fixing but of Lens3 offline
-                flc_is_on = flc_is_on[0]
-            
-            if flc_is_on:
-                # free lens control is on
-                # save lens to set it back to the previous state after execution
-                lens_flc_status_changes.append(lens_id)
-                # switch it off
-                lens_control.SetFLCSw(lens_id, 0)
+
+        if not args.keepflc:
+            for lens_id in needed_lens_ids:
+                flc_is_on = lens_control.GetFLCInfo(lens_id)
+                if isinstance(flc_is_on, (tuple, list)):
+                    # fixing but of Lens3 offline
+                    flc_is_on = flc_is_on[0]
+                
+                if flc_is_on:
+                    # free lens control is on
+                    # save lens to set it back to the previous state after execution
+                    lens_flc_status_changes.append(lens_id)
+                    # switch it off
+                    lens_control.SetFLCSw(lens_id, 0)
 
         output = {}
         
@@ -215,10 +228,11 @@ if __name__ == "__main__":
                 if isinstance(val, (list, tuple)):
                     output[key] = val[-1]
         
-        # switch back to the initial state
-        for lens_id in lens_flc_status_changes:
-            # switch it on again
-            lens_control.SetFLCSw(lens_id, 1)
+        if args.restoreflc:
+            # switch back to the initial state
+            for lens_id in lens_flc_status_changes:
+                # switch it on again
+                lens_control.SetFLCSw(lens_id, 1)
     finally:
         sys.stderr = old_stderr
         sys.stdout = old_stdout
