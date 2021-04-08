@@ -94,6 +94,7 @@ class DMImage(Image):
         self.show_image = False
         self.annotations = []
         self.workspace_id = None
+        self.annotations_height_fraction = None
         try:
             self.workspace_rect = self._getWorkspaceRect()
         except LookupError:
@@ -591,6 +592,11 @@ class DMImage(Image):
                 from .config import DM_IMAGE_ANNOTATION_PADDING_FRACTION
                 from .config import DM_IMAGE_ANNOTATION_SCALEBAR_LENGTH_FRACTION
                 from .config import DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+                if (not isinstance(self.annotations_height_fraction, float) or 
+                    self.annotations_height_fraction <= 0 or 
+                    math.isclose(self.annotations_height_fraction, 0, abs_tol=1e-10) or
+                    self.annotations_height_fraction > 1):
+                    self.annotations_height_fraction = DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
 
                 dmscript += [
                     "if(img_doc.ImageDocumentCountImages() > 0){",
@@ -607,12 +613,12 @@ class DMImage(Image):
                         "number image_height = img.ImageGetDimensionSize(1);",
                         "number top, left, bottom, right, font_size, t, l, b, r;",
                         "top = (1 - {ah} - {ap}) * image_height".format(
-                            ah=DM_IMAGE_ANNOTATION_HEIGHT_FRACTION,
+                            ah=self.annotations_height_fraction,
                             ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION),
                         "left = {ap} * image_width".format(
                             ap=DM_IMAGE_ANNOTATION_PADDING_FRACTION),
                         "font_size = {ah} * image_height".format(
-                            ah=DM_IMAGE_ANNOTATION_HEIGHT_FRACTION)
+                            ah=self.annotations_height_fraction)
                 ]
 
                 for annotation in self.annotations:
