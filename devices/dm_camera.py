@@ -74,6 +74,7 @@ class DMCamera(CameraInterface):
 
         self._logger = logginglib.get_logger(self)
         self.show_images = None
+        self.annotations_height_fraction = None
         self.exposure_time = None
         self.binning_x = None
         self.binning_y = None
@@ -104,9 +105,11 @@ class DMCamera(CameraInterface):
         logginglib.log_debug(self._logger, "Loading settings from configuration and " + 
                                "preparing tags")
         
-        (self.show_images, self.exposure_time, self.binning_x, self.binning_y, 
-            self.process_level, *self.ccd_area) = self.controller.getConfigurationValuesOrAsk(
+        (self.show_images, self.annotations_height_fraction, self.exposure_time, 
+            self.binning_x, self.binning_y, self.process_level, 
+            *self.ccd_area) = self.controller.getConfigurationValuesOrAsk(
             (self.config_group_name, "show-images"),
+            (self.config_group_name, "annotations-height"),
             (self.config_group_name, "exposure-time"),
             (self.config_group_name, "binning-x"),
             (self.config_group_name, "binning-y"),
@@ -148,7 +151,7 @@ class DMCamera(CameraInterface):
 
         if (None in (self.show_images, self.exposure_time, self.binning_x, 
                      self.binning_y, self.process_level, self.ccd_area, 
-                     self.tags)):
+                     self.tags, self.annotations_height_fraction)):
             self._loadSettings()
         
         if isinstance(additional_tags, dict):
@@ -219,6 +222,7 @@ class DMCamera(CameraInterface):
         image.show_image = self.show_images
         image.workspace_id = self._workspace_id
         image.annotations = annotations
+        image.annotations_height_fraction = self.annotations_height_fraction
 
         logginglib.log_debug(self._logger, "Image is now '{}'".format(image))
 
@@ -416,6 +420,23 @@ class DMCamera(CameraInterface):
             default_value=config_defaults["show-images"], 
             description="Whether to show all acquired images (in a new " + 
             "workspace) or not, they will be saved to a file in both cases."
+        )
+
+        if "annotations-height" not in config_defaults:
+            from pylo.config import DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+            config_defaults["annotations-height"] = DM_IMAGE_ANNOTATION_HEIGHT_FRACTION
+        configuration.addConfigurationOption(
+            config_group_name, "annotations-height", 
+            datatype=float, 
+            default_value=config_defaults["annotations-height"], 
+            description=("The height fraction of the annotations shown in the " + 
+                         "image, 0 < value <= 1.\n\n" + 
+                         "The 'annotations-height' tells how big the " + 
+                         "annotations are in the vertical direction. The value " + 
+                         "is multiplied with the image height and then used " + 
+                         "as the font size and as the height of the scale bar. " + 
+                         "To decrease the font size, decrease this value. " + 
+                         "The default value is 0.05.")
         )
         
         # the exposure time
