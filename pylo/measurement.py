@@ -496,8 +496,8 @@ class Measurement:
                         
                     if (isinstance(self.relaxation_time, (int, float)) and 
                         self.relaxation_time > 0):
-                        wait_time = self.relaxation_time / self.substep_count
-                        text = ("Waiting relaxation time of '{}'/'{}'='{}' " + 
+                        wait_time = self.relaxation_time / 2 / self.substep_count
+                        text = ("Waiting relaxation time of '{}'/2/'{}'='{}' " + 
                                 "seconds").format(self.relaxation_time, 
                                                   self.substep_count, 
                                                   wait_time)
@@ -518,12 +518,12 @@ class Measurement:
         
                 if (isinstance(self.relaxation_time, (int, float)) and 
                     self.relaxation_time > 0):
-                    text = "Waiting relaxation time of '{}' seconds".format(self.relaxation_time)
+                    text = "Waiting relaxation time of '{}'/2 seconds".format(self.relaxation_time)
                     log_info(self._logger, text)
                     self.controller.view.print(text)
                     start_time = time.time()
 
-                    while time.time() - start_time < self.relaxation_time:
+                    while time.time() - start_time < self.relaxation_time / 2:
                         # allow calling stop() function while waiting
                         time.sleep(0.01)
 
