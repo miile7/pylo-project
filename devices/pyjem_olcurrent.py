@@ -4,6 +4,12 @@ import json
 import random
 import argparse
 
+def parse_hex(h):
+    if isinstance(h, str) and h.strip().lower().startswith("0x"):
+        return int(h, base=16)
+    else:
+        return int(h)
+
 if __name__ == "__main__":
     class IOBuffer:
         def __init__(self):
@@ -210,9 +216,9 @@ if __name__ == "__main__":
         output = {}
         
         if args.setc is not None:
-            lens_control.SetOLc(int(args.setc))
+            lens_control.SetOLc(parse_hex(args.setc))
         if args.setf is not None:
-            lens_control.SetOLf(int(args.setf))
+            lens_control.SetOLf(parse_hex(args.setf))
         
         if args.setc is not None or args.getc:
             output["getc"] = lens_control.GetOLc()
