@@ -239,7 +239,7 @@ class DMMicroscope(MicroscopeInterface):
                 calibrated_unit=magnetic_field_unit,
                 calibrated_name="Magnetic Field",
                 calibration=magnetic_field_calibration_factor,
-                calibrated_format=Datatype.float_np(3)
+                calibrated_format=Datatype.float_np(1)
             ),
             self._getObjectiveLensCurrent,
             self._setObjectiveLensCurrent
