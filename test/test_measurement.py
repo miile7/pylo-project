@@ -1328,7 +1328,7 @@ class TestMeasurement:
 
         end_time = time.time()
         total_duration = (step_number * substep_count * sleep_time + 
-                          perf_m.measurement.relaxation_time * 2 * step_number + 
+                          perf_m.measurement.relaxation_time * step_number + 
                           # set to lorentz mode
                           sleep_time)
         
