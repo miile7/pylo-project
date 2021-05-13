@@ -1,6 +1,8 @@
 # PyLo
 
-PyLo is a Python module and program for recording Lorentz-TEM images.
+![PyLo measurement series start](docs/pylo-promotion.gif)
+
+PyLo is a Python module and program for recording Lorentz-TEM image series.
 
 The software is written for the JEOL NeoArm F200 with Gatan Microscopy Suite as the 
 displaying software but can be extended to use any microscope. Also it comes with a 
@@ -18,6 +20,16 @@ before every measurement run. Microscopes and cameras can be customized or repla
 creating own classes that implement an interface. Those classes can be loaded dynamically.
 This way PyLo can deal with every microscope and camera without having to learn the whole
 program code. 
+
+**Key Features**:
+
+1. Record LTEM image series automatically (e.g. field series + focus series for induction maps)
+2. Integration in [Gatan Microscopy Suite Software](https://www.gatan.com/products/tem-analysis/gatan-microscopy-suite-software)
+3. Alternative Command Line Interface
+4. Adaptable for all TEMs and connected camera systems
+5. Easily extendable parameter control
+6. Plug-In and Event system integrated
+1. Offline installation possible
 
 ## Installation
 
